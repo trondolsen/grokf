@@ -1,0 +1,3622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="referrer" content="no-referrer">
+<!-- Defense-in-depth for a tool that renders untrusted bundles. connect-src/img-src
+     keep content from contacting other origins; script/style need 'unsafe-inline'
+     because this is a single-file app with an inline script and styles. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>OKF Graph Explorer</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1b1e27;
+    --panel-2: #232734;
+    --line: #2e3341;
+    --text: #e7e9ee;
+    --muted: #9aa2b3;
+    --accent: #5b8def;
+    --dir: #8b93a7;
+    --index: #37b6c4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    /* Block the browser's page pinch-zoom so two-finger gestures stay with the
+       tool. Panning stays allowed for scrollable panels; the canvas overrides
+       this with touch-action:none for its own zoom. */
+    touch-action: pan-x pan-y;
+  }
+  #c { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none; }
+  #c.dragging { cursor: grabbing; }
+
+  .bar {
+    position: fixed; top: 12px; left: 12px; right: 12px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    pointer-events: none;
+  }
+  .bar > * { pointer-events: auto; }
+  .nav-toggle { display: none; }
+  /* On desktop the wrappers are transparent, so their groups stay direct flex items. */
+  .bar-head, .nav-groups, .nav-more { display: contents; }
+  .group {
+    display: flex; gap: 6px; align-items: center;
+    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px;
+    backdrop-filter: blur(6px);
+  }
+  .title {
+    font-weight: 600; letter-spacing: .2px;
+    appearance: none; border: 0; background: transparent; color: inherit;
+    font: inherit; font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .title:hover { background: var(--panel-2); }
+  .title .caret { font-size: 10px; line-height: 1; transition: transform .15s ease; }
+  .title[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+  /* In-flight load indicator, floated at the toolbar's top-right (left of the
+     filter menu). z-index is above the loading overlay so it stays visible
+     during local folder reads. */
+  #spinner {
+    position: fixed; top: 12px; right: 12px; z-index: 31; pointer-events: none;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  #spinner[hidden] { display: none; }
+  #spinner .spin {
+    width: 12px; height: 12px; border-radius: 50%; flex: none;
+    border: 2px solid var(--line); border-top-color: var(--accent);
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #spinner .spin { animation-duration: 1.8s; } }
+  /* Desktop: sit just left of the docked filter sidebar when it is open. */
+  @media (min-width: 761px) { body:not(.hide-side) #spinner { right: 324px; } }
+  button, label.btn {
+    appearance: none; border: 1px solid var(--line); background: var(--panel-2);
+    color: var(--text); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+    font: inherit;
+  }
+  button:hover, label.btn:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
+  input[type="search"] {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 6px 10px; font: inherit; width: 170px;
+  }
+  input[type="search"]:focus { outline: none; border-color: var(--accent); }
+
+  #legend {
+    position: fixed; left: 12px; bottom: 12px;
+    background: var(--panel);
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+    max-width: 260px; backdrop-filter: blur(6px);
+  }
+  #legend h2 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .lg { display: flex; align-items: center; gap: 8px; padding: 2px 0; cursor: pointer; border-radius: 6px; }
+  .lg:hover { background: var(--panel-2); }
+  .lg.off { opacity: .4; }
+  .lg .sw, .sw { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .lg .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  body:not(.hide-side) .bar { right: 324px; }
+
+  #sidebar {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 312px; z-index: 15;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-left: 1px solid var(--line);
+    transform: translateX(0); transition: transform .18s ease;
+  }
+  body.hide-side #sidebar { transform: translateX(100%); }
+  .side-head {
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 8px; font-weight: 600;
+  }
+  .side-head .meta { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .side-body { padding: 12px 14px 20px; overflow: auto; }
+  .fld { display: block; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+  .fld input, .fld select {
+    width: 100%; margin-top: 5px; background: var(--panel-2);
+    border: 1px solid var(--line); color: var(--text); border-radius: 8px;
+    padding: 6px 8px; font: inherit;
+  }
+  .fld input:focus, .fld select:focus { outline: none; border-color: var(--accent); }
+  .facet { margin: 14px 0; }
+  .facet h3 {
+    margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted);
+  }
+  .facet .row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .facet .row:hover { background: var(--panel-2); }
+  .facet .row.on { background: var(--active); background: color-mix(in srgb, var(--accent) 24%, transparent); }
+  .facet .row .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #clearFilters { width: 100%; margin-top: 8px; }
+
+  .tagbox, .searchfld { margin-bottom: 12px; }
+  .tagbox > .lbl, .searchfld > .lbl { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .searchbox {
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+    background: var(--panel-2);
+  }
+  .searchbox:focus-within { border-color: var(--accent); }
+  .searchbox input {
+    width: 100%; border: 0; background: transparent; color: var(--text);
+    padding: 7px 9px; font: inherit;
+  }
+  .searchbox input:focus { outline: none; }
+  .searchbox .scope {
+    display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid var(--line); padding: 3px 6px 3px 9px;
+    color: var(--muted); font-size: 12px;
+  }
+  .searchbox .scope select {
+    flex: 1; border: 0; background: transparent; color: var(--text);
+    font: inherit; padding: 3px 0;
+  }
+  .searchbox .scope select:focus { outline: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .chips:empty { display: none; }
+  .chip {
+    display: inline-flex; align-items: center; border-radius: 999px;
+    overflow: hidden; border: 1px solid var(--line); font-size: 12px;
+  }
+  .chip.inc {
+    background: var(--active);
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .chip.exc {
+    background: color-mix(in srgb, #e0575b 24%, transparent);
+    border-color: color-mix(in srgb, #e0575b 55%, transparent);
+  }
+  .chip.exc .ct { text-decoration: line-through; color: var(--muted); }
+  .chip button {
+    appearance: none; border: 0; background: transparent; color: var(--text);
+    font: inherit; cursor: pointer; padding: 3px 6px;
+  }
+  .chip .ct:hover { background: rgba(255,255,255,.10); }
+  .chip .cx { padding: 3px 8px 3px 4px; color: var(--muted); }
+  .chip .cx:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .tagopen {
+    width: 100%; text-align: left; background: var(--panel-2);
+    border: 1px solid var(--line); color: var(--text); border-radius: 8px;
+    padding: 6px 8px; font: inherit; cursor: pointer;
+  }
+  .tagopen:hover { border-color: var(--accent); }
+  .pop {
+    position: fixed; z-index: 40; width: 300px; max-height: 60vh;
+    display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5);
+  }
+  .pop[hidden] { display: none; }
+  .pop-search { padding: 8px; border-bottom: 1px solid var(--line); }
+  .pop-search input {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 8px; padding: 6px 8px; font: inherit;
+  }
+  .pop-search input:focus { outline: none; border-color: var(--accent); }
+  .pop-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; overflow: auto; flex: 1 1 auto; }
+  .pop-empty { color: var(--muted); font-size: 12px; padding: 4px; }
+  .pop-foot {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px; border-top: 1px solid var(--line);
+  }
+  .pop-foot .meta { color: var(--muted); font-size: 12px; margin-right: auto; }
+  .tg {
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+    border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .tg:hover { border-color: var(--accent); }
+  .tg.inc { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tg.exc {
+    background: transparent; border-color: #e0575b; color: #e0575b;
+    text-decoration: line-through;
+  }
+
+  #tip {
+    position: fixed; z-index: 20; max-width: 340px; pointer-events: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; box-shadow: 0 8px 30px rgba(0,0,0,.45); display: none;
+  }
+  #tip .t { font-weight: 600; margin-bottom: 2px; }
+  #tip .meta { color: var(--muted); font-size: 12px; }
+  #tip .desc { margin-top: 5px; }
+  #tip code { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
+
+  /* Tag popup in the markdown preview: hover a tag to list pages sharing it. */
+  .md-meta .chip2.pv-tag { cursor: pointer; }
+  .md-meta .chip2.pv-tag:hover { border-color: var(--accent); color: var(--text); }
+  #pvTagPop {
+    position: fixed; z-index: 60;
+    min-width: min(220px, calc(100vw - 16px));
+    max-width: min(340px, calc(100vw - 16px));
+    max-height: 60vh;
+    overflow: auto; padding: 8px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  #pvTagPop[hidden] { display: none; }
+  #pvTagPop .tp-head { font-size: 12px; color: var(--muted); padding: 2px 6px 8px; }
+  #pvTagPop .tp-head b { color: var(--text); }
+  #pvTagPop .tp-item {
+    display: block; width: 100%; text-align: left; background: transparent;
+    border: 0; color: var(--text); font: inherit; padding: 6px 8px;
+    border-radius: 8px; cursor: pointer;
+  }
+  #pvTagPop .tp-item:hover { background: var(--panel-2); }
+  #pvTagPop .tp-item .tp-t { display: block; }
+  #pvTagPop .tp-item .tp-p {
+    display: block; font-size: 11px; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #pvTagPop .tp-cur { color: var(--muted); font-style: italic; cursor: default; }
+  #pvTagPop .tp-cur:hover { background: transparent; }
+
+  /* "About" panel revealed by clicking the title. */
+  #aboutPop { z-index: 45; width: auto; overflow: hidden; }
+  #aboutPop .about-body { flex: 1 1 auto; min-height: 0; padding: 12px 14px; overflow: auto; line-height: 1.5; }
+  #aboutPop p { margin: 0 0 8px; }
+  #aboutPop ul { margin: 0 0 8px; padding-left: 18px; }
+  #aboutPop li { margin: 4px 0; }
+  #aboutPop code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+  #aboutPop a { color: var(--accent); text-decoration: none; }
+  #aboutPop a:hover { text-decoration: underline; }
+  #aboutPop .about-links { margin: 10px 0 0; }
+  #aboutPop .about-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  #aboutPop .about-rev { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+
+  #overlay {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(18,20,26,.78);
+    background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(3px);
+  }
+  #overlay.show { display: flex; }
+  #card {
+    max-width: 560px; margin: 16px; padding: 22px 24px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  #card h1 { margin: 0 0 6px; font-size: 19px; }
+  #card p { color: var(--muted); margin: 0 0 12px; }
+  #card ul { margin: 0 0 16px; padding-left: 20px; color: var(--text); }
+  #card li { margin: 5px 0; }
+  #card code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
+  #card .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  #card.dropping { border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  #preview {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55);
+  }
+  #preview.show { display: flex; }
+  #pvCard {
+    width: min(840px, 92vw); height: min(82vh, 940px);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  }
+  #pvHead {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  #pvHead .t {
+    font-weight: 600; font-size: 15px; white-space: nowrap;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  }
+  #pvHead .p {
+    color: var(--muted); font-size: 12px; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #pvHead button { padding: 4px 9px; }
+  #pvHead #pvBack, #pvHead #pvFwd { padding: 3px 10px; font-size: 15px; line-height: 1; }
+  #pvHead #pvBack, #pvHead #pvFwd, #pvHead #pvClose { flex: none; }
+  #pvHead #pvClose { margin-left: auto; }
+  #pvHead button:disabled { opacity: .4; cursor: default; }
+  #pvBody { padding: 18px 22px 30px; overflow: auto; line-height: 1.55; }
+  .md-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .md-meta .chip2 {
+    font-size: 11px; padding: 2px 8px; border: 1px solid var(--line);
+    border-radius: 999px; color: var(--muted);
+  }
+  #pvBody h1, #pvBody h2, #pvBody h3, #pvBody h4, #pvBody h5, #pvBody h6 {
+    line-height: 1.25; margin: 1.1em 0 .5em;
+  }
+  #pvBody h1 { font-size: 1.5em; border-bottom: 1px solid var(--line); padding-bottom: .25em; }
+  #pvBody h2 { font-size: 1.28em; }
+  #pvBody h3 { font-size: 1.12em; }
+  #pvBody p { margin: .6em 0; }
+  #pvBody a { color: var(--accent); text-decoration: none; }
+  #pvBody a:hover { text-decoration: underline; }
+  #pvBody code {
+    background: var(--panel-2); padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em;
+  }
+  #pvBody pre.md-pre {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px; overflow: auto; margin: .8em 0;
+  }
+  #pvBody pre.md-pre code { background: none; padding: 0; }
+  #pvBody pre.plain { white-space: pre-wrap; word-break: break-word; }
+  #pvBody ul, #pvBody ol { margin: .5em 0; padding-left: 1.6em; }
+  #pvBody li { margin: .18em 0; }
+  #pvBody blockquote {
+    margin: .6em 0; padding: .2em 1em;
+    border-left: 3px solid var(--line); color: var(--muted);
+  }
+  #pvBody table { border-collapse: collapse; margin: .8em 0; width: 100%; font-size: .94em; }
+  #pvBody th, #pvBody td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  #pvBody th { background: var(--panel-2); }
+  #pvBody hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+  #pvBody img { max-width: 100%; }
+  #pvBody .fnref { font-size: .8em; }
+  #pvBody .fnref + .fnref { margin-left: .3em; }
+  #pvBody .fnref + .fnref::before { content: ","; }
+  #pvBody .md-footnotes { color: var(--muted); font-size: .92em; }
+  #pvBody .pv-note { color: var(--muted); }
+  #pvBody .pv-hide { display: none; }
+  #pvBody .pv-fields {
+    display: grid; grid-template-columns: max-content 1fr; gap: 5px 18px;
+    margin: 0 0 14px; padding-left: 12px; border-left: 2px solid var(--line);
+  }
+  #pvBody .pv-fields dt { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  #pvBody .pv-fields dd { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+  #pvBody .pv-attach-note { margin-top: 4px; }
+  #pvBody .pv-sec { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  #pvBody .pv-sec:first-of-type { margin-top: 4px; }
+
+  /* Panel edge tabs. The filters tab is always visible and toggles the sidebar;
+     the legend tab is only shown on small screens (see @media below). */
+  .panel-handle {
+    display: none; position: fixed; z-index: 16;
+    appearance: none; border: 1px solid var(--line);
+    background: var(--panel); background: color-mix(in srgb, var(--panel) 92%, transparent);
+    color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+    padding: 10px 6px; border-radius: 10px;
+    writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: .04em;
+    box-shadow: 0 8px 30px rgba(0,0,0,.45); backdrop-filter: blur(6px);
+  }
+  .panel-handle:hover { border-color: var(--accent); }
+  /* Filters tab: attached to the sidebar's inner (left) edge, near the top. */
+  #sideHandle {
+    display: block; position: absolute; right: 100%; top: 84px;
+    border-right: 0; border-radius: 10px 0 0 10px;
+  }
+
+  @media (max-width: 760px) {
+    /* Compact screens. The hamburger and title share the top line; the directory
+       nav and the rest sit flush-left underneath. The extra groups expand
+       vertically behind the hamburger. Both panels dock to a screen edge and
+       slide out behind a tab attached to the panel's inner edge. */
+    body:not(.hide-side) .bar { right: 12px; }
+    .bar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+    .bar-head { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+    .nav-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 6px 11px; }
+    .nav-groups {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    }
+    .nav-more {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+      max-height: 0; overflow: hidden;
+      transition: max-height .2s ease;
+      order: 2;
+    }
+    body.nav-open .nav-more { max-height: 320px; }
+    /* Directory (graph) nav leads the left-aligned stack. */
+    .group-dir { order: 1; }
+
+    .panel-handle { display: block; }
+
+    /* Filters: right-docked panel, closed by default on small screens (opened
+       via body.side-open). On desktop the sidebar is open unless body.hide-side. */
+    #sidebar { width: min(312px, 86vw); transform: translateX(100%); }
+    body.side-open #sidebar { transform: translateX(0); }
+
+    /* Legend: left-docked panel (mirrors filters); tab attached to its right
+       edge, near the bottom. */
+    #legend {
+      top: 0; left: 0; bottom: 0; right: auto; z-index: 15;
+      width: min(280px, 80vw); max-width: none;
+      display: flex; flex-direction: column;
+      border: 0; border-right: 1px solid var(--line); border-radius: 0;
+      padding: 14px; overflow: visible;
+      transform: translateX(-100%); transition: transform .18s ease;
+    }
+    body.m-open-legend #legend { transform: translateX(0); }
+    #legendBody { flex: 1 1 auto; overflow: auto; }
+    #legendHandle {
+      position: absolute; left: 100%; bottom: 84px; transform: none;
+      border-left: 0; border-radius: 0 10px 10px 0;
+    }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="bar">
+  <div class="bar-head">
+    <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar">☰</button>
+    <div class="group">
+      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About">OKF Graph Explorer<span class="caret">▾</span></button>
+      <span id="stats" class="meta" style="color:var(--muted)"></span>
+    </div>
+  </div>
+  <div id="navGroups" class="nav-groups">
+    <div id="navMore" class="nav-more">
+      <div class="group">
+        <button id="open">Open folder…</button>
+        <button id="reload">Reload</button>
+      </div>
+      <div class="group">
+        <button id="resetView">Reset view</button>
+        <button id="resetLayout">Reset layout</button>
+        <button id="labels" aria-pressed="true">Labels</button>
+      </div>
+    </div>
+    <div class="group group-dir">
+      <button id="graphTop" title="Top level" disabled>Top</button>
+      <button id="graphBack" title="Back" disabled>‹</button>
+      <button id="graphFwd" title="Forward" disabled>›</button>
+      <span id="graphPath" style="color:var(--muted)">/</span>
+    </div>
+  </div>
+</div>
+
+<div id="spinner" class="group" hidden title="Loading">
+  <span class="spin" aria-hidden="true"></span>
+  <span id="fetchCount">0</span>
+</div>
+
+<aside id="sidebar">
+  <button id="sideHandle" class="panel-handle" type="button" aria-controls="sidebar" aria-expanded="false" title="Toggle filters">Filters</button>
+  <div class="side-head">
+    <span>Search &amp; filter</span>
+    <span id="filterSummary" class="meta"></span>
+  </div>
+  <div class="side-body">
+    <div class="searchfld">
+      <div class="lbl">Search</div>
+      <div class="searchbox">
+        <input id="search" type="search" placeholder="e.g. json, guide, nsm…" autocomplete="off" spellcheck="false">
+        <label class="scope">in
+          <select id="searchField">
+            <option value="">All fields</option>
+            <option value="title">Title</option>
+            <option value="description">Description</option>
+            <option value="type">Type</option>
+            <option value="tags">Tags</option>
+            <option value="path">Path</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="tagbox">
+      <div class="lbl">Kinds</div>
+      <div id="kindChips" class="chips"></div>
+      <button id="kindOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select kinds…</button>
+    </div>
+    <div class="tagbox">
+      <div class="lbl">Types</div>
+      <div id="typeChips" class="chips"></div>
+      <button id="typeOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select types…</button>
+    </div>
+    <div class="tagbox">
+      <div class="lbl">Tags</div>
+      <div id="tagChips" class="chips"></div>
+      <button id="tagOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select tags…</button>
+    </div>
+    <div class="tagbox">
+      <div class="lbl">Status</div>
+      <div id="statusChips" class="chips"></div>
+      <button id="statusOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select status…</button>
+    </div>
+    <button id="clearFilters">Clear filters</button>
+  </div>
+</aside>
+
+<div id="tagPop" class="pop" hidden>
+  <div class="pop-search">
+    <input id="tagSearch" type="search" placeholder="Search tags…" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="tagList" class="pop-list"></div>
+  <div class="pop-foot">
+    <span id="tagCount" class="meta"></span>
+    <button id="tagClear" type="button">Clear</button>
+  </div>
+</div>
+
+<div id="kindPop" class="pop" hidden>
+  <div class="pop-search">
+    <input id="kindSearch" type="search" placeholder="Search kinds…" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="kindList" class="pop-list"></div>
+  <div class="pop-foot">
+    <span id="kindCount" class="meta"></span>
+    <button id="kindClear" type="button">Clear</button>
+  </div>
+</div>
+
+<div id="typePop" class="pop" hidden>
+  <div class="pop-search">
+    <input id="typeSearch" type="search" placeholder="Search types…" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="typeList" class="pop-list"></div>
+  <div class="pop-foot">
+    <span id="typeCount" class="meta"></span>
+    <button id="typeClear" type="button">Clear</button>
+  </div>
+</div>
+
+<div id="statusPop" class="pop" hidden>
+  <div class="pop-search">
+    <input id="statusSearch" type="search" placeholder="Search statuses…" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="statusList" class="pop-list"></div>
+  <div class="pop-foot">
+    <span id="statusCount" class="meta"></span>
+    <button id="statusClear" type="button">Clear</button>
+  </div>
+</div>
+
+<div id="legend">
+  <button id="legendHandle" class="panel-handle" type="button" aria-controls="legend" aria-expanded="false" title="Toggle legend">Legend</button>
+  <div id="legendBody"></div>
+</div>
+<div id="tip"></div>
+<div id="pvTagPop" hidden></div>
+
+<div id="aboutPop" class="pop" hidden>
+  <div class="about-body">
+    <p><b>OKF Graph Explorer</b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
+    <p class="about-rev">Revision <span id="aboutRev"></span></p>
+    <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
+    <ul>
+      <li>Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
+      <li>Choose a bundle with <code>?bundle=&lt;name|path&gt;</code> (or <code>?start=</code>).</li>
+      <li>Prefetch fewer levels with <code>?depth=N</code> (default: all). A node with a dashed ring (page or attachment) has unloaded content — click it to load, then click again to preview.</li>
+      <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
+      <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
+    </ul>
+    <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
+    <p class="about-links">
+      <a href="https://github.com/trondolsen/okf-graph-explorer" target="_blank" rel="noopener">Source on GitHub</a>
+    </p>
+  </div>
+</div>
+
+<div id="overlay" class="show">
+  <div id="card">
+    <h1>OKF Graph Explorer</h1>
+    <p>Single-file, dependency-free viewer for this knowledge bundle.</p>
+    <ul>
+      <li>Served: on a static server (including GitHub Pages) it loads <code>bundles/</code> automatically from <code>bundles/index.md</code>.</li>
+      <li>Pick a bundle with a URL parameter, for example <code>?bundle=acme_retail</code> (a name, a folder path, or a start <code>.md</code> file).</li>
+      <li>Limit prefetch depth with <code>?depth=N</code> (default: all levels); click a dotted node to load its next level, click again to preview.</li>
+      <li>Local file: click Open folder and choose a bundle directory, or drag it onto this window.</li>
+    </ul>
+    <div class="row">
+      <button id="pick">Open folder…</button>
+      <button id="retry">Retry auto-load</button>
+    </div>
+    <div class="hint" id="overlayMsg"></div>
+    <input id="dirinput" type="file" webkitdirectory multiple hidden>
+  </div>
+</div>
+
+<div id="preview">
+  <div id="pvCard">
+    <div id="pvHead">
+      <button id="pvBack" type="button" title="Back" disabled>‹</button>
+      <button id="pvFwd" type="button" title="Forward" disabled>›</button>
+      <span class="t" id="pvTitle"></span>
+      <span class="p" id="pvPath"></span>
+      <button id="pvClose" type="button">Close</button>
+    </div>
+    <div id="pvBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function () {
+  // ---------------------------------------------------------------- config
+  var TYPE_COLORS = {
+    "Reference": "#5b8def",
+    "Guide": "#3fb98a",
+    "Agent Skill": "#e0954a"
+  };
+  var DIR_COLOR = "#8b93a7";
+  var INDEX_COLOR = "#37b6c4";
+  var FILE_COLOR = "#c9a24d";
+  var ATTACH_COLOR = "#c06a5b";
+  var OTHER_COLOR = "#a274d6";
+
+  // ---------------------------------------------------------------- dom
+  var canvas = document.getElementById("c");
+  var ctx = canvas.getContext("2d");
+  var tip = document.getElementById("tip");
+  var overlay = document.getElementById("overlay");
+  var overlayMsg = document.getElementById("overlayMsg");
+  var legendEl = document.getElementById("legend");
+  var legendBody = document.getElementById("legendBody");
+  var statsEl = document.getElementById("stats");
+  var searchEl = document.getElementById("search");
+  var dirInput = document.getElementById("dirinput");
+  var preview = document.getElementById("preview");
+  var pvTitle = document.getElementById("pvTitle");
+  var pvPath = document.getElementById("pvPath");
+  var pvBody = document.getElementById("pvBody");
+  var pvBackBtn = document.getElementById("pvBack");
+  var pvFwdBtn = document.getElementById("pvFwd");
+  var graphPathEl = document.getElementById("graphPath");
+  var graphBackBtn = document.getElementById("graphBack");
+  var graphFwdBtn = document.getElementById("graphFwd");
+  var graphTopBtn = document.getElementById("graphTop");
+  var spinnerEl = document.getElementById("spinner");
+  var fetchCountEl = document.getElementById("fetchCount");
+
+  // ---------------------------------------------------------------- state
+  var W = 0, H = 0, dpr = 1;
+  var nodes = [], links = [], allNodes = [], allLinks = [], dirNodes = null, fileMap = null;
+  var graphStack = [""], graphIndex = 0, graphFocus = "";
+  var view = { k: 1, x: 0, y: 0 };
+  var ringGap = 160, maxDepth = 1;
+  var alpha = 1;
+  var autoFit = false;   // keep the view framed while a freshly built layout settles
+  var bundleFiles = null;      // currently visible file set, for on-demand expansion
+  var bundleRootUrl = null;    // base URL used to fetch deeper content on demand
+  var bundleKnown = null;      // Map(path->file) of locally loaded files not yet shown
+  var attemptedUrls = new Set();
+  var prefetchLimited = false;  // true when ?depth limited the crawl (deeper markdown loads on demand)
+
+  // Loads surfaced in the toolbar spinner. `fetchCount` is work in flight;
+  // `queuedCount` is work already discovered but not started. Counting both
+  // keeps the spinner steady while a bundle crawl runs and shows how much is
+  // still outstanding, instead of flickering to "1" between sequential fetches.
+  var fetchCount = 0, queuedCount = 0, spinnerShown = -1;
+  function updateSpinner() {
+    if (!spinnerEl) return;
+    var total = fetchCount + queuedCount;
+    if (total === spinnerShown) return;   // skip redundant redraws
+    spinnerShown = total;
+    spinnerEl.hidden = total === 0;
+    if (fetchCountEl) fetchCountEl.textContent = String(total);
+  }
+  function busyStart() { fetchCount++; updateSpinner(); }
+  function busyEnd() { fetchCount = Math.max(0, fetchCount - 1); updateSpinner(); }
+  function queuedAdd(n) { queuedCount += n; updateSpinner(); }
+  function queuedDone(n) { queuedCount = Math.max(0, queuedCount - n); updateSpinner(); }
+  // Upper bound on simultaneous network requests. The eager crawl is sequential,
+  // but on-demand expansion and preview metadata can otherwise fire bursts.
+  var MAX_CONCURRENT_FETCHES = 4;
+  // All HTTP requests flow through trackedFetch, so one semaphore bounds how many
+  // run at once. Extra callers wait for a free slot instead of piling on.
+  var activeFetches = 0, fetchWaiters = [];
+  function acquireFetchSlot() {
+    if (activeFetches < MAX_CONCURRENT_FETCHES) { activeFetches++; return Promise.resolve(); }
+    return new Promise(function (resolve) { fetchWaiters.push(resolve); });
+  }
+  function releaseFetchSlot() {
+    var next = fetchWaiters.shift();
+    if (next) next();          // hand the slot straight to the next waiter
+    else activeFetches--;
+  }
+  async function trackedFetch(url, opts) {
+    await acquireFetchSlot();
+    busyStart();
+    try { return await fetch(url, opts); }
+    finally { busyEnd(); releaseFetchSlot(); }
+  }
+  var hover = null, dragNode = null, panning = null;
+  var activePointers = new Map(), pinchPrev = null;
+  var lastPointerType = "mouse";
+  var MIN_ZOOM = 0.02, MAX_ZOOM = 4;
+  var showLabels = true;
+  var query = "";
+  var searchField = "";
+  var tagInclude = new Set(), tagExclude = new Set();
+  var kindInclude = new Set(), kindExclude = new Set();
+  var typeInclude = new Set(), typeExclude = new Set();
+  var statusInclude = new Set(), statusExclude = new Set();
+  var KIND_LABELS = ["Directory", "Index file", "Concept", "File", "Attachment"];
+  var popovers = [];
+  var allTags = [];
+  var dragging = false, moved = false;
+
+  // ---------------------------------------------------------------- utils
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+  function parseScalar(s) {
+    s = s.trim();
+    if (s === "") return "";
+    if (s[0] === '"' && s.lastIndexOf('"') === s.length - 1) return s.slice(1, -1);
+    if (s[0] === "'" && s.lastIndexOf("'") === s.length - 1) return s.slice(1, -1);
+    if (s[0] === "[" && s[s.length - 1] === "]") {
+      return s.slice(1, -1).split(",")
+        .map(function (x) { return x.trim().replace(/^["']|["']$/g, ""); })
+        .filter(function (x) { return x !== ""; });
+    }
+    return s;
+  }
+
+  // Tags may be written as a bracketed list (`[a, b]`), a YAML block list, or a
+  // single-line comma-separated string. Normalize all three to an array.
+  function normalizeTags(value) {
+    if (value == null) return [];
+    if (Array.isArray(value)) {
+      return value.map(function (t) { return String(t).trim(); })
+        .filter(function (t) { return t !== ""; });
+    }
+    return String(value).split(",")
+      .map(function (t) { return t.trim(); })
+      .filter(function (t) { return t !== ""; });
+  }
+
+  function addKeyVal(obj, text) {
+    var m = /^([A-Za-z0-9_.\-]+):(.*)$/.exec(text);
+    if (m) obj[m[1]] = parseScalar(m[2]);
+  }
+
+  function parseBlockValue(block) {
+    if (!block.length) return "";
+    var isList = /^\s*-\s*/.test(block[0]);
+    if (isList) {
+      var items = [], current = null;
+      for (var i = 0; i < block.length; i++) {
+        var lm = /^\s*-\s*(.*)$/.exec(block[i]);
+        if (lm) {
+          current = {};
+          items.push(current);
+          if (lm[1].trim()) addKeyVal(current, lm[1].trim());
+        } else if (current) {
+          addKeyVal(current, block[i].trim());
+        }
+      }
+      return items;
+    }
+    var obj = {};
+    for (var j = 0; j < block.length; j++) addKeyVal(obj, block[j].trim());
+    return obj;
+  }
+
+  function parseYaml(src) {
+    var out = {};
+    var lines = src.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      if (!raw.trim() || raw.trim().charAt(0) === "#") continue;
+      if (/^\s/.test(raw)) continue; // only top-level here
+      var m = /^([A-Za-z0-9_.\-]+):(.*)$/.exec(raw);
+      if (!m) continue;
+      var key = m[1], rest = m[2].trim();
+      if (rest !== "") { out[key] = parseScalar(rest); continue; }
+      var block = [], j = i + 1;
+      for (; j < lines.length; j++) {
+        var l = lines[j];
+        if (!l.trim()) continue;
+        if (!/^\s/.test(l)) break;
+        block.push(l);
+      }
+      i = j - 1;
+      out[key] = parseBlockValue(block);
+    }
+    return out;
+  }
+
+  function parseFrontmatter(text) {
+    var m = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/.exec(text);
+    if (!m) return { fm: {}, body: text };
+    return { fm: parseYaml(m[1]), body: text.slice(m[0].length) };
+  }
+
+  function extractLinks(body) {
+    var out = [], re = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, m;
+    while ((m = re.exec(body))) {
+      var t = m[1];
+      if (/^(https?:|mailto:|tel:|#)/i.test(t)) continue;
+      t = t.split("#")[0].split("?")[0];
+      if (t) out.push(t);
+    }
+    return out;
+  }
+
+  function dirOf(from) { return from.indexOf("/") >= 0 ? from.slice(0, from.lastIndexOf("/")) : ""; }
+
+  // Normalize base+link into a bundle-relative path; null if it escapes the root.
+  function joinPath(base, link) {
+    var parts = (base ? base.split("/") : []).concat(link.split("/"));
+    var stack = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (p === "" || p === ".") continue;
+      if (p === "..") { if (!stack.length) return null; stack.pop(); }
+      else stack.push(p);
+    }
+    return stack.join("/");
+  }
+
+  // Candidate bundle-relative paths for `link`, anchored at the concept file's
+  // directory and at each of its ancestors (up to the bundle root). `shallowFirst`
+  // puts the bundle root first (for path fields and "/"-links), otherwise the
+  // file's own directory first (for relative links). Trying several anchors lets a
+  // path resolve whether a single bundle or a nested collection is loaded.
+  function pathCandidates(from, link, shallowFirst) {
+    var dir = dirOf(from), seg = dir ? dir.split("/") : [], acc = "", prefixes = [""];
+    for (var i = 0; i < seg.length; i++) { acc = acc ? acc + "/" + seg[i] : seg[i]; prefixes.push(acc); }
+    if (!shallowFirst) prefixes.reverse();
+    var out = [];
+    for (var j = 0; j < prefixes.length; j++) {
+      var r = joinPath(prefixes[j], link);
+      if (r && out.indexOf(r) < 0) out.push(r);
+    }
+    return out;
+  }
+
+  // Candidates for a body markdown link. "./"/"../" are file-relative; a leading
+  // "/" is bundle-root-relative (OKF §6.1); a bare path is file-relative.
+  function linkCandidates(from, link) {
+    link = String(link).trim();
+    if (!link || /^(https?:|mailto:|tel:|#)/i.test(link)) return [];
+    link = link.split("#")[0].split("?")[0];
+    if (!link || /\/$/.test(link)) return [];
+    if (/^\.\.?\//.test(link)) { var r = joinPath(dirOf(from), link); return r ? [r] : []; }
+    if (link.charAt(0) === "/") return pathCandidates(from, link.replace(/^\//, ""), true);
+    return pathCandidates(from, link, false);
+  }
+
+  // Candidates for a path-valued frontmatter field (`sources[].resource`,
+  // `executor`, `attester`, …). Bare and "/"-prefixed paths are
+  // bundle-root-relative (as in the OKF examples); "./"/"../" are file-relative.
+  function resourceCandidates(from, link) {
+    link = String(link).trim();
+    if (!link || /^(https?:|mailto:|tel:|#)/i.test(link)) return [];
+    link = link.split("#")[0].split("?")[0];
+    if (!link || !/\.md$/i.test(link)) return [];
+    if (/^\.\.?\//.test(link)) { var r = joinPath(dirOf(from), link); return r ? [r] : []; }
+    return pathCandidates(from, link.charAt(0) === "/" ? link.replace(/^\//, "") : link, true);
+  }
+
+  // Text file extensions we load and can show as plain text.
+  var TEXT_EXT = {
+    md: 1, markdown: 1, txt: 1, text: 1, json: 1, jsonl: 1, yaml: 1, yml: 1,
+    toml: 1, ini: 1, cfg: 1, conf: 1, csv: 1, tsv: 1, xml: 1, html: 1, htm: 1,
+    css: 1, js: 1, mjs: 1, cjs: 1, ts: 1, tsx: 1, jsx: 1, py: 1, rb: 1, go: 1,
+    rs: 1, java: 1, kt: 1, c: 1, h: 1, cpp: 1, hpp: 1, cc: 1, cs: 1, php: 1,
+    sh: 1, bash: 1, zsh: 1, sql: 1, graphql: 1, gql: 1, vue: 1, svelte: 1, svg: 1,
+    rst: 1, tex: 1, log: 1, env: 1, properties: 1, gradle: 1, lock: 1
+  };
+  var MAX_FILE_BYTES = 512 * 1024;
+
+  // Attachment extensions: rendered as nodes, but never read or previewed,
+  // because their bytes are not text we can display.
+  var ATTACH_EXT = {
+    pdf: 1, doc: 1, docx: 1, odt: 1, rtf: 1,
+    xls: 1, xlsx: 1, xlsm: 1, ods: 1,
+    ppt: 1, pptx: 1, odp: 1,
+    zip: 1, gz: 1, tar: 1, tgz: 1, "7z": 1,
+    png: 1, jpg: 1, jpeg: 1, gif: 1, webp: 1, bmp: 1, tif: 1, tiff: 1, ico: 1, avif: 1
+  };
+
+  function extOf(name) {
+    var base = String(name).split(/[\\/]/).pop();
+    var m = /\.([A-Za-z0-9]+)$/.exec(base);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  // Lower-case extension for a loadable text file, else null.
+  function fileKind(name) {
+    var ext = extOf(name);
+    return ext && TEXT_EXT[ext] ? ext : null;
+  }
+
+  // Lower-case extension for a binary attachment, else null.
+  function attachKind(name) {
+    var ext = extOf(name);
+    return ext && ATTACH_EXT[ext] ? ext : null;
+  }
+
+  function colorFor(n) {
+    if (n.kind === "dir") return DIR_COLOR;
+    if (n.kind === "index") return INDEX_COLOR;
+    if (n.kind === "file") return FILE_COLOR;
+    if (n.kind === "attachment") return ATTACH_COLOR;
+    return TYPE_COLORS[n.type] || OTHER_COLOR;
+  }
+  function groupOf(n) {
+    if (n.kind === "dir") return "Directories";
+    if (n.kind === "index") return "Index files";
+    if (n.kind === "file") return "Files";
+    if (n.kind === "attachment") return "Attachments";
+    return n.type || "Other concepts";
+  }
+  function displayLabel(n) {
+    if (n.kind === "dir") return n.path === "" ? (n.label || "bundle") : n.label + "/";
+    return n.title || n.path.split("/").pop();
+  }
+
+  // ---------------------------------------------------------------- loaders
+  function stripCommonPrefix(files) {
+    if (!files.length) return files;
+    var segs = files.map(function (f) { return f.path.split("/"); });
+    var minLen = segs.reduce(function (m, s) { return Math.min(m, s.length); }, Infinity);
+    var c = 0;
+    while (c < minLen) {
+      var first = segs[0][c];
+      var all = true;
+      for (var i = 1; i < segs.length; i++) {
+        if (segs[i][c] !== first) { all = false; break; }
+      }
+      if (!all) break;
+      c++;
+    }
+    if (c >= minLen) c = minLen - 1; // never strip the filename itself
+    if (c <= 0) return files;
+    return files.map(function (f) {
+      return { path: f.path.split("/").slice(c).join("/"), text: f.text, binary: f.binary, src: f.src };
+    }).filter(function (f) { return f.path; });
+  }
+
+  // Depth-limited link crawl. `maxDepth` caps how many link hops are prefetched
+  // (0 = the start file only, null/undefined = all levels).
+  async function crawlFromUrl(startHref, maxDepth) {
+    var limit = (maxDepth == null) ? Infinity : maxDepth;
+    var base = new URL("./", location.href);
+    var start = new URL(startHref || "index.md", location.href);
+    var seen = new Set();
+    var queue = [{ url: start.href, depth: 0 }];
+    var out = [];
+    var guard = 0;
+    queuedAdd(queue.length);
+    try {
+      while (queue.length && guard++ < 2000) {
+        var item = queue.shift();
+        queuedDone(1);
+        var url = item.url, depth = item.depth;
+        if (seen.has(url)) continue;
+        seen.add(url);
+        // Only fetch same-origin text files within the page directory. The check
+        // runs BEFORE the request so out-of-scope URLs are never contacted.
+        var u = new URL(url);
+        if (u.origin !== base.origin || !u.pathname.startsWith(base.pathname) || !fileKind(u.pathname)) continue;
+        var rel;
+        try { rel = decodeURIComponent(u.pathname.slice(base.pathname.length)); }
+        catch (e) { continue; }
+        var res;
+        try { res = await trackedFetch(url, { cache: "no-store" }); }
+        catch (e) { continue; }
+        if (!res.ok) continue;
+        var text = await res.text();
+        if (text.length > MAX_FILE_BYTES) continue;
+        out.push({ path: rel, text: text });
+        if (depth >= limit) continue;   // stop prefetching beyond the requested depth
+        var found = extractLinks(text);
+        for (var i = 0; i < found.length; i++) {
+          var abs;
+          try { abs = new URL(found[i], url); } catch (e) { continue; }
+          if (abs.origin !== base.origin) continue;
+          if (!abs.pathname.startsWith(base.pathname)) continue;
+          if (fileKind(abs.pathname)) {
+            abs.hash = "";
+            if (!seen.has(abs.href)) { queue.push({ url: abs.href, depth: depth + 1 }); queuedAdd(1); }
+          }
+          // Attachments are not loaded during the crawl. They stay as unresolved
+          // references ("missing") and materialize only when a node is expanded.
+        }
+      }
+    } finally {
+      queuedDone(queue.length);   // release whatever is still outstanding, even on error
+    }
+    return stripCommonPrefix(out);
+  }
+
+  async function fromFileList(fileList) {
+    var out = [];
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      if (attachKind(f.name)) {
+        out.push({ path: f.webkitRelativePath || f.name, text: "", binary: true, src: f });
+        continue;
+      }
+      if (!fileKind(f.name)) continue;
+      if (f.size && f.size > MAX_FILE_BYTES) continue;
+      out.push({ path: f.webkitRelativePath || f.name, text: await f.text() });
+    }
+    return stripCommonPrefix(out);
+  }
+
+  async function fromDirectoryHandle(dir) {
+    var out = [];
+    await walkDir(dir, "", out);
+    return stripCommonPrefix(out);
+  }
+
+  async function walkDir(handle, prefix, out) {
+    await walkDirAt(handle, prefix, out, 0);
+  }
+  async function walkDirAt(handle, prefix, out, depth) {
+    if (depth > 12 || out.length > 5000) return; // guard against cycles and huge trees
+    for await (var entry of handle.values()) {
+      var p = prefix ? prefix + "/" + entry.name : entry.name;
+      if (entry.kind === "file") {
+        if (attachKind(entry.name)) {
+          out.push({ path: p, text: "", binary: true, src: await entry.getFile() });
+        } else if (fileKind(entry.name)) {
+          var file = await entry.getFile();
+          if (!file.size || file.size <= MAX_FILE_BYTES) out.push({ path: p, text: await file.text() });
+        }
+      } else if (entry.kind === "directory") {
+        await walkDirAt(entry, p, out, depth + 1);
+      }
+    }
+  }
+
+  // Drag-and-drop of a folder.
+  async function fromDataTransfer(dt) {
+    var items = dt.items;
+    var out = [];
+    var entries = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.kind !== "file") continue;
+      var e = it.webkitGetAsEntry ? it.webkitGetAsEntry() : null;
+      if (e) entries.push(e);
+    }
+    if (!entries.length) return fromFileList(dt.files);
+    for (var k = 0; k < entries.length; k++) await walkEntry(entries[k], "", out, 0);
+    return stripCommonPrefix(out);
+  }
+  async function walkEntry(entry, prefix, out, depth) {
+    if (depth > 12 || out.length > 5000) return; // guard against cycles and huge trees
+    var p = prefix ? prefix + "/" + entry.name : entry.name;
+    if (entry.isFile) {
+      if (attachKind(entry.name)) {
+        out.push({ path: p, text: "", binary: true, src: await new Promise(function (res, rej) { entry.file(res, rej); }) });
+      } else if (fileKind(entry.name)) {
+        var file = await new Promise(function (res, rej) { entry.file(res, rej); });
+        if (!file.size || file.size <= MAX_FILE_BYTES) out.push({ path: p, text: await file.text() });
+      }
+    } else if (entry.isDirectory) {
+      var reader = entry.createReader();
+      while (true) {
+        var batch = await new Promise(function (res, rej) { reader.readEntries(res, rej); });
+        if (!batch.length) break;
+        for (var i = 0; i < batch.length; i++) await walkEntry(batch[i], p, out, depth + 1);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- graph
+  function buildGraph(files) {
+    nodes = []; links = [];
+    var fileMapLocal = new Map();
+    var dirSet = new Set([""]);
+
+    files.forEach(function (f) {
+      var segs = f.path.split("/"); segs.pop();
+      var acc = "";
+      segs.forEach(function (s) { acc = acc ? acc + "/" + s : s; dirSet.add(acc); });
+    });
+
+    var dirMap = new Map();
+    Array.from(dirSet).sort().forEach(function (d) {
+      var n = {
+        id: "dir:" + d, path: d, kind: "dir",
+        label: d ? d.split("/").pop() : "bundle",
+        type: "", title: "", description: "",
+        children: [], depth: 0, angle: 0, targetR: 0,
+        x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+      };
+      dirMap.set(d, n); nodes.push(n);
+    });
+
+    dirMap.forEach(function (n, d) {
+      if (d === "") return;
+      var parent = d.indexOf("/") >= 0 ? d.slice(0, d.lastIndexOf("/")) : "";
+      var pn = dirMap.get(parent);
+      if (pn) { pn.children.push(n); links.push({ source: pn, target: n, kind: "tree" }); }
+    });
+
+    files.forEach(function (f) {
+      var isMd = /\.md$/i.test(f.path);
+      var fm = {}, body = f.text, kind;
+      if (isMd) {
+        var parsed = parseFrontmatter(f.text);
+        fm = parsed.fm; body = parsed.body;
+        kind = /(^|\/)index\.md$/i.test(f.path) ? "index" : "concept";
+      } else {
+        kind = f.binary ? "attachment" : "file";
+      }
+      var dir = f.path.indexOf("/") >= 0 ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
+      var n = {
+        id: f.path, path: f.path, kind: kind,
+        type: fm.type || "", title: fm.title || "",
+        description: fm.description || "", tags: normalizeTags(fm.tags), status: fm.status || "",
+        fm: fm, body: body, src: f.src || null, pdfMeta: null, metaPromise: null,
+        children: [], depth: 0, angle: 0, targetR: 0,
+        x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+      };
+      fileMapLocal.set(f.path, n); nodes.push(n);
+      var pn = dirMap.get(dir);
+      if (pn) { pn.children.push(n); links.push({ source: pn, target: n, kind: "tree" }); }
+    });
+
+    // Reference edges from markdown links and .md source resources.
+    var seenEdge = new Set();
+    var placeholderMap = new Map();   // path -> unloaded attachment node
+    files.forEach(function (f) {
+      var node = fileMapLocal.get(f.path);
+      if (!node || node.kind === "file" || node.kind === "attachment") return; // plaintext/attachment nodes have no links
+      var targets = new Set();      // resolved (already-loaded) reference paths
+      var pending = [];             // candidate paths for references not loaded yet
+      // Show an unresolved attachment as a visible, unloaded node (nothing is
+      // fetched for it), deduplicated across every file that references it.
+      function addPlaceholder(cands) {
+        var path = cands[0];
+        var ph = placeholderMap.get(path);
+        if (!ph) {
+          ph = {
+            id: path, path: path, kind: "attachment", loaded: false, candidates: cands.slice(),
+            type: "", title: "", description: "", tags: [], status: "",
+            fm: {}, body: "", src: null, pdfMeta: null, metaPromise: null,
+            children: [], depth: 0, angle: 0, targetR: 0,
+            x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+          };
+          placeholderMap.set(path, ph);
+          nodes.push(ph);
+          var pn = dirMap.get(dirOf(path));
+          if (pn) { pn.children.push(ph); links.push({ source: pn, target: ph, kind: "tree" }); }
+        }
+        if (ph === node) return;
+        var key = node.id + "\u2192" + ph.id;
+        if (!seenEdge.has(key)) { seenEdge.add(key); links.push({ source: node, target: ph, kind: "ref" }); }
+      }
+      function consider(cands) {
+        if (!cands.length) return;
+        var hit = null;
+        for (var ci = 0; ci < cands.length; ci++) { if (fileMapLocal.has(cands[ci])) { hit = cands[ci]; break; } }
+        if (hit) { targets.add(hit); return; }
+        // Unresolved: attachments become visible placeholders; other references
+        // stay in `missing` for the existing click-to-load behaviour.
+        if (attachKind(cands[0])) { addPlaceholder(cands); return; }
+        cands.forEach(function (c) { if (pending.indexOf(c) < 0) pending.push(c); });
+      }
+      extractLinks(node.body).forEach(function (l) { consider(linkCandidates(f.path, l)); });
+      var srcs = node.fm && node.fm.sources;
+      if (Array.isArray(srcs)) {
+        srcs.forEach(function (s) { if (s && s.resource) consider(resourceCandidates(f.path, s.resource)); });
+      }
+      node.missing = [];
+      targets.forEach(function (t) {
+        var tn = fileMapLocal.get(t);
+        if (!tn || tn === node) return;
+        var key = node.id + "\u2192" + tn.id;
+        if (seenEdge.has(key)) return;
+        seenEdge.add(key);
+        links.push({ source: node, target: tn, kind: "ref" });
+      });
+      // Referenced but not loaded (e.g. a depth-limited crawl): remember every
+      // candidate so a click can fetch this "next level" on demand.
+      pending.forEach(function (c) {
+        if (c !== node.id && fileKind(c) && node.missing.indexOf(c) < 0) node.missing.push(c);
+      });
+    });
+
+    nodes.forEach(function (n) { n.degree = 0; });
+    links.forEach(function (l) { l.source.degree++; l.target.degree++; });
+
+    dirNodes = dirMap; fileMap = fileMapLocal;
+    allNodes = nodes.slice(); allLinks = links.slice();
+    graphStack = [""]; graphIndex = 0; graphFocus = "";
+    return files.length;
+  }
+
+  // ---------------------------------------------------------------- layout
+  function weightOf(n) {
+    if (!n.children || !n.children.length) return 1;
+    var s = 0;
+    n.children.forEach(function (c) { s += weightOf(c); });
+    return Math.max(1, s);
+  }
+
+  function measureDepths() {
+    var root = dirNodes.get(graphFocus);
+    if (!root) return;
+    maxDepth = 1;
+    (function m(n, d) {
+      n.depth = d;
+      if (d > maxDepth) maxDepth = d;
+      (n.children || []).forEach(function (c) { m(c, d + 1); });
+    })(root, 0);
+  }
+
+  function recomputeRadii() {
+    ringGap = Math.max(70, (Math.min(W, H) / 2 - 90) / Math.max(1, maxDepth));
+    nodes.forEach(function (n) { n.targetR = n.depth * ringGap; });
+    // Simulation scale: k is the Fruchterman-Reingold ideal distance.
+    var k = clamp(ringGap * 0.5, 24, 70);
+    CHARGE = -(k * k) * 0.6;          // many-body strength (negative = repulsion)
+    var md = Math.max(6, k * 0.35);   // softening radius
+    MIN_DIST2 = md * md;
+    treeDist = ringGap;
+    refDist = ringGap * 1.4;
+    MAX_SPEED = clamp(ringGap * 0.15, 14, 46);
+    MAX_ACC = MAX_SPEED * 3;
+  }
+
+  function initialLayout() {
+    var root = dirNodes.get(graphFocus);
+    if (!root) return;
+    (function place(n, a0, a1) {
+      var mid = (a0 + a1) / 2;
+      n.angle = mid;
+      n.x = n.targetR * Math.cos(mid);
+      n.y = n.targetR * Math.sin(mid);
+      n.vx = 0; n.vy = 0;
+      var kids = n.children || [];
+      var total = 0;
+      kids.forEach(function (c) { total += weightOf(c); });
+      if (!total) total = 1;
+      var a = a0;
+      kids.forEach(function (c) {
+        var span = (a1 - a0) * weightOf(c) / total;
+        place(c, a, a + span);
+        a += span;
+      });
+    })(root, -Math.PI, Math.PI);
+  }
+
+  // ------- graph navigation: drill into directories -------
+  // Restrict nodes/links to the subtree rooted at graphFocus ("" = whole bundle),
+  // further narrowed by the sidebar's attribute filters.
+  function applyFocus() {
+    var f = graphFocus, prefix = f ? f + "/" : "";
+    nodes = allNodes.filter(function (n) {
+      if (!matchesAttrFilters(n)) return false;
+      if (f === "") return true;
+      if (n.kind === "dir") return (n.path === f) || n.path.indexOf(prefix) === 0;
+      return n.path.indexOf(prefix) === 0;
+    });
+    var vis = new Set(nodes);
+    links = allLinks.filter(function (l) { return vis.has(l.source) && vis.has(l.target); });
+    nodes.forEach(function (n) { n.degree = 0; });
+    links.forEach(function (l) { l.source.degree++; l.target.degree++; });
+  }
+
+  // Recompute the tree metrics, then position the nodes. With `preserve`, every
+  // node keeps its current coordinates and velocity (and any drag pin); only the
+  // ring targets change, so the simulation eases the nodes onto their new ring
+  // instead of re-flowing from scratch. Without it the layout is rebuilt from
+  // scratch (initial render and directory navigation).
+  function relayout(preserve) {
+    measureDepths();
+    recomputeRadii();
+    if (!preserve) {
+      initialLayout();
+      nodes.forEach(function (n) { n.fx = null; n.fy = null; });
+      alpha = 1;
+      return;
+    }
+    nodes.forEach(function (n) {
+      if (n.x == null || !isFinite(n.x) || n.y == null || !isFinite(n.y)) {
+        // A node that has no valid position yet gets a spot on its ring.
+        var a = n.angle == null ? Math.random() * Math.PI * 2 : n.angle;
+        n.x = n.targetR * Math.cos(a);
+        n.y = n.targetR * Math.sin(a);
+        n.vx = 0; n.vy = 0;
+      }
+    });
+    alpha = Math.max(alpha, 0.6);   // enough energy for the rings to resettle
+  }
+
+  // Rebuild the view after a sidebar filter change, keeping the surviving nodes
+  // where they are so the change reads as a removal, not a full re-flow.
+  function updateView() {
+    applyFocus();
+    relayout(true);
+    updateStats();
+  }
+
+  function setFocus(path) {
+    graphFocus = path;
+    applyFocus();
+    relayout();
+    autoFit = true;   // re-frame the new subgraph as it settles
+    updateGraphNav();
+    updateStats();
+  }
+
+  function enterDir(path) {
+    if (path == null || path === graphFocus) return;
+    if (graphIndex < graphStack.length - 1) graphStack = graphStack.slice(0, graphIndex + 1);
+    graphStack.push(path);
+    graphIndex = graphStack.length - 1;
+    setFocus(path);
+  }
+
+  function graphBack() {
+    if (graphIndex <= 0) return;
+    graphIndex--;
+    setFocus(graphStack[graphIndex]);
+  }
+  function graphForward() {
+    if (graphIndex >= graphStack.length - 1) return;
+    graphIndex++;
+    setFocus(graphStack[graphIndex]);
+  }
+  function graphTop() {
+    if (graphFocus === "") return;
+    enterDir("");
+  }
+
+  function updateGraphNav() {
+    if (graphBackBtn) graphBackBtn.disabled = graphIndex <= 0;
+    if (graphFwdBtn) graphFwdBtn.disabled = graphIndex >= graphStack.length - 1;
+    if (graphTopBtn) graphTopBtn.disabled = graphFocus === "";
+    if (graphPathEl) graphPathEl.textContent = graphFocus === "" ? "/" : graphFocus + "/";
+  }
+
+  function updateStats() {
+    if (!statsEl) return;
+    statsEl.textContent = nodes.filter(function (n) { return n.kind !== "dir"; }).length + " files · " +
+      links.filter(function (l) { return l.kind === "ref"; }).length + " links";
+  }
+
+  // ---------------------------------------------------------------- forces
+  //
+  // A d3-force-style simulation: independent forces accumulate acceleration
+  // on the nodes, which are advanced with a velocity Verlet integrator.
+  // Many-body interaction is Fruchterman-Reingold-style repulsion (magnitude
+  // ~ k^2 / d) evaluated with a Barnes-Hut quadtree, so it costs O(n log n)
+  // rather than O(n^2). Collision is resolved through a uniform grid, which
+  // guarantees nodes never overlap regardless of how the forces are tuned.
+  var CHARGE = -900;                 // many-body strength (negative = repulsion)
+  var THETA = 0.9;                   // Barnes-Hut accuracy (smaller = finer)
+  var MIN_DIST2 = 36;                // softening, avoids singular forces
+  var treeDist = 150, refDist = 220;
+  var treeStrength = 0.8, refStrength = 0.05;
+  var radialStrength = 0.35, centerStrength = 0.003, collideStrength = 1.0;
+  var MAX_SPEED = 20, MAX_ACC = 60;
+
+  function jiggle() { return (Math.random() - 0.5) * 1e-6; }
+
+  // ---- Barnes-Hut quadtree ------------------------------------------------
+  function makeCell(x0, y0, x1, y1) {
+    return { x0: x0, y0: y0, x1: x1, y1: y1,
+      point: null, points: null, children: null, mass: 0, cx: 0, cy: 0 };
+  }
+
+  function buildQuadtree(pts) {
+    var i, n = pts.length;
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (i = 0; i < n; i++) {
+      var p = pts[i];
+      if (p.x < x0) x0 = p.x;
+      if (p.y < y0) y0 = p.y;
+      if (p.x > x1) x1 = p.x;
+      if (p.y > y1) y1 = p.y;
+    }
+    if (!isFinite(x0)) { x0 = y0 = -1; x1 = y1 = 1; }
+    var size = Math.max(x1 - x0, y1 - y0) || 1;
+    var root = makeCell(x0, y0, x0 + size, y0 + size);
+    for (i = 0; i < n; i++) insertPoint(root, pts[i], 0);
+    accumulate(root);
+    return root;
+  }
+
+  function quadIndex(cell, p) {
+    var mx = (cell.x0 + cell.x1) / 2, my = (cell.y0 + cell.y1) / 2;
+    return (p.x >= mx ? 1 : 0) + (p.y >= my ? 2 : 0);
+  }
+
+  function makeChildren(cell) {
+    var mx = (cell.x0 + cell.x1) / 2, my = (cell.y0 + cell.y1) / 2;
+    cell.children = [
+      makeCell(cell.x0, cell.y0, mx, my),
+      makeCell(mx, cell.y0, cell.x1, my),
+      makeCell(cell.x0, my, mx, cell.y1),
+      makeCell(mx, my, cell.x1, cell.y1)
+    ];
+  }
+
+  function insertPoint(cell, p, depth) {
+    if (cell.children) { insertPoint(cell.children[quadIndex(cell, p)], p, depth + 1); return; }
+    if (cell.point === null && cell.points === null) { cell.point = p; return; }
+    if (depth < 22) {
+      var existing = cell.point, bucket = cell.points;
+      cell.point = null; cell.points = null;
+      makeChildren(cell);
+      if (existing) insertPoint(cell, existing, depth + 1);
+      if (bucket) for (var i = 0; i < bucket.length; i++) insertPoint(cell, bucket[i], depth + 1);
+      insertPoint(cell, p, depth + 1);
+    } else {
+      if (!cell.points) {
+        cell.points = [];
+        if (cell.point) { cell.points.push(cell.point); cell.point = null; }
+      }
+      cell.points.push(p);
+    }
+  }
+
+  function accumulate(cell) {
+    if (cell.children) {
+      var m = 0, cx = 0, cy = 0, c = cell.children, i;
+      for (i = 0; i < 4; i++) {
+        accumulate(c[i]);
+        m += c[i].mass; cx += c[i].cx * c[i].mass; cy += c[i].cy * c[i].mass;
+      }
+      cell.mass = m;
+      cell.cx = m ? cx / m : 0;
+      cell.cy = m ? cy / m : 0;
+    } else if (cell.points) {
+      var sx = 0, sy = 0, k = cell.points.length;
+      for (var j = 0; j < k; j++) { sx += cell.points[j].x; sy += cell.points[j].y; }
+      cell.mass = k; cell.cx = sx / k; cell.cy = sy / k;
+    } else if (cell.point) {
+      cell.mass = 1; cell.cx = cell.point.x; cell.cy = cell.point.y;
+    } else {
+      cell.mass = 0; cell.cx = 0; cell.cy = 0;
+    }
+  }
+
+  // FR repulsion from a quadtree cell onto `node`, using the Barnes-Hut
+  // approximation when the cell is small relative to its distance.
+  function manyBody(node, cell, alpha) {
+    if (cell.mass === 0) return;
+    var dx = cell.cx - node.x, dy = cell.cy - node.y;
+    var l = dx * dx + dy * dy;
+
+    if (!cell.children && !cell.points) {         // leaf holding one node
+      if (cell.point === node) return;
+      if (dx === 0 && dy === 0) { dx = jiggle(); dy = jiggle(); }
+      l = dx * dx + dy * dy;
+      if (l < MIN_DIST2) l = Math.sqrt(MIN_DIST2 * l);
+      node.ax += dx * CHARGE * alpha / l;
+      node.ay += dy * CHARGE * alpha / l;
+      return;
+    }
+    if (cell.points) {                            // coincident-node bucket
+      for (var i = 0; i < cell.points.length; i++) {
+        var q = cell.points[i];
+        if (q === node) continue;
+        var qx = q.x - node.x, qy = q.y - node.y;
+        if (qx === 0 && qy === 0) { qx = jiggle(); qy = jiggle(); }
+        var ql = qx * qx + qy * qy;
+        if (ql < MIN_DIST2) ql = Math.sqrt(MIN_DIST2 * ql);
+        node.ax += qx * CHARGE * alpha / ql;
+        node.ay += qy * CHARGE * alpha / ql;
+      }
+      return;
+    }
+    var w = cell.x1 - cell.x0;
+    if (w * w / (THETA * THETA) < l) {            // far enough: pool the cell
+      if (dx === 0 && dy === 0) { dx = jiggle(); dy = jiggle(); l = dx * dx + dy * dy; }
+      if (l < MIN_DIST2) l = Math.sqrt(MIN_DIST2 * l);
+      node.ax += dx * cell.mass * CHARGE * alpha / l;
+      node.ay += dy * cell.mass * CHARGE * alpha / l;
+      return;
+    }
+    for (var k = 0; k < 4; k++) manyBody(node, cell.children[k], alpha);
+  }
+
+  // ---- collision: hard non-overlap via a uniform grid ---------------------
+  function collide(alpha) {
+    if (nodes.length < 2) return;
+    var i, n, maxR = 0;
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      n.cr = radiusOf(n) + 10;
+      if (n.cr > maxR) maxR = n.cr;
+    }
+    var size = maxR * 2 || 1;
+    var grid = new Map();
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      var key = Math.floor(n.x / size) + "," + Math.floor(n.y / size);
+      var arr = grid.get(key);
+      if (!arr) { arr = []; grid.set(key, arr); }
+      arr.push(n);
+    }
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      var gx = Math.floor(n.x / size), gy = Math.floor(n.y / size);
+      for (var ox = -1; ox <= 1; ox++) {
+        for (var oy = -1; oy <= 1; oy++) {
+          var bucket = grid.get((gx + ox) + "," + (gy + oy));
+          if (!bucket) continue;
+          for (var j = 0; j < bucket.length; j++) {
+            var m = bucket[j];
+            if (m === n) continue;
+            var dx = n.x - m.x, dy = n.y - m.y;
+            var d = Math.sqrt(dx * dx + dy * dy);
+            var minD = n.cr + m.cr;
+            if (d >= minD) continue;
+            if (d < 1e-6) { dx = jiggle(); dy = jiggle(); d = Math.sqrt(dx * dx + dy * dy); }
+            var dd = d < 1e-3 ? 1e-3 : d;
+            var push = (minD - d) / dd * 0.5 * collideStrength * alpha;
+            n.ax += dx * push; n.ay += dy * push;
+            m.ax -= dx * push; m.ay -= dy * push;
+          }
+        }
+      }
+    }
+  }
+
+  function accumulateForces(alpha) {
+    var i, n, l;
+    for (i = 0; i < nodes.length; i++) { n = nodes[i]; n.ax = 0; n.ay = 0; }
+
+    var tree = buildQuadtree(nodes);
+    for (i = 0; i < nodes.length; i++) manyBody(nodes[i], tree, alpha);
+
+    for (i = 0; i < links.length; i++) {
+      l = links[i];
+      var s = l.source, t = l.target;
+      var dx = t.x - s.x, dy = t.y - s.y;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 1e-6) { dx = jiggle(); dy = jiggle(); d = Math.sqrt(dx * dx + dy * dy); }
+      var dd = d < 1e-3 ? 1e-3 : d;
+      var rest = l.kind === "tree" ? treeDist : refDist;
+      var strength = (l.kind === "tree" ? treeStrength : refStrength) * alpha;
+      var f = (d - rest) / dd * strength;
+      s.ax += dx * f; s.ay += dy * f;
+      t.ax -= dx * f; t.ay -= dy * f;
+    }
+
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      var r = Math.sqrt(n.x * n.x + n.y * n.y);
+      if (r < 1e-6) { n.ax += jiggle() * 8; n.ay += jiggle() * 8; continue; }
+      var rf = (n.targetR - r) * radialStrength * alpha;
+      n.ax += n.x / r * rf;
+      n.ay += n.y / r * rf;
+      n.ax += -n.x * centerStrength * alpha;
+      n.ay += -n.y * centerStrength * alpha;
+    }
+
+    collide(alpha);
+
+    // Keep acceleration bounded so a near-coincident pair can never fling a
+    // node across the canvas within a single step.
+    for (i = 0; i < nodes.length; i++) {
+      n = nodes[i];
+      var a2 = n.ax * n.ax + n.ay * n.ay;
+      if (a2 > MAX_ACC * MAX_ACC) {
+        var sc = MAX_ACC / Math.sqrt(a2);
+        n.ax *= sc; n.ay *= sc;
+      }
+    }
+  }
+
+  // ---- velocity Verlet integrator ----------------------------------------
+  function integrate() {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; n.pax = 0; n.pay = 0; continue; }
+      n.x += n.vx + 0.5 * n.ax;   // dt = 1
+      n.y += n.vy + 0.5 * n.ay;
+      n.pax = n.ax;
+      n.pay = n.ay;
+    }
+  }
+
+  function finishStep() {
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.fx != null) continue;
+      n.vx += 0.5 * (n.pax + n.ax);   // v(t + dt) from mean acceleration
+      n.vy += 0.5 * (n.pay + n.ay);
+      n.vx *= 0.7; n.vy *= 0.7;       // damping
+      var sp = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+      if (sp > MAX_SPEED) { var sc = MAX_SPEED / sp; n.vx *= sc; n.vy *= sc; }
+    }
+  }
+
+  function tick() {
+    accumulateForces(alpha);  // a(t)
+    integrate();              // x(t + dt)
+    accumulateForces(alpha);  // a(t + dt)
+    finishStep();             // v(t + dt)
+    alpha = Math.max(0.02, alpha * 0.992);
+  }
+
+  // ---------------------------------------------------------------- drawing
+  function sx(wx) { return view.x + wx * view.k; }
+  function sy(wy) { return view.y + wy * view.k; }
+  function toWorld(px, py) { return { x: (px - view.x) / view.k, y: (py - view.y) / view.k }; }
+
+  function radiusOf(n) {
+    var base = n.kind === "dir" ? 7 : 5.5;
+    return base + Math.min(9, Math.sqrt(n.degree) * 2.1);
+  }
+
+  function kindLabel(n) {
+    return n.kind === "dir" ? "Directory"
+      : n.kind === "index" ? "Index file"
+      : n.kind === "file" ? "File"
+      : n.kind === "attachment" ? "Attachment"
+      : "Concept";
+  }
+
+  // Kinds actually present in the current bundle, in a stable order.
+  function presentKinds() {
+    var set = new Set();
+    allNodes.forEach(function (n) { set.add(kindLabel(n)); });
+    return KIND_LABELS.filter(function (k) { return set.has(k); });
+  }
+
+  // Frontmatter types present among concepts, sorted.
+  function presentTypes() {
+    var set = new Set();
+    allNodes.forEach(function (n) { if (n.kind === "concept") set.add(n.type || "(untyped)"); });
+    return Array.from(set).sort();
+  }
+
+  // Lifecycle statuses present among concepts ("stable" is the default).
+  function presentStatuses() {
+    var set = new Set();
+    allNodes.forEach(function (n) { if (n.kind === "concept") set.add(n.status || "stable"); });
+    return Array.from(set).sort();
+  }
+
+  function fieldText(n, field) {
+    switch (field) {
+      case "title": return displayLabel(n);
+      case "description": return n.description || "";
+      case "type": return n.type || "";
+      case "tags": return (n.tags || []).join(" ");
+      case "path": return n.path || "";
+      default:
+        return [displayLabel(n), n.type || "", n.description || "",
+          (n.tags || []).join(" "), n.path || ""].join(" ");
+    }
+  }
+
+  function matchesQuery(n) {
+    if (!query) return true;
+    return fieldText(n, searchField).toLowerCase().indexOf(query.toLowerCase()) >= 0;
+  }
+
+  function matchesAttrFilters(n) {
+    var kind = kindLabel(n);
+    if (kindInclude.size && !kindInclude.has(kind)) return false;
+    if (kindExclude.size && kindExclude.has(kind)) return false;
+    var type = n.type || "(untyped)";
+    if (typeInclude.size && !typeInclude.has(type)) return false;
+    if (typeExclude.size && typeExclude.has(type)) return false;
+    var status = n.status || "stable";
+    if (statusInclude.size && !statusInclude.has(status)) return false;
+    if (statusExclude.size && statusExclude.has(status)) return false;
+    var tags = Array.isArray(n.tags) ? n.tags : [];
+    if (tagInclude.size) {
+      var has = false;
+      for (var i = 0; i < tags.length; i++) { if (tagInclude.has(tags[i])) { has = true; break; } }
+      if (!has) return false;
+    }
+    if (tagExclude.size) {
+      for (var j = 0; j < tags.length; j++) { if (tagExclude.has(tags[j])) return false; }
+    }
+    return true;
+  }
+
+  // Attribute filters remove nodes from the view entirely; text search only dims.
+  function isDimmed(n) { return !matchesQuery(n); }
+
+  function neighborSet(n) {
+    var set = new Set();
+    if (!n) return set;
+    set.add(n.id);
+    links.forEach(function (l) {
+      if (l.source === n) set.add(l.target.id);
+      if (l.target === n) set.add(l.source.id);
+    });
+    return set;
+  }
+
+  function draw() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    var active = hover ? neighborSet(hover) : null;
+
+    // Edges
+    var i, l;
+    for (i = 0; i < links.length; i++) {
+      l = links[i];
+      if (l.kind === "ref") continue;
+      drawEdge(l, false, active);
+    }
+    for (i = 0; i < links.length; i++) {
+      l = links[i];
+      if (l.kind !== "ref") continue;
+      drawEdge(l, true, active);
+    }
+
+    // Nodes
+    // Labels render in screen space (the canvas has no world transform). Size
+    // tracks the zoom but is smaller when zoomed out, and labels stay visible
+    // over a wider zoom range, fading out only at the far end.
+    var fontScreen = clamp(11.5 * view.k, 9, 18);
+    var labelAlpha = clamp((view.k - 0.30) / 0.25, 0, 1);
+    for (i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var px = sx(n.x), py = sy(n.y);
+      var r = radiusOf(n) * view.k;
+      var col = colorFor(n);
+      var dim = isDimmed(n) || (active && !active.has(n.id));
+
+      var unloaded = n.loaded === false;                  // attachment placeholder
+      var missing = !unloaded && hasLoadableMissing(n);   // page with unloaded references
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.globalAlpha = dim ? 0.18 : (unloaded || missing ? 0.5 : 1);
+      ctx.fill();
+
+      if (n.kind === "dir" || n.kind === "index") {
+        ctx.lineWidth = Math.max(1, 1.4 * view.k);
+        ctx.strokeStyle = n.kind === "dir" ? "#cfd5e2" : "#0c2f33";
+        ctx.globalAlpha = dim ? 0.2 : 0.9;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      if (hover === n) {
+        ctx.beginPath();
+        ctx.arc(px, py, r + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 1; ctx.stroke();
+      }
+
+      // Unloaded indicator, shared by attachment placeholders and pages whose
+      // references are not loaded yet: a dashed blue ring means "click to load".
+      if (unloaded || missing) {
+        ctx.beginPath();
+        ctx.arc(px, py, r + Math.max(1.5, 1.5 * view.k), 0, Math.PI * 2);
+        ctx.setLineDash([Math.max(2, 3 * view.k), Math.max(2, 3 * view.k)]);
+        ctx.lineWidth = Math.max(1, 1.3 * view.k);
+        ctx.strokeStyle = "#5b8def";
+        ctx.globalAlpha = dim ? 0.2 : 0.9;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
+      if (showLabels && labelAlpha > 0.01) {
+        var label = displayLabel(n);
+        ctx.globalAlpha = (dim ? 0.2 : 1) * labelAlpha;
+        ctx.font = (n.kind === "dir" ? "600 " : "") + fontScreen.toFixed(1) + "px ui-sans-serif, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = n.kind === "dir" ? "#cfd5e2" : "#e7e9ee";
+        ctx.fillText(label, px, py + r + Math.max(2, 2 * view.k), Math.max(70, 150));
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawEdge(l, ref, active) {
+    var s = l.source, t = l.target;
+    var x1 = sx(s.x), y1 = sy(s.y), x2 = sx(t.x), y2 = sy(t.y);
+    var dim = isDimmed(s) && isDimmed(t);
+    var hot = active && active.has(s.id) && active.has(t.id);
+    ctx.globalAlpha = dim ? 0.06 : (hot ? 0.95 : (ref ? 0.4 : 0.22));
+    if (!ref) {
+      ctx.strokeStyle = "#5a6274";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    } else {
+      // Curved reference edge with an arrowhead.
+      var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      var dx = x2 - x1, dy = y2 - y1;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var off = Math.min(40, len * 0.16);
+      var cx0 = mx - dy / len * off, cy0 = my + dx / len * off;
+      ctx.strokeStyle = hot ? "#8fb4ff" : "#6f86b8";
+      ctx.lineWidth = hot ? 1.8 : 1.1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cx0, cy0, x2, y2);
+      ctx.stroke();
+
+      var ang = Math.atan2(y2 - cy0, x2 - cx0);
+      var r = radiusOf(t) * view.k;
+      var ax = x2 - Math.cos(ang) * r, ay = y2 - Math.sin(ang) * r;
+      var a = 6 + 2 * view.k;
+      ctx.fillStyle = hot ? "#8fb4ff" : "#6f86b8";
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - Math.cos(ang - 0.4) * a, ay - Math.sin(ang - 0.4) * a);
+      ctx.lineTo(ax - Math.cos(ang + 0.4) * a, ay - Math.sin(ang + 0.4) * a);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------------------------------------------------------------- loop
+  var raf = null;
+  function loop() {
+    tick();
+    if (autoFit) {
+      // Track the settling layout so the whole graph stays in view; stop once
+      // it has mostly settled (or when the user takes over — see interaction).
+      fitView();
+      if (alpha <= 0.15) autoFit = false;
+    }
+    draw();
+    raf = requestAnimationFrame(loop);
+  }
+
+  // ---------------------------------------------------------------- hit test
+  function nodeAt(px, py) {
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      var n = nodes[i];
+      var dx = px - sx(n.x), dy = py - sy(n.y);
+      var r = radiusOf(n) * view.k + 4;
+      if (dx * dx + dy * dy <= r * r) return n;
+    }
+    return null;
+  }
+
+  // Fit the whole graph in the viewport, zoomed out as far as needed.
+  function fitView() {
+    if (!nodes.length || !W || !H) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    nodes.forEach(function (n) {
+      var r = radiusOf(n) + 26; // node radius plus room for the label
+      if (n.x - r < minX) minX = n.x - r;
+      if (n.x + r > maxX) maxX = n.x + r;
+      if (n.y - r < minY) minY = n.y - r;
+      if (n.y + r > maxY) maxY = n.y + r;
+    });
+    var pad = 36;
+    // On small screens keep the graph clear of the vertical toolbar at the top.
+    var topInset = 0;
+    var barEl = document.querySelector(".bar");
+    if (barEl && window.matchMedia && window.matchMedia("(max-width: 760px)").matches) {
+      topInset = barEl.offsetHeight + 16;
+    }
+    var bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+    var availW = Math.max(1, W - pad * 2);
+    var availH = Math.max(1, H - pad * 2 - topInset);
+    var fitK = Math.min(availW / bw, availH / bh);
+    // Never zoom in past 1:1 on load/reset: show everything, otherwise all the way out.
+    var k = clamp(Math.min(fitK, 1), MIN_ZOOM, MAX_ZOOM);
+    view.k = k;
+    view.x = W / 2 - ((minX + maxX) / 2) * k;
+    view.y = topInset + availH / 2 - ((minY + maxY) / 2) * k;
+  }
+
+  // ---------------------------------------------------------------- interaction
+  function pointerPoint(e) { return { x: e.clientX, y: e.clientY }; }
+
+  function pinchState() {
+    var pts = Array.from(activePointers.values());
+    if (pts.length < 2) return null;
+    var a = pts[0], b = pts[1];
+    var dx = b.x - a.x, dy = b.y - a.y;
+    return { dist: Math.sqrt(dx * dx + dy * dy) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  }
+
+  canvas.addEventListener("pointerdown", function (e) {
+    if (e.button && e.button !== 0) return; // only the primary button
+    lastPointerType = e.pointerType || lastPointerType;
+    activePointers.set(e.pointerId, pointerPoint(e));
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    if (activePointers.size >= 2) {
+      // A second finger starts a pinch: cancel any pan/drag and zoom from here.
+      dragNode = null; panning = null; moved = true;
+      canvas.classList.remove("dragging");
+      hover = null; hideTip();
+      pinchPrev = pinchState();
+      return;
+    }
+    var n = nodeAt(e.clientX, e.clientY);
+    if (n) {
+      dragNode = n; moved = false; alpha = Math.max(alpha, 0.6);
+    } else {
+      panning = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+      canvas.classList.add("dragging");
+      canvas.style.cursor = "grabbing";
+    }
+  });
+
+  canvas.addEventListener("pointermove", function (e) {
+    if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, pointerPoint(e));
+
+    // Two or more fingers: pinch-zoom around the midpoint (which also pans).
+    if (activePointers.size >= 2) {
+      var st = pinchState();
+      if (st && pinchPrev) {
+        autoFit = false;   // the user is taking over the view
+        var k = clamp(view.k * (st.dist / pinchPrev.dist), MIN_ZOOM, MAX_ZOOM);
+        var wx = (pinchPrev.cx - view.x) / view.k, wy = (pinchPrev.cy - view.y) / view.k;
+        view.x = st.cx - wx * k;
+        view.y = st.cy - wy * k;
+        view.k = k;
+        pinchPrev = st;
+      }
+      return;
+    }
+
+    if (dragNode) {
+      moved = true;
+      autoFit = false;
+      var w = toWorld(e.clientX, e.clientY);
+      dragNode.fx = w.x; dragNode.fy = w.y;
+      alpha = Math.max(alpha, 0.5);
+      return;
+    }
+    if (panning) {
+      autoFit = false;
+      view.x = panning.vx + (e.clientX - panning.x);
+      view.y = panning.vy + (e.clientY - panning.y);
+      return;
+    }
+    var h = nodeAt(e.clientX, e.clientY);
+    canvas.style.cursor = h ? "pointer" : "grab";
+    if (h !== hover) { hover = h; showTip(h, e.clientX, e.clientY); }
+    else if (h) positionTip(e.clientX, e.clientY);
+  });
+
+  function endPointer(e) {
+    if (e && e.pointerId != null) activePointers.delete(e.pointerId);
+
+    // Still pinching with two or more fingers left.
+    if (activePointers.size >= 2) { pinchPrev = pinchState(); return; }
+    pinchPrev = null;
+
+    if (dragNode) {
+      var node = dragNode;
+      dragNode = null;
+      if (!moved) {
+        var touch = ((e && e.pointerType) || lastPointerType) === "touch";
+        if (node.kind === "dir") {
+          // Double-click is unreliable on touch, so a single tap enters the
+          // directory there; on desktop a single click stays inert.
+          if (touch && node.path !== graphFocus) { enterDir(node.path); fitView(); }
+        } else if (node.kind === "attachment" && node.loaded === false) {
+          loadAttachmentNode(node);
+        } else if (hasLoadableMissing(node)) {
+          // First click loads this node's next level; once there is nothing more to
+          // load, a later click opens the preview instead.
+          expandNode(node).then(function (added) { if (!added) openPreview(node); })
+            .catch(function () { openPreview(node); });
+        } else {
+          openPreview(node);
+        }
+      }
+    }
+    if (activePointers.size === 1) {
+      // One finger remains: keep panning from where it is.
+      var p = activePointers.values().next().value;
+      panning = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+      canvas.classList.add("dragging");
+      canvas.style.cursor = "grabbing";
+    } else if (panning) {
+      panning = null; canvas.classList.remove("dragging"); canvas.style.cursor = "grab";
+    }
+    if (e && e.pointerId != null && canvas.hasPointerCapture(e.pointerId)) {
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  canvas.addEventListener("dblclick", function (e) {
+    if (lastPointerType === "touch") return; // handled on tap for touch devices
+    var n = nodeAt(e.clientX, e.clientY);
+    if (!n) return;
+    if (n.kind === "dir") enterDir(n.path);
+    else { n.fx = null; n.fy = null; alpha = Math.max(alpha, 0.5); }
+  });
+
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    autoFit = false;
+    var factor = Math.exp(-e.deltaY * 0.0015);
+    var k = clamp(view.k * factor, MIN_ZOOM, MAX_ZOOM);
+    var wx = (e.clientX - view.x) / view.k, wy = (e.clientY - view.y) / view.k;
+    view.x = e.clientX - wx * k;
+    view.y = e.clientY - wy * k;
+    view.k = k;
+  }, { passive: false });
+
+  canvas.addEventListener("pointerleave", function () { hover = null; hideTip(); });
+
+  function showTip(n, x, y) {
+    if (!n) { hideTip(); return; }
+    var kind = n.kind === "dir" ? "Directory" : n.kind === "index" ? "Index file" : (n.type || "Concept");
+    var html = '<div class="t">' + esc(displayLabel(n)) + "</div>";
+    html += '<div class="meta">' + esc(kind) + (n.path ? " · <code>" + esc(n.path) + "</code>" : "") + "</div>";
+    if (n.description) html += '<div class="desc">' + esc(n.description) + "</div>";
+    if (n.tags && n.tags.length) html += '<div class="meta" style="margin-top:4px">' + n.tags.map(function (t) { return "#" + esc(t); }).join(" ") + "</div>";
+    var out = 0, inc = 0;
+    links.forEach(function (l) { if (l.kind === "ref" && l.source === n) out++; if (l.kind === "ref" && l.target === n) inc++; });
+    if (n.kind === "concept") html += '<div class="meta" style="margin-top:4px">' + inc + " incoming · " + out + " outgoing links</div>";
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    positionTip(x, y);
+  }
+  function positionTip(x, y) {
+    var pad = 14;
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var lx = x + pad, ly = y + pad;
+    if (lx + w > W - 8) lx = x - w - pad;
+    if (ly + h > H - 8) ly = H - h - 8;
+    if (ly < 8) ly = 8;
+    tip.style.left = lx + "px";
+    tip.style.top = ly + "px";
+  }
+  function hideTip() { tip.style.display = "none"; }
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ------------------------------------------------------------ markdown
+  // A small, dependency-free CommonMark-ish renderer: headings, emphasis,
+  // inline code, fenced code, links/images, lists, blockquotes, tables, hr,
+  // and GFM-style [^id] footnotes. Input is escaped, so raw HTML is inert.
+  function renderInline(raw) {
+    var store = [];
+    function stash(htmlStr) { store.push(htmlStr); return "\u0001" + (store.length - 1) + "\u0001"; }
+    var s = esc(raw);
+    s = s.replace(/`([^`]+)`/g, function (m, c) { return stash("<code>" + c + "</code>"); });
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, url) {
+      return stash('<img alt="' + alt + '" src="' + url + '">');
+    });
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, function (m, text, url) {
+      var ext = /^(https?:|mailto:)/i.test(url);
+      var href = ext ? url : "#";
+      var extra = ext ? ' target="_blank" rel="noopener"' : "";
+      return stash('<a href="' + href + '" data-link="' + url + '"' + extra + ">" + text + "</a>");
+    });
+    // Consecutive footnote references should read as a comma-separated list,
+    // so drop whitespace between them; the .fnref CSS adds the commas.
+    s = s.replace(/\]\s+(\[\^)/g, "]$1");
+    s = s.replace(/\[\^([^\]]+)\]/g, function (m, id) {
+      return stash('<sup class="fnref" id="fnref-' + id + '"><a href="#fn-' + id + '" data-fn="' + id + '">' + id + "</a></sup>");
+    });
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    s = s.replace(/(^|[^_\w])_([^_\n]+)_/g, "$1<em>$2</em>");
+    s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    // Placeholders may nest (e.g. inline code inside a link label), so restore
+    // repeatedly until none remain.
+    var guard = 0;
+    while (/\u0001\d+\u0001/.test(s) && guard++ < 20) {
+      s = s.replace(/\u0001(\d+)\u0001/g, function (m, i) { return store[+i]; });
+    }
+    return s;
+  }
+
+  function isTableStart(lines, i) {
+    return lines[i].indexOf("|") >= 0 && i + 1 < lines.length &&
+      lines[i + 1].indexOf("|") >= 0 && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1]);
+  }
+
+  function parseTable(lines, i) {
+    function cells(row) {
+      return row.trim().replace(/^\|/, "").replace(/\|$/, "")
+        .split("|").map(function (c) { return c.trim(); });
+    }
+    var header = cells(lines[i]);
+    var align = cells(lines[i + 1]).map(function (s) {
+      if (/^:-{2,}:$/.test(s)) return "center";
+      if (/^-{2,}:$/.test(s)) return "right";
+      if (/^:-{2,}$/.test(s)) return "left";
+      return "";
+    });
+    i += 2;
+    var html = "<table><thead><tr>";
+    header.forEach(function (c, idx) {
+      html += "<th" + (align[idx] ? ' style="text-align:' + align[idx] + '"' : "") + ">" + renderInline(c) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && lines[i].indexOf("|") >= 0) {
+      var row = cells(lines[i]);
+      html += "<tr>";
+      header.forEach(function (_, idx) {
+        html += "<td" + (align[idx] ? ' style="text-align:' + align[idx] + '"' : "") + ">" + renderInline(row[idx] || "") + "</td>";
+      });
+      html += "</tr>";
+      i++;
+    }
+    return { html: html + "</tbody></table>", next: i };
+  }
+
+  function parseList(lines, i) {
+    var ordered = /^\s*\d+\.\s+/.test(lines[i]);
+    var base = lines[i].match(/^\s*/)[0].length;
+    var parts = [], open = false;
+    while (i < lines.length) {
+      var m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i]);
+      if (!m) break;
+      var indent = m[1].length;
+      if (indent < base) break;
+      if (indent > base) {
+        var sub = parseList(lines, i);
+        parts.push(open ? sub.html : "<li>" + sub.html + "</li>");
+        i = sub.next;
+        continue;
+      }
+      if (open) parts.push("</li>");
+      parts.push("<li>" + renderInline(m[3]));
+      open = true;
+      i++;
+    }
+    if (open) parts.push("</li>");
+    var tag = ordered ? "ol" : "ul";
+    return { html: "<" + tag + ">" + parts.join("") + "</" + tag + ">", next: i };
+  }
+
+  function renderMarkdown(md) {
+    var lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
+    var footnotes = {}, order = [], kept = [];
+    for (var k = 0; k < lines.length; k++) {
+      var fm = /^\[\^([^\]]+)\]:\s*(.*)$/.exec(lines[k]);
+      if (fm) { if (!(fm[1] in footnotes)) order.push(fm[1]); footnotes[fm[1]] = fm[2]; continue; }
+      kept.push(lines[k]);
+    }
+    lines = kept;
+    function startsBlock(t) {
+      return /^\s*(#{1,6}\s|```|>|([-*+]|\d+\.)\s)/.test(t) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(t);
+    }
+    var html = [], i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (/^\s*$/.test(line)) { i++; continue; }
+      var fence = /^\s*```(\w*)\s*$/.exec(line);
+      if (fence) {
+        var lang = fence[1], code = []; i++;
+        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
+        i++;
+        html.push('<pre class="md-pre"><code' + (lang ? ' class="language-' + esc(lang) + '"' : "") + ">" + esc(code.join("\n")) + "</code></pre>");
+        continue;
+      }
+      var h = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
+      if (h) { var lv = h[1].length; html.push("<h" + lv + ">" + renderInline(h[2]) + "</h" + lv + ">"); i++; continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { html.push("<hr>"); i++; continue; }
+      if (/^\s*>/.test(line)) {
+        var bq = [];
+        while (i < lines.length && /^\s*>/.test(lines[i])) { bq.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+        html.push("<blockquote>" + renderMarkdown(bq.join("\n")) + "</blockquote>");
+        continue;
+      }
+      if (isTableStart(lines, i)) { var tb = parseTable(lines, i); html.push(tb.html); i = tb.next; continue; }
+      if (/^\s*([-*+]|\d+\.)\s+/.test(line)) { var ls = parseList(lines, i); html.push(ls.html); i = ls.next; continue; }
+      var para = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !startsBlock(lines[i]) && !isTableStart(lines, i)) {
+        para.push(lines[i]); i++;
+      }
+      if (!para.length) { para.push(line); i++; }
+      html.push("<p>" + renderInline(para.join("\n")).replace(/\n/g, "<br>") + "</p>");
+    }
+    if (order.length) {
+      var fh = '<section class="md-footnotes"><hr><ol>';
+      order.forEach(function (id) { fh += '<li id="fn-' + esc(id) + '">' + renderInline(footnotes[id]) + "</li>"; });
+      html.push(fh + "</ol></section>");
+    }
+    return html.join("\n");
+  }
+
+  // ------------------------------------------------------------ pdf peek
+  //
+  // Best-effort PDF metadata extraction with no library: read the file, decode
+  // it as latin1 so byte values map one-to-one to characters, then scan the two
+  // places metadata normally lives, the XMP packet and the Info dictionary.
+  // Compressed object streams (PDF 1.5+) are inflated with DecompressionStream
+  // so their objects join the scan. Encrypted PDFs may yield nothing; every
+  // field is optional.
+  var PDF_PEEK_BYTES = 2 * 1024 * 1024;      // head/tail window for very large files
+  var PDF_MAX_BYTES = 16 * 1024 * 1024;      // read the whole file up to this cap
+  var PDF_STREAM_TEXT_MAX = 8 * 1024 * 1024; // cap on inflated object-stream text
+  var PDF_WS = " \t\r\n\f";
+
+  function bytesToLatin1(buf) {
+    var bytes = new Uint8Array(buf), out = [], CH = 0x8000, i;
+    for (i = 0; i < bytes.length; i += CH) {
+      out.push(String.fromCharCode.apply(null, bytes.subarray(i, i + CH)));
+    }
+    return out.join("");
+  }
+
+  function latin1ToBytes(s) {
+    var u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xff;
+    return u;
+  }
+
+  // Read the bytes to scan. Files up to the cap are read whole, so compressed
+  // object streams can be located and inflated; larger ones fall back to a
+  // head+tail window separated by a newline.
+  async function readPdfBytes(node) {
+    var src = node.src;
+    if (!src) return null;
+    if (typeof src === "string") {
+      var res = await trackedFetch(src, { cache: "force-cache" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return new Uint8Array(await res.arrayBuffer());
+    }
+    var size = src.size || 0;
+    if (!size || size <= PDF_MAX_BYTES) return new Uint8Array(await src.arrayBuffer());
+    var head = new Uint8Array(await src.slice(0, PDF_PEEK_BYTES).arrayBuffer());
+    var tail = new Uint8Array(await src.slice(size - PDF_PEEK_BYTES).arrayBuffer());
+    var out = new Uint8Array(head.length + 1 + tail.length);
+    out.set(head, 0);
+    out[head.length] = 10;
+    out.set(tail, head.length + 1);
+    return out;
+  }
+
+  // Object streams (/Type /ObjStm) keep their payload DEFLATE-compressed but
+  // leave their dictionaries in plaintext, so we can find and inflate them to
+  // reach objects (such as the Info dictionary) the raw scan cannot see.
+  function findObjStmPayloads(text) {
+    var out = [], from = 0, guard = 0;
+    while (guard++ < 500) {
+      var i = text.indexOf("/ObjStm", from);
+      if (i < 0) break;
+      from = i + 7;
+      var dictEnd = text.indexOf(">>", i);
+      if (dictEnd < 0) continue;
+      var dict = text.slice(i, dictEnd);
+      if (dict.indexOf("/FlateDecode") < 0) continue;
+      var s = text.indexOf("stream", dictEnd);
+      if (s < 0) continue;
+      var p = s + 6;
+      if (text.charAt(p) === "\r") p++;
+      if (text.charAt(p) === "\n") p++;
+      var m = /\/Length\s+(\d+)/.exec(dict);
+      var indirect = m ? /^\s+\d+\s+R\b/.test(dict.slice(m.index + m[0].length)) : false;
+      var payload;
+      if (m && !indirect && p + parseInt(m[1], 10) <= text.length) {
+        payload = text.slice(p, p + parseInt(m[1], 10));
+      } else {
+        var e = text.indexOf("endstream", p);
+        if (e < 0) continue;
+        payload = text.slice(p, e);
+      }
+      out.push(payload);
+    }
+    return out;
+  }
+
+  // Inflate a zlib (RFC 1950) payload, which is what PDF FlateDecode uses.
+  async function inflateDeflate(latin1) {
+    if (typeof DecompressionStream !== "function") return "";
+    try {
+      var stream = new Response(latin1ToBytes(latin1)).body
+        .pipeThrough(new DecompressionStream("deflate"));
+      return bytesToLatin1(await new Response(stream).arrayBuffer());
+    } catch (e) { return ""; }
+  }
+
+  // Inflate every FlateDecode object stream we can find, so their objects join
+  // the text the metadata scan sees. Bounded and best-effort.
+  async function inflateObjStreams(text) {
+    if (typeof DecompressionStream !== "function") return "";
+    var payloads = findObjStmPayloads(text), parts = [], total = 0;
+    for (var i = 0; i < payloads.length && i < 200; i++) {
+      var t = await inflateDeflate(payloads[i]);
+      if (t) { parts.push(t); total += t.length; if (total > PDF_STREAM_TEXT_MAX) break; }
+    }
+    return parts.join("\n");
+  }
+
+  async function scanTextForPdf(node) {
+    var bytes = await readPdfBytes(node);
+    if (!bytes || !bytes.length) return "";
+    var text = bytesToLatin1(bytes);
+    var extra = await inflateObjStreams(text);
+    return extra ? text + "\n" + extra : text;
+  }
+
+  function cleanPdfText(s) {
+    s = String(s);
+    if (s.charCodeAt(0) === 0xFE && s.charCodeAt(1) === 0xFF) {
+      var w = "", i;
+      for (i = 2; i + 1 < s.length; i += 2) w += String.fromCharCode((s.charCodeAt(i) << 8) | s.charCodeAt(i + 1));
+      s = w;
+    }
+    s = s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    return s.split(String.fromCharCode(0)).join("").replace(/\s+/g, " ").trim();
+  }
+
+  function decodePdfString(raw) {
+    if (raw == null) return "";
+    raw = String(raw).trim();
+    if (raw.charAt(0) === "<") {
+      var hex = "", i, c;
+      for (i = 1; i < raw.length && raw.charAt(i) !== ">"; i++) {
+        c = raw.charAt(i);
+        if (/[0-9A-Fa-f]/.test(c)) hex += c;
+      }
+      var h = "";
+      for (i = 0; i + 1 < hex.length; i += 2) h += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+      return cleanPdfText(h);
+    }
+    var out = "", n = raw.length, k = 0, depth = 0;
+    if (raw.charAt(k) === "(") { k++; depth = 1; }
+    while (k < n && depth > 0) {
+      c = raw.charAt(k);
+      if (c === "\\") {
+        k++;
+        var e = raw.charAt(k);
+        if (e >= "0" && e <= "7") {
+          var oct = e; k++;
+          e = raw.charAt(k);
+          if (e >= "0" && e <= "7") { oct += e; k++; e = raw.charAt(k); if (e >= "0" && e <= "7") { oct += e; k++; } }
+          out += String.fromCharCode(parseInt(oct, 8));
+        } else if (e === "n") { out += String.fromCharCode(10); k++; }
+        else if (e === "r") { out += String.fromCharCode(13); k++; }
+        else if (e === "t") { out += String.fromCharCode(9); k++; }
+        else if (e === "b") { out += String.fromCharCode(8); k++; }
+        else if (e === "f") { out += String.fromCharCode(12); k++; }
+        else if (e === String.fromCharCode(10) || e === String.fromCharCode(13)) { k++; }
+        else { out += e; k++; }
+      } else if (c === "(") { depth++; out += c; k++; }
+      else if (c === ")") { depth--; if (depth === 0) break; out += c; k++; }
+      else { out += c; k++; }
+    }
+    return cleanPdfText(out);
+  }
+
+  function findInfoString(text, key) {
+    var needle = "/" + key, from = 0, n = text.length;
+    while (from < n) {
+      var i = text.indexOf(needle, from);
+      if (i < 0) return "";
+      var j = i + needle.length, ch = text.charAt(j);
+      if ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z")) { from = j; continue; }
+      while (j < n && PDF_WS.indexOf(text.charAt(j)) >= 0) j++;
+      ch = text.charAt(j);
+      if (ch === "(") {
+        var depth = 1, k = j + 1;
+        while (k < n && depth > 0) {
+          var cc = text.charAt(k);
+          if (cc === "\\") { k += 2; continue; }
+          if (cc === "(") depth++;
+          else if (cc === ")") { depth--; if (depth === 0) break; }
+          k++;
+        }
+        return decodePdfString(text.slice(j, k + 1));
+      }
+      if (ch === "<") {
+        var e2 = text.indexOf(">", j);
+        if (e2 > j) return decodePdfString(text.slice(j, e2 + 1));
+      }
+      from = j;
+    }
+    return "";
+  }
+
+  function xmpField(xmp, name) {
+    var open = "<" + name, close = "</" + name + ">";
+    var i = xmp.indexOf(open);
+    if (i < 0) return "";
+    var gt = xmp.indexOf(">", i);
+    var j = gt < 0 ? -1 : xmp.indexOf(close, gt);
+    if (j < 0) return "";
+    return cleanPdfText(xmp.slice(gt + 1, j).replace(/<[^>]+>/g, " "));
+  }
+
+  function xmpAttr(xmp, name) {
+    var eq = name + "=", i = xmp.indexOf(eq);
+    if (i < 0) return "";
+    var q = xmp.charAt(i + eq.length);
+    if (q !== '"' && q !== "'") return "";
+    var end = xmp.indexOf(q, i + eq.length + 1);
+    if (end < 0) return "";
+    return cleanPdfText(xmp.slice(i + eq.length + 1, end));
+  }
+
+  function pdfDate(s) {
+    if (!s) return "";
+    if (s.length >= 10 && s.charAt(4) === "-" && s.charAt(7) === "-") {
+      return s.replace("T", " ").replace(/Z$/, " UTC").replace(/\+00:00$/, " UTC");
+    }
+    var digits = s.replace(/[^0-9]/g, "");
+    if (digits.length < 4) return s;
+    var d = digits.substr(0, 4) + "-" + (digits.substr(4, 2) || "01") + "-" + (digits.substr(6, 2) || "01");
+    return digits.length >= 12
+      ? d + " " + digits.substr(8, 2) + ":" + digits.substr(10, 2) + ":" + (digits.substr(12, 2) || "00")
+      : d;
+  }
+
+  function countPdfPages(text) {
+    var count = 0, from = 0, n = text.length, needle = "/Type";
+    while (from < n) {
+      var i = text.indexOf(needle, from);
+      if (i < 0) break;
+      var k = i + needle.length;
+      while (k < n && PDF_WS.indexOf(text.charAt(k)) >= 0) k++;
+      if (text.substr(k, 5) === "/Page") {
+        var nx = text.charAt(k + 5);
+        if (!((nx >= "A" && nx <= "Z") || (nx >= "a" && nx <= "z") || (nx >= "0" && nx <= "9"))) count++;
+      }
+      from = i + needle.length;
+    }
+    return count;
+  }
+
+  function parsePdfMeta(text) {
+    var a = text.indexOf("<x:xmpmeta"), b = text.indexOf("</x:xmpmeta>");
+    var xmp = (a >= 0 && b > a) ? text.slice(a, b) : "";
+    var meta = {};
+    meta.title = xmpField(xmp, "dc:title") || xmpAttr(xmp, "dc:title") || findInfoString(text, "Title");
+    meta.author = xmpField(xmp, "dc:creator") || xmpAttr(xmp, "dc:creator") || findInfoString(text, "Author");
+    meta.subject = xmpField(xmp, "dc:description") || xmpAttr(xmp, "dc:description") || findInfoString(text, "Subject") || findInfoString(text, "Keywords");
+    meta.producer = xmpField(xmp, "pdf:Producer") || xmpAttr(xmp, "pdf:Producer") || findInfoString(text, "Producer");
+    meta.creator = xmpField(xmp, "xmp:CreatorTool") || xmpAttr(xmp, "xmp:CreatorTool") || findInfoString(text, "Creator");
+    meta.created = pdfDate(xmpField(xmp, "xmp:CreateDate") || xmpAttr(xmp, "xmp:CreateDate") || findInfoString(text, "CreationDate"));
+    meta.modified = pdfDate(xmpField(xmp, "xmp:ModifyDate") || xmpAttr(xmp, "xmp:ModifyDate") || findInfoString(text, "ModDate"));
+    meta.pages = countPdfPages(text);
+    return meta;
+  }
+
+  function peekPdfMeta(node) {
+    if (!node || node.kind !== "attachment" || extOf(node.path) !== "pdf") return Promise.resolve(null);
+    if (node.pdfMeta) return Promise.resolve(node.pdfMeta);
+    if (!node.metaPromise) {
+      node.metaPromise = scanTextForPdf(node).then(function (text) {
+        node.pdfMeta = parsePdfMeta(text);
+        return node.pdfMeta;
+      });
+    }
+    return node.metaPromise;
+  }
+
+  function formatBytes(n) {
+    if (n == null || isNaN(n)) return "";
+    if (n < 1024) return n + " B";
+    var units = ["KB", "MB", "GB", "TB"], v = n, i = -1;
+    do { v /= 1024; i++; } while (v >= 1024 && i < units.length - 1);
+    return (v >= 10 ? Math.round(v) : v.toFixed(1)) + " " + units[i];
+  }
+
+  function formatDate(ms) {
+    if (!ms) return "";
+    try { return new Date(ms).toLocaleString(); } catch (e) { return ""; }
+  }
+
+  // File-system details. For a File/Blob we read size and lastModified
+  // directly; for a served URL we ask the server with a HEAD request.
+  function peekFileInfo(node) {
+    if (node.fileInfo) return Promise.resolve(node.fileInfo);
+    if (!node.fileInfoPromise) {
+      node.fileInfoPromise = (async function () {
+        var src = node.src, info = {};
+        if (!src) return info;
+        if (typeof src === "string") {
+          try {
+            var res = await trackedFetch(src, { method: "HEAD", cache: "force-cache" });
+            if (res.ok) {
+              var cl = res.headers.get("content-length");
+              if (cl) info.size = parseInt(cl, 10);
+              var lm = res.headers.get("last-modified");
+              if (lm) { var t = Date.parse(lm); if (!isNaN(t)) info.modified = t; }
+            }
+          } catch (e) {}
+        } else {
+          if (typeof src.size === "number") info.size = src.size;
+          if (typeof src.lastModified === "number" && src.lastModified) info.modified = src.lastModified;
+        }
+        node.fileInfo = info;
+        return info;
+      })();
+    }
+    return node.fileInfoPromise;
+  }
+
+  // ------------------------------------------------------------ preview
+  var previewPath = null;
+  var pvStack = [], pvIndex = -1, pvSuppress = false, pvPushed = false;
+
+  function renderPreviewEntry(node) {
+    pvHideTagPop();
+    previewPath = node.path;
+    pvTitle.textContent = displayLabel(node);
+    pvPath.textContent = node.path || "";
+    if (node.kind === "attachment") {
+      renderAttachmentPreview(node);
+    } else if (node.kind === "file") {
+      pvBody.innerHTML = '<pre class="md-pre plain">' + esc(node.body || "") + "</pre>";
+    } else {
+      var meta = [];
+      if (node.type) meta.push('<span class="chip2">' + esc(node.type) + "</span>");
+      if (node.status) meta.push('<span class="chip2">' + esc(node.status) + "</span>");
+      (Array.isArray(node.tags) ? node.tags : []).forEach(function (t) {
+        meta.push('<span class="chip2 pv-tag" data-tag="' + esc(t) + '" title="Pages with this tag">#' + esc(t) + "</span>");
+      });
+      var metaHtml = meta.join("");
+      pvBody.innerHTML = (metaHtml ? '<div class="md-meta">' + metaHtml + "</div>" : "") +
+        renderMarkdown(node.body || "");
+    }
+    pvBody.scrollTop = 0;
+    preview.classList.add("show");
+    updatePvNav();
+  }
+
+  function renderAttachmentPreview(node) {
+    var ext = extOf(node.path) || "";
+    var isPdf = ext === "pdf";
+    var head = '<div class="md-meta"><span class="chip2">' + esc((ext || "file").toUpperCase()) + "</span>" +
+      '<span class="chip2 pv-hide" id="pvPages"></span>' + "</div>";
+    var body = head +
+      '<h3 class="pv-sec">File</h3><div id="pvFile"><p class="pv-note">Reading file details\u2026</p></div>';
+    if (isPdf) {
+      body += '<h3 class="pv-sec">Document</h3><div id="pvMeta"><p class="pv-note">Reading PDF metadata\u2026</p></div>';
+    } else {
+      body += '<p class="pv-note pv-attach-note">This file type is not previewed.</p>';
+    }
+    body += '<p class="pv-note pv-attach-note">Binary attachments are shown as graph nodes. Open the file from the bundle directory to view it.</p>';
+    pvBody.innerHTML = body;
+    peekFileInfo(node).then(function () { paintFileSection(node); });
+    if (!isPdf) return;
+    if (node.pdfMeta) { paintPdfMeta(node, node.pdfMeta); return; }
+    peekPdfMeta(node).then(function (m) { paintPdfMeta(node, m); },
+      function () { paintPdfMeta(node, null); });
+  }
+
+  function paintFileSection(node) {
+    if (previewPath !== node.path) return;
+    var el = document.getElementById("pvFile");
+    if (!el) return;
+    var info = node.fileInfo || {};
+    var cells = [];
+    function add(label, val) {
+      if (val) cells.push("<dt>" + esc(label) + "</dt><dd>" + esc(String(val)) + "</dd>");
+    }
+    add("Size", info.size != null ? formatBytes(info.size) : "");
+    add("Modified", info.modified ? formatDate(info.modified) : "");
+    el.innerHTML = cells.length ? '<dl class="pv-fields">' + cells.join("") + "</dl>"
+      : '<p class="pv-note">File details are not available.</p>';
+  }
+
+  function paintPdfMeta(node, meta) {
+    if (previewPath !== node.path) return;
+    var el = document.getElementById("pvMeta");
+    if (!el) return;
+    if (!meta) { el.innerHTML = '<p class="pv-note">PDF metadata could not be read.</p>'; return; }
+    var pagesEl = document.getElementById("pvPages");
+    if (pagesEl && meta.pages) {
+      pagesEl.textContent = meta.pages + " pages";
+      pagesEl.classList.remove("pv-hide");
+    }
+    var cells = [];
+    function add(label, val) {
+      if (val) cells.push("<dt>" + esc(label) + "</dt><dd>" + esc(String(val)) + "</dd>");
+    }
+    add("Title", meta.title);
+    add("Author", meta.author);
+    add("Subject", meta.subject);
+    add("Producer", meta.producer);
+    add("Creator", meta.creator);
+    add("Created", meta.created);
+    add("Modified", meta.modified);
+    el.innerHTML = cells.length ? '<dl class="pv-fields">' + cells.join("") + "</dl>"
+      : '<p class="pv-note">No document metadata found.</p>';
+  }
+
+  // Navigating (node click or an in-preview link) pushes the entry to both the
+  // in-app stack and the browser history. This lets the browser's own
+  // back/forward controls — including mouse side buttons, which browsers
+  // reserve for history navigation — drive the preview.
+  function openPreview(node) {
+    if (!node || node.kind === "dir") return;
+    var showing = preview.classList.contains("show");
+    if (showing && pvIndex >= 0 && pvStack[pvIndex] === node) { renderPreviewEntry(node); return; }
+    if (pvIndex < pvStack.length - 1) pvStack = pvStack.slice(0, pvIndex + 1);
+    pvStack.push(node);
+    pvIndex = pvStack.length - 1;
+    try { history.pushState({ okfPv: pvIndex }, "", location.href); pvPushed = true; }
+    catch (e) { pvPushed = false; /* e.g. file:// */ }
+    renderPreviewEntry(node);
+  }
+
+  function showPreviewAt(i) {
+    if (i < 0 || i >= pvStack.length) return;
+    pvIndex = i;
+    renderPreviewEntry(pvStack[i]);
+  }
+  // Back/forward go through browser history so they stay in sync with the
+  // browser and mouse controls; popstate renders the resulting entry.
+  function pvBack() {
+    if (pvPushed) { try { history.back(); return; } catch (e) {} }
+    showPreviewAt(pvIndex - 1);
+  }
+  function pvForward() {
+    if (pvPushed) { try { history.forward(); return; } catch (e) {} }
+    showPreviewAt(pvIndex + 1);
+  }
+  function updatePvNav() {
+    if (pvBackBtn) pvBackBtn.disabled = pvIndex <= 0;
+    if (pvFwdBtn) pvFwdBtn.disabled = pvIndex >= pvStack.length - 1;
+  }
+
+  function hidePreview() { preview.classList.remove("show"); pvHideTagPop(); }
+  function closePreview() {
+    if (!preview.classList.contains("show")) return;
+    hidePreview();
+    // Pop our current history entry so a later Back doesn't reopen the preview.
+    if (pvPushed && pvIndex >= 0) { pvSuppress = true; try { history.back(); } catch (e) { pvSuppress = false; } }
+  }
+
+  window.addEventListener("popstate", function (e) {
+    if (pvSuppress) {
+      pvSuppress = false;
+      if (e.state && typeof e.state.okfPv === "number") pvIndex = e.state.okfPv;
+      return;
+    }
+    var st = e.state;
+    if (st && typeof st.okfPv === "number" && st.okfPv >= 0 && st.okfPv < pvStack.length) {
+      showPreviewAt(st.okfPv);
+    } else {
+      hidePreview(); // navigated back before the first preview entry
+    }
+  });
+  function handlePreviewClick(e) {
+    var a = e.target.closest ? e.target.closest("a") : null;
+    if (!a) return;
+    var raw = a.getAttribute("data-link");
+    if (raw) {
+      if (/^(https?:|mailto:)/i.test(raw)) return; // let the browser open it
+      e.preventDefault();
+      var tn = null, cands = linkCandidates(previewPath, raw);
+      for (var ci = 0; ci < cands.length && fileMap; ci++) { if (fileMap.has(cands[ci])) { tn = fileMap.get(cands[ci]); break; } }
+      if (tn) openPreview(tn);
+      return;
+    }
+    var href = a.getAttribute("href") || "";
+    if (href.charAt(0) === "#") {
+      e.preventDefault();
+      var el = null;
+      try { el = pvBody.querySelector(href); } catch (err) { el = null; } // guard against malformed fragments
+      if (el) el.scrollIntoView({ block: "start" });
+    }
+  }
+
+  // Hovering a tag chip in the preview lists the other pages that carry the
+  // same tag, so a reader can jump between them without leaving the preview.
+  // Prefixed "pv" so the identifiers cannot collide with the sidebar tag
+  // filter, whose popover object is called `tagPop`.
+  var pvTagPop = document.getElementById("pvTagPop");
+  var pvTagPopTimer = null, pvTagPopTag = null;
+  // Hover needs a real pointer; on touch devices a tap opens the popup instead.
+  var pvCanHover = !window.matchMedia || window.matchMedia("(hover: hover)").matches;
+
+  function nodesWithTag(tag) {
+    var out = [];
+    allNodes.forEach(function (n) {
+      if (n.kind !== "concept") return;
+      if (Array.isArray(n.tags) && n.tags.indexOf(tag) !== -1) out.push(n);
+    });
+    out.sort(function (a, b) { return displayLabel(a).localeCompare(displayLabel(b)); });
+    return out;
+  }
+
+  function pvHideTagPop() {
+    if (pvTagPopTimer) { clearTimeout(pvTagPopTimer); pvTagPopTimer = null; }
+    pvTagPopTag = null;
+    if (pvTagPop) pvTagPop.hidden = true;
+  }
+  function pvScheduleHideTagPop() {
+    if (pvTagPopTimer) clearTimeout(pvTagPopTimer);
+    pvTagPopTimer = setTimeout(pvHideTagPop, 180);
+  }
+
+  function pvPositionTagPop(chip) {
+    var r = chip.getBoundingClientRect();
+    pvTagPop.style.left = "0px";
+    pvTagPop.style.top = "0px";
+    var pw = pvTagPop.offsetWidth, ph = pvTagPop.offsetHeight;
+    var left = r.left;
+    var top = r.bottom + 6;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (left < 8) left = 8;
+    if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+    pvTagPop.style.left = left + "px";
+    pvTagPop.style.top = top + "px";
+  }
+
+  function pvShowTagPop(tag, chip) {
+    if (!pvTagPop) return;
+    if (pvTagPopTimer) { clearTimeout(pvTagPopTimer); pvTagPopTimer = null; }
+    pvTagPopTag = tag;
+    var nodes = nodesWithTag(tag);
+    var html = '<div class="tp-head">Pages tagged <b>#' + esc(tag) + "</b> (" + nodes.length + ")</div>";
+    if (!nodes.length) {
+      html += '<div class="tp-item tp-cur">No pages with this tag.</div>';
+    } else {
+      nodes.forEach(function (n) {
+        if (n.path === previewPath) {
+          html += '<div class="tp-item tp-cur">' + esc(displayLabel(n)) + " (this page)</div>";
+        } else {
+          html += '<button type="button" class="tp-item" data-path="' + esc(n.path) + '">' +
+            '<span class="tp-t">' + esc(displayLabel(n)) + "</span>" +
+            '<span class="tp-p">' + esc(n.path || "") + "</span></button>";
+        }
+      });
+    }
+    pvTagPop.innerHTML = html;
+    pvTagPop.hidden = false;
+    pvPositionTagPop(chip);
+  }
+
+  if (pvTagPop) {
+    if (pvCanHover) {
+      pvTagPop.addEventListener("mouseenter", function () {
+        if (pvTagPopTimer) { clearTimeout(pvTagPopTimer); pvTagPopTimer = null; }
+      });
+      pvTagPop.addEventListener("mouseleave", pvScheduleHideTagPop);
+    }
+    pvTagPop.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest(".tp-item") : null;
+      if (!b || !b.getAttribute) return;
+      var p = b.getAttribute("data-path");
+      if (!p || !fileMap) return;
+      var n = fileMap.get(p);
+      if (n) { pvHideTagPop(); openPreview(n); }
+    });
+  }
+
+  if (pvBody) {
+    if (pvCanHover) {
+      pvBody.addEventListener("mouseover", function (e) {
+        var chip = e.target.closest ? e.target.closest(".pv-tag") : null;
+        if (!chip) return;
+        var tag = chip.getAttribute("data-tag");
+        if (!tag) return;
+        if (pvTagPopTag === tag && pvTagPop && !pvTagPop.hidden) return;
+        pvShowTagPop(tag, chip);
+      });
+      pvBody.addEventListener("mouseout", function (e) {
+        var chip = e.target.closest ? e.target.closest(".pv-tag") : null;
+        if (!chip) return;
+        pvScheduleHideTagPop();
+      });
+    }
+    // Tap/click a tag chip: open the popup, or close it if this tag is already open.
+    pvBody.addEventListener("click", function (e) {
+      var chip = e.target.closest ? e.target.closest(".pv-tag") : null;
+      if (!chip) return;
+      var tag = chip.getAttribute("data-tag");
+      if (!tag) return;
+      if (pvTagPopTag === tag && pvTagPop && !pvTagPop.hidden) {
+        if (!pvCanHover) pvHideTagPop(); // tap the same chip again to close
+        return;
+      }
+      pvShowTagPop(tag, chip);
+    });
+    pvBody.addEventListener("scroll", pvHideTagPop);
+  }
+
+  // Tap outside the popup (and outside a chip) to dismiss it.
+  document.addEventListener("pointerdown", function (e) {
+    if (!pvTagPop || pvTagPop.hidden) return;
+    var t = e.target;
+    if (t.closest && (t.closest("#pvTagPop") || t.closest(".pv-tag"))) return;
+    pvHideTagPop();
+  }, true);
+
+  // ---------------------------------------------------------------- legend
+  function buildLegend() {
+    var groups = new Map();
+    nodes.forEach(function (n) {
+      var g = groupOf(n);
+      if (!groups.has(g)) groups.set(g, { count: 0, node: n });
+      groups.get(g).count++;
+    });
+    var order = ["Directories", "Index files"];
+    var rest = Array.from(groups.keys()).filter(function (g) { return order.indexOf(g) < 0; }).sort();
+    var keys = order.concat(rest);
+    var html = "<h2>Legend</h2>";
+    keys.forEach(function (g) {
+      if (!groups.has(g)) return;
+      var n = groups.get(g).node;
+      html += '<div class="lg">' +
+        '<span class="sw" style="background:' + colorFor(n) + '"></span>' +
+        "<span>" + esc(g) + "</span>" +
+        '<span class="n">' + groups.get(g).count + "</span></div>";
+    });
+    legendBody.innerHTML = html;
+  }
+
+  // ---------------------------------------------------------------- legend
+  function updateFilterSummary() {
+    var n = tagInclude.size + tagExclude.size + kindInclude.size + kindExclude.size +
+            typeInclude.size + typeExclude.size + statusInclude.size + statusExclude.size;
+    var el = document.getElementById("filterSummary");
+    if (el) el.textContent = n ? n + " active" : (query ? "search" : "");
+  }
+
+  // ---- tag combobox: include / exclude chips + embedded search -------------
+  function computeAllTags() {
+    var counts = new Map();
+    allNodes.forEach(function (n) {
+      var tags = Array.isArray(n.tags) ? n.tags : (n.tags ? [n.tags] : []);
+      tags.forEach(function (t) { if (t) counts.set(t, (counts.get(t) || 0) + 1); });
+    });
+    allTags = Array.from(counts.keys()).sort();
+    Array.from(tagInclude).forEach(function (t) { if (allTags.indexOf(t) < 0) tagInclude.delete(t); });
+    Array.from(tagExclude).forEach(function (t) { if (allTags.indexOf(t) < 0) tagExclude.delete(t); });
+  }
+
+  function renderChipsInto(hostId, include, exclude) {
+    var host = document.getElementById(hostId);
+    if (!host) return;
+    var html = "";
+    function chip(t, cls) {
+      return '<span class="chip ' + cls + '" data-t="' + esc(t) + '">' +
+        '<button type="button" class="ct" title="Toggle include / exclude">' + esc(t) + "</button>" +
+        '<button type="button" class="cx" title="Remove">\u00d7</button></span>';
+    }
+    include.forEach(function (t) { html += chip(t, "inc"); });
+    exclude.forEach(function (t) { html += chip(t, "exc"); });
+    host.innerHTML = html;
+  }
+  function renderChips() { renderChipsInto("tagChips", tagInclude, tagExclude); }
+  function renderKindChips() { renderChipsInto("kindChips", kindInclude, kindExclude); }
+  function renderTypeChips() { renderChipsInto("typeChips", typeInclude, typeExclude); }
+  function renderStatusChips() { renderChipsInto("statusChips", statusInclude, statusExclude); }
+
+  // ---- reusable tri-state popover (none -> include -> exclude -> none) ----
+  function makeTriPopover(cfg) {
+    var popEl = cfg.popEl, searchEl = cfg.searchEl, listEl = cfg.listEl,
+        countEl = cfg.countEl, openEl = cfg.openEl;
+
+    function stateOf(t) {
+      if (cfg.include.has(t)) return "inc";
+      if (cfg.exclude.has(t)) return "exc";
+      return "";
+    }
+    function render() {
+      if (!listEl) return;
+      var q = searchEl ? searchEl.value.trim().toLowerCase() : "";
+      var html = "", shown = 0;
+      cfg.items().forEach(function (t) {
+        var label = String(t);
+        if (q && label.toLowerCase().indexOf(q) < 0) return;
+        shown++;
+        var st = stateOf(t);
+        var cls = st ? " " + st : "";
+        var sign = st === "inc" ? "\u2713 " : (st === "exc" ? "\u2212 " : "");
+        html += '<button type="button" class="tg' + cls + '" data-t="' + esc(label) + '">' +
+          sign + esc(label) + "</button>";
+      });
+      if (!shown) html = '<div class="pop-empty">Nothing to show.</div>';
+      listEl.innerHTML = html;
+      if (countEl) countEl.textContent = cfg.summary();
+    }
+    function cycle(t) {
+      if (cfg.include.has(t)) { cfg.include.delete(t); cfg.exclude.add(t); }
+      else if (cfg.exclude.has(t)) { cfg.exclude.delete(t); }
+      else { cfg.include.add(t); }
+      render();
+      cfg.onChange();
+    }
+    function position() {
+      if (!openEl) return;
+      var r = openEl.getBoundingClientRect();
+      var w = Math.max(240, Math.min(340, Math.round(r.width) + 40));
+      var left = Math.min(r.left, window.innerWidth - w - 8);
+      if (left < 8) left = 8;
+      popEl.style.width = w + "px";
+      popEl.style.left = left + "px";
+      popEl.style.top = (r.bottom + 6) + "px";
+    }
+    function open() {
+      if (searchEl) searchEl.value = "";
+      render();
+      popEl.hidden = false;
+      openEl.setAttribute("aria-expanded", "true");
+      position();
+      if (searchEl) searchEl.focus();
+    }
+    function close() {
+      popEl.hidden = true;
+      openEl.setAttribute("aria-expanded", "false");
+    }
+    function isOpen() { return !popEl.hidden; }
+    function clear() {
+      cfg.include.clear(); cfg.exclude.clear();
+      if (searchEl) searchEl.value = "";
+      render();
+      cfg.onChange();
+    }
+
+    openEl.addEventListener("click", function () { if (isOpen()) close(); else open(); });
+    if (searchEl) searchEl.addEventListener("input", render);
+    if (listEl) listEl.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest(".tg") : null;
+      if (!b) return;
+      cycle(b.getAttribute("data-t"));
+    });
+    if (cfg.clearEl) cfg.clearEl.addEventListener("click", clear);
+    window.addEventListener("resize", function () { if (isOpen()) position(); });
+
+    return { render: render, open: open, close: close, isOpen: isOpen, clear: clear,
+             popEl: popEl, openEl: openEl };
+  }
+
+  // ---------------------------------------------------------------- controls
+  document.getElementById("open").addEventListener("click", pickFolder);
+  document.getElementById("pick").addEventListener("click", pickFolder);
+  document.getElementById("reload").addEventListener("click", function () { autoLoad(true); });
+  document.getElementById("retry").addEventListener("click", function () { autoLoad(true); });
+  document.getElementById("resetView").addEventListener("click", function () {
+    fitView();
+  });
+  document.getElementById("resetLayout").addEventListener("click", function () {
+    nodes.forEach(function (n) { n.fx = null; n.fy = null; });
+    measureDepths();
+    recomputeRadii();
+    initialLayout();
+    alpha = 1;
+    autoFit = true;   // re-frame as the layout rebuilds
+  });
+  var labelsBtn = document.getElementById("labels");
+  labelsBtn.addEventListener("click", function () {
+    showLabels = !showLabels;
+    labelsBtn.setAttribute("aria-pressed", showLabels ? "true" : "false");
+  });
+  graphBackBtn.addEventListener("click", graphBack);
+  graphFwdBtn.addEventListener("click", graphForward);
+  graphTopBtn.addEventListener("click", graphTop);
+  searchEl.addEventListener("input", function () { query = searchEl.value.trim(); updateFilterSummary(); });
+  var searchFieldEl = document.getElementById("searchField");
+  searchFieldEl.addEventListener("change", function () { searchField = searchFieldEl.value; });
+
+  // Instantiate the two tri-state popovers (kinds and tags).
+  var tagPop = makeTriPopover({
+    openEl: document.getElementById("tagOpen"),
+    popEl: document.getElementById("tagPop"),
+    searchEl: document.getElementById("tagSearch"),
+    listEl: document.getElementById("tagList"),
+    countEl: document.getElementById("tagCount"),
+    clearEl: document.getElementById("tagClear"),
+    include: tagInclude, exclude: tagExclude,
+    items: function () { return allTags; },
+    summary: function () {
+      return allTags.length + " tags \u00b7 " + tagInclude.size + " include \u00b7 " + tagExclude.size + " exclude";
+    },
+    onChange: function () { renderChips(); updateFilterSummary(); updateView(); }
+  });
+  popovers.push(tagPop);
+
+  var kindPop = makeTriPopover({
+    openEl: document.getElementById("kindOpen"),
+    popEl: document.getElementById("kindPop"),
+    searchEl: document.getElementById("kindSearch"),
+    listEl: document.getElementById("kindList"),
+    countEl: document.getElementById("kindCount"),
+    clearEl: document.getElementById("kindClear"),
+    include: kindInclude, exclude: kindExclude,
+    items: presentKinds,
+    summary: function () {
+      return presentKinds().length + " kinds \u00b7 " + kindInclude.size + " include \u00b7 " + kindExclude.size + " exclude";
+    },
+    onChange: function () { renderKindChips(); updateFilterSummary(); updateView(); }
+  });
+  popovers.push(kindPop);
+
+  var typePop = makeTriPopover({
+    openEl: document.getElementById("typeOpen"),
+    popEl: document.getElementById("typePop"),
+    searchEl: document.getElementById("typeSearch"),
+    listEl: document.getElementById("typeList"),
+    countEl: document.getElementById("typeCount"),
+    clearEl: document.getElementById("typeClear"),
+    include: typeInclude, exclude: typeExclude,
+    items: presentTypes,
+    summary: function () {
+      return presentTypes().length + " types \u00b7 " + typeInclude.size + " include \u00b7 " + typeExclude.size + " exclude";
+    },
+    onChange: function () { renderTypeChips(); updateFilterSummary(); updateView(); }
+  });
+  popovers.push(typePop);
+
+  var statusPop = makeTriPopover({
+    openEl: document.getElementById("statusOpen"),
+    popEl: document.getElementById("statusPop"),
+    searchEl: document.getElementById("statusSearch"),
+    listEl: document.getElementById("statusList"),
+    countEl: document.getElementById("statusCount"),
+    clearEl: document.getElementById("statusClear"),
+    include: statusInclude, exclude: statusExclude,
+    items: presentStatuses,
+    summary: function () {
+      return presentStatuses().length + " statuses \u00b7 " + statusInclude.size + " include \u00b7 " + statusExclude.size + " exclude";
+    },
+    onChange: function () { renderStatusChips(); updateFilterSummary(); updateView(); }
+  });
+  popovers.push(statusPop);
+
+  document.addEventListener("mousedown", function (e) {
+    popovers.forEach(function (p) {
+      if (!p.isOpen()) return;
+      if (p.popEl.contains(e.target) || p.openEl.contains(e.target)) return;
+      p.close();
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (preview.classList.contains("show")) { closePreview(); return; }
+    popovers.forEach(function (p) { if (p.isOpen()) p.close(); });
+  });
+
+  document.getElementById("pvClose").addEventListener("click", closePreview);
+  pvBackBtn.addEventListener("click", pvBack);
+  pvFwdBtn.addEventListener("click", pvForward);
+  preview.addEventListener("mousedown", function (e) { if (e.target === preview) closePreview(); });
+  pvBody.addEventListener("click", handlePreviewClick);
+  document.addEventListener("keydown", function (e) {
+    if (!preview.classList.contains("show") || !e.altKey) return;
+    if (e.key === "ArrowLeft") { e.preventDefault(); pvBack(); }
+    else if (e.key === "ArrowRight") { e.preventDefault(); pvForward(); }
+  });
+
+  // Mouse back/forward buttons are auxiliary buttons 3 and 4. Route them to the
+  // preview history and suppress the browser's own navigation while it is open.
+  function previewSideButton(e) {
+    if (!preview.classList.contains("show")) return false;
+    if (e.button === 3) { pvBack(); return true; }
+    if (e.button === 4) { pvForward(); return true; }
+    return false;
+  }
+  window.addEventListener("mousedown", function (e) {
+    if (previewSideButton(e)) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  window.addEventListener("auxclick", function (e) {
+    if (e.button === 3 || e.button === 4) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // iOS Safari ignores user-scalable=no in the viewport meta, so block WebKit's
+  // pinch gesture events too. A two-finger gesture then never zooms the page.
+  ["gesturestart", "gesturechange", "gestureend"].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false });
+  });
+
+  function bindChips(id, include, exclude, rerender) {
+    document.getElementById(id).addEventListener("click", function (e) {
+      var chip = e.target.closest ? e.target.closest(".chip") : null;
+      if (!chip) return;
+      var t = chip.getAttribute("data-t");
+      if (e.target.classList.contains("cx")) { include.delete(t); exclude.delete(t); }
+      else if (include.has(t)) { include.delete(t); exclude.add(t); }
+      else { exclude.delete(t); include.add(t); }
+      rerender();
+      updateFilterSummary();
+      updateView();
+    });
+  }
+  bindChips("tagChips", tagInclude, tagExclude, renderChips);
+  bindChips("kindChips", kindInclude, kindExclude, renderKindChips);
+  bindChips("typeChips", typeInclude, typeExclude, renderTypeChips);
+  bindChips("statusChips", statusInclude, statusExclude, renderStatusChips);
+
+  // Clicking the title reveals an "about" panel with usage notes and the
+  // source repository link. Outside click / Escape dismisses it.
+  // Shown in the About panel so a deployed copy is easy to identify. Bump this
+  // number whenever this file is revised.
+  var REVISION = 1;
+  var titleBtn = document.getElementById("titleBtn");
+  var aboutPop = document.getElementById("aboutPop");
+  var aboutRevEl = document.getElementById("aboutRev");
+  if (aboutRevEl) aboutRevEl.textContent = String(REVISION);
+  function positionAbout() {
+    // Anchor to the title's bordered box (the .group), not the button inside it,
+    // so the panel's left edge lines up with the box and it sits below the box.
+    var box = (titleBtn.closest ? titleBtn.closest(".group") : null) || titleBtn;
+    var r = box.getBoundingClientRect();
+    var w = Math.min(360, window.innerWidth - 16);
+    aboutPop.style.width = w + "px";
+    var left = Math.min(r.left, window.innerWidth - w - 8);
+    if (left < 8) left = 8;
+    aboutPop.style.left = left + "px";
+    aboutPop.style.top = (r.bottom + 6) + "px";
+  }
+  function closeAbout() {
+    if (!aboutPop || aboutPop.hidden) return;
+    aboutPop.hidden = true;
+    titleBtn.setAttribute("aria-expanded", "false");
+  }
+  if (titleBtn && aboutPop) {
+    titleBtn.addEventListener("click", function () {
+      if (aboutPop.hidden) {
+        aboutPop.hidden = false;
+        titleBtn.setAttribute("aria-expanded", "true");
+        positionAbout();
+      } else {
+        closeAbout();
+      }
+    });
+    window.addEventListener("resize", function () { if (!aboutPop.hidden) positionAbout(); });
+    document.addEventListener("pointerdown", function (e) {
+      if (aboutPop.hidden) return;
+      var t = e.target;
+      if (t.closest && (t.closest("#aboutPop") || t.closest("#titleBtn"))) return;
+      closeAbout();
+    }, true);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAbout(); });
+  }
+
+  // Toolbar: a hamburger that expands the nav groups horizontally. On desktop
+  // the toggle is hidden and the groups are always shown.
+  var navToggle = document.getElementById("navToggle");
+  navToggle.addEventListener("click", function () {
+    var open = document.body.classList.toggle("nav-open");
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  // The filters tab is always visible and toggles the sidebar on any screen size.
+  // Desktop: open unless body.hide-side. Small screens: closed unless body.side-open.
+  function isMobileView() {
+    return !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+  }
+  function isSideOpen() {
+    return isMobileView()
+      ? document.body.classList.contains("side-open")
+      : !document.body.classList.contains("hide-side");
+  }
+  function setSideOpen(open) {
+    if (isMobileView()) document.body.classList.toggle("side-open", open);
+    else document.body.classList.toggle("hide-side", !open);
+    var h = document.getElementById("sideHandle");
+    if (h) h.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  function setLegendOpen(open) {
+    document.body.classList.toggle("m-open-legend", open);
+    var h = document.getElementById("legendHandle");
+    if (h) h.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  document.getElementById("sideHandle").addEventListener("click", function () {
+    setSideOpen(!isSideOpen());
+  });
+  document.getElementById("legendHandle").addEventListener("click", function () {
+    setLegendOpen(!document.body.classList.contains("m-open-legend"));
+  });
+  setSideOpen(isSideOpen());   // sync the tab's aria state with the default
+
+  // Mobile panels: a tap outside an open panel dismisses it. The legend uses its
+  // own tab; the sidebar uses the filters tab (always visible).
+  var SIDE_OWNED = "#sidebar, #sideHandle, #tagPop, #kindPop, #typePop, #statusPop";
+  document.addEventListener("pointerdown", function (e) {
+    if (e.button && e.button !== 0) return; // primary pointer only
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (isMobileView() && isSideOpen() && !t.closest(SIDE_OWNED)) setSideOpen(false);
+    if (document.body.classList.contains("m-open-legend") && !t.closest("#legend, #legendHandle")) setLegendOpen(false);
+    if (document.body.classList.contains("nav-open") && !t.closest(".bar")) {
+      document.body.classList.remove("nav-open");
+      navToggle.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.getElementById("clearFilters").addEventListener("click", function () {
+    query = ""; searchEl.value = ""; searchField = ""; searchFieldEl.value = "";
+    tagPop.clear();
+    kindPop.clear();
+    typePop.clear();
+    statusPop.clear();
+    renderChips();
+    renderKindChips();
+    renderTypeChips();
+    renderStatusChips();
+    updateFilterSummary();
+    updateView();
+  });
+
+  async function pickFolder() {
+    if (!window.showDirectoryPicker) { dirInput.click(); return; }
+    var dir;
+    try {
+      dir = await window.showDirectoryPicker({ mode: "read" });
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // the user dismissed the picker
+      overlay.classList.add("show");
+      overlayMsg.textContent = "Folder picker failed: " + (e && e.message ? e.message : e);
+      return;
+    }
+    busyStart();
+    try {
+      var files = await fromDirectoryHandle(dir);
+      if (files.length) loadLocal(files);
+      else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
+    } catch (e) {
+      overlay.classList.add("show");
+      overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
+      if (window.console && console.error) console.error(e);
+    } finally {
+      busyEnd();
+    }
+  }
+
+  dirInput.addEventListener("change", async function () {
+    if (!dirInput.files || !dirInput.files.length) return;
+    busyStart();
+    try {
+      var files = await fromFileList(dirInput.files);
+      if (files.length) loadLocal(files);
+      else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
+    } catch (e) {
+      overlay.classList.add("show");
+      overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
+      if (window.console && console.error) console.error(e);
+    } finally {
+      busyEnd();
+    }
+  });
+
+  // Drag-and-drop of a folder onto the window.
+  ["dragenter", "dragover"].forEach(function (t) {
+    window.addEventListener(t, function (e) {
+      e.preventDefault();
+      document.getElementById("card").classList.add("dropping");
+      overlay.classList.add("show");
+    });
+  });
+  window.addEventListener("dragleave", function (e) {
+    if (e.relatedTarget === null) document.getElementById("card").classList.remove("dropping");
+  });
+  window.addEventListener("drop", async function (e) {
+    e.preventDefault();
+    document.getElementById("card").classList.remove("dropping");
+    busyStart();
+    try {
+      var files = await fromDataTransfer(e.dataTransfer);
+      if (files.length) loadLocal(files);
+      else overlayMsg.textContent = "No Markdown files found in the dropped folder.";
+    } catch (err) {
+      overlayMsg.textContent = "Could not read the dropped folder: " + err.message;
+    } finally {
+      busyEnd();
+    }
+  });
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+
+  // Surface unexpected errors instead of leaving the page apparently stuck.
+  window.addEventListener("error", function (e) {
+    if (overlay && overlay.classList.contains("show") && e && e.message) {
+      overlayMsg.textContent = e.message;
+    }
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    if (overlay && overlay.classList.contains("show")) {
+      overlayMsg.textContent = (e && e.reason && e.reason.message) || "Unexpected error";
+    }
+  });
+
+  // ---------------------------------------------------------------- load
+  // `preserve` grows the graph in place (used by on-demand expansion) instead of
+  // rebuilding it: node positions, the focused directory and the current view are
+  // kept, so adding nodes does not re-flow or re-zoom the graph.
+  function load(files, rootUrl, known, preserve) {
+    var prev = null;
+    if (preserve && nodes.length) {
+      prev = { pos: new Map(), focus: graphFocus, stack: graphStack.slice(), index: graphIndex };
+      allNodes.forEach(function (n) { prev.pos.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy, fx: n.fx, fy: n.fy }); });
+    }
+    bundleFiles = files;
+    bundleRootUrl = rootUrl || null;
+    bundleKnown = known || null;
+    try {
+      buildGraph(files);
+      resize();
+      if (prev) {
+        // Stay in the same directory and restore every surviving node's position.
+        graphFocus = dirNodes.has(prev.focus) ? prev.focus : "";
+        graphStack = prev.stack; graphIndex = prev.index;
+        allNodes.forEach(function (n) {
+          var p = prev.pos.get(n.id);
+          if (p) { n.x = p.x; n.y = p.y; n.vx = p.vx; n.vy = p.vy; n.fx = p.fx; n.fy = p.fy; }
+        });
+        // Seed genuinely new nodes beside a placed neighbour so they appear where
+        // they belong rather than at the origin.
+        allNodes.forEach(function (n) {
+          if (prev.pos.has(n.id)) return;
+          var anchor = null;
+          for (var i = 0; i < allLinks.length && !anchor; i++) {
+            var l = allLinks[i];
+            if (l.source === n && prev.pos.has(l.target.id)) anchor = l.target;
+            else if (l.target === n && prev.pos.has(l.source.id)) anchor = l.source;
+          }
+          if (anchor) { n.x = anchor.x; n.y = anchor.y; }
+          else { var a = Math.random() * Math.PI * 2; n.x = 40 * Math.cos(a); n.y = 40 * Math.sin(a); }
+          n.vx = 0; n.vy = 0;
+        });
+        applyFocus();
+        relayout(true);
+        autoFit = false;   // keep the user's view; do not re-frame
+      } else {
+        measureDepths();
+        recomputeRadii();
+        initialLayout();
+        fitView();
+        autoFit = true;   // keep it framed while the layout settles
+        alpha = 1;
+        hideOverlay();
+      }
+      computeAllTags();
+      updateStats();
+      updateGraphNav();
+      if (!raf) loop();
+    } catch (e) {
+      overlay.classList.add("show");
+      overlayMsg.textContent = "Could not build the graph: " + (e && e.message ? e.message : e);
+      if (window.console && console.error) console.error(e);
+      return;
+    }
+    // Sidebar updates are isolated so one failure can't blank the others.
+    function safe(label, fn) {
+      try { fn(); }
+      catch (e) { if (window.console && console.error) console.error("Sidebar " + label + " failed:", e); }
+    }
+    safe("legend", buildLegend);
+    safe("chips", renderChips);
+    safe("kindChips", renderKindChips);
+    safe("typeChips", renderTypeChips);
+    safe("statusChips", renderStatusChips);
+    safe("tags", function () { tagPop.render(); });
+    safe("kinds", function () { kindPop.render(); });
+    safe("types", function () { typePop.render(); });
+    safe("status", function () { statusPop.render(); });
+  }
+
+  // Keep only files reachable within `maxDepth` link hops from the start file
+  // (root index.md, else the shallowest .md). Used for local folders, which we
+  // read in full but show level by level.
+  function filterByDepth(files, maxDepth) {
+    if (!files.length) return files;
+    var map = new Map();
+    files.forEach(function (f) { map.set(f.path, f); });
+    var start = map.has("index.md") ? "index.md" : null;
+    if (!start) {
+      var bestPath = null, bestDepth = Infinity;
+      files.forEach(function (f) {
+        if (!/\.md$/i.test(f.path)) return;
+        var d = f.path.split("/").length;
+        if (d < bestDepth) { bestDepth = d; bestPath = f.path; }
+      });
+      start = bestPath || files[0].path;
+    }
+    var reached = new Set([start]);
+    var frontier = [start];
+    for (var d = 0; d < maxDepth; d++) {
+      var next = [];
+      frontier.forEach(function (p) {
+        var f = map.get(p); if (!f || f.binary) return;
+        var body = /\.md$/i.test(p) ? parseFrontmatter(f.text).body : (f.text || "");
+        extractLinks(body).forEach(function (l) {
+          var cands = linkCandidates(p, l);
+          for (var ci = 0; ci < cands.length; ci++) {
+            if (!map.has(cands[ci])) continue;
+            if (!reached.has(cands[ci])) { reached.add(cands[ci]); next.push(cands[ci]); }
+            break;
+          }
+        });
+      });
+      frontier = next;
+    }
+    return files.filter(function (f) { return reached.has(f.path); });
+  }
+
+  // Load a file set obtained locally (folder picker / drag-drop), honouring the
+  // same ?depth limit: deeper files stay available in `bundleKnown` for on-demand
+  // reveal instead of being shown up front.
+  function loadLocal(files) {
+    var depth = urlDepth();
+    prefetchLimited = depth !== Infinity;
+    attemptedUrls = new Set();
+    var known = new Map();
+    files.forEach(function (f) { known.set(f.path, f); });
+    // Attachments are kept out of the loaded set: they appear as visible
+    // placeholders and load from `known` when clicked.
+    var visible = (prefetchLimited ? filterByDepth(files, depth) : files)
+      .filter(function (f) { return !f.binary; });
+    load(visible, null, known);
+  }
+
+  // A non-directory node can be expanded on demand when a depth-limited crawl
+  // left it with unresolved references that resolve against the network
+  // (bundleRootUrl) or the local read set (bundleKnown). Attachments are handled
+  // separately as visible placeholders, so they are not part of `missing`.
+  function hasLoadableMissing(n) {
+    if (!prefetchLimited || !n || !n.missing || !n.missing.length) return false;
+    return !!(bundleRootUrl || bundleKnown);
+  }
+
+  // Materialize a visible-but-unloaded attachment placeholder. Local files come
+  // from the already-read set; server bundles resolve against the bundle root.
+  // No bytes are fetched here — only the preview's metadata request is.
+  function loadAttachmentNode(node) {
+    if (!node || node.kind !== "attachment" || node.loaded !== false) return false;
+    var cands = (node.candidates && node.candidates.length) ? node.candidates : [node.path];
+    var path = null, file = null;
+    if (bundleKnown) {
+      for (var i = 0; i < cands.length; i++) {
+        if (bundleKnown.has(cands[i])) { path = cands[i]; file = bundleKnown.get(cands[i]); break; }
+      }
+    }
+    if (!path && bundleRootUrl) {
+      path = node.path;
+      file = { path: path, text: "", binary: true, src: new URL(path, bundleRootUrl).href };
+    }
+    if (!path || !file) return false;
+    if (!bundleFiles.some(function (f) { return f.path === path; })) bundleFiles.push(file);
+    load(bundleFiles, bundleRootUrl, bundleKnown, true);
+    if (fileMap && fileMap.has(path)) openPreview(fileMap.get(path));
+    return true;
+  }
+
+  // Fetch a node's referenced-but-unloaded files (its "next level") and rebuild
+  // the graph: from the network for server bundles, from the already-read set for
+  // local folders.
+  async function expandNode(node) {
+    if (!hasLoadableMissing(node)) return false;
+    var pending = node.missing.filter(function (p) {
+      if (fileMap && fileMap.has(p)) return false;
+      if (bundleKnown && bundleKnown.has(p)) return true;
+      if (bundleRootUrl) return !attemptedUrls.has(new URL(p, bundleRootUrl).href);
+      return false;
+    });
+    if (!pending.length) return false;
+    // Fetch the next level in parallel (bounded by trackedFetch's semaphore) so
+    // the toolbar spinner shows the number of requests in flight; local files
+    // resolve without a request.
+    var results = await Promise.all(pending.map(async function (p) {
+      if (bundleKnown && bundleKnown.has(p)) return bundleKnown.get(p);
+      var url = new URL(p, bundleRootUrl).href;
+      attemptedUrls.add(url);
+      if (attachKind(p)) return { path: p, text: "", binary: true, src: url };
+      if (!fileKind(p)) return null;
+      var res; try { res = await trackedFetch(url, { cache: "no-store" }); } catch (e) { return null; }
+      if (!res.ok) return null;
+      var text = await res.text();
+      if (text.length > MAX_FILE_BYTES) return null;
+      return { path: p, text: text };
+    }));
+    var added = false;
+    var have = new Set();
+    bundleFiles.forEach(function (f) { have.add(f.path); });
+    results.forEach(function (r) { if (r && !have.has(r.path)) { have.add(r.path); bundleFiles.push(r); added = true; } });
+    if (!added) return false;
+    var showing = preview.classList.contains("show");
+    var openPath = previewPath;
+    load(bundleFiles, bundleRootUrl, bundleKnown, true);
+    if (showing && fileMap && fileMap.has(openPath)) renderPreviewEntry(fileMap.get(openPath));
+    return true;
+  }
+
+  // ---- URL parameters: ?bundle=<name|path|file.md>, ?start=<file>, ?depth=<n|all>
+  function urlParam(name) {
+    try { return new URLSearchParams(location.search).get(name); }
+    catch (e) { return null; }
+  }
+  // Prefetch depth in link hops; "all"/absent = unlimited.
+  function urlDepth() {
+    var v = urlParam("depth");
+    if (v == null) v = urlParam("levels");
+    if (v == null || v === "" || /^(all|inf|infinity)$/i.test(v)) return Infinity;
+    var n = parseInt(v, 10);
+    return (isFinite(n) && n >= 0) ? n : Infinity;
+  }
+  function resolveBundleLoc(val) {
+    if (/^https?:/i.test(val)) return new URL(val);
+    if (/\.md$/i.test(val)) return new URL(val, location.href);
+    if (val.indexOf("/") === -1 && !/\.json$/i.test(val)) {
+      return new URL("bundles/" + val + "/", location.href); // bare name -> bundles/<name>/
+    }
+    return new URL(val, location.href);
+  }
+  // Only same-origin http(s) URLs are loaded, so a link like
+  // ?bundle=https://elsewhere/ cannot inject third-party content or probe hosts.
+  function isAllowedUrl(u) {
+    return u.origin === location.origin && /^https?:$/.test(u.protocol);
+  }
+  // Load a folder by crawling its index.md (or the ?start file).
+  async function loadBundleFromFolder(folderHref, maxDepth) {
+    var folder = new URL(folderHref);
+    var startRel = urlParam("start");
+    var start = startRel ? new URL(startRel, folder) : new URL("index.md", folder);
+    // Keep ?start same-origin and inside the bundle folder; otherwise use index.md.
+    if (!isAllowedUrl(start) || !start.pathname.startsWith(folder.pathname)) {
+      start = new URL("index.md", folder);
+    }
+    var files = await crawlFromUrl(start.href, maxDepth);
+    return files.length ? files : null;
+  }
+
+  async function autoLoad(force) {
+    var proto = location.protocol;
+    if (proto !== "http:" && proto !== "https:") {
+      if (force) overlayMsg.textContent = "Auto-load needs a web server; open the folder instead.";
+      return false;
+    }
+    overlayMsg.textContent = "Loading bundle…";
+    var bundle = urlParam("bundle");
+    var depth = urlDepth();
+    prefetchLimited = depth !== Infinity;
+    attemptedUrls = new Set();   // fresh bundle: forget any earlier on-demand fetches
+    try {
+      var files = null, root = null;
+      if (bundle && /\.md$/i.test(bundle)) {
+        var bUrl = new URL(bundle, location.href);
+        if (!isAllowedUrl(bUrl)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
+        root = new URL("./", bUrl).href;
+        files = await crawlFromUrl(bUrl.href, depth);
+      } else if (bundle) {
+        var loc = resolveBundleLoc(bundle);
+        if (!isAllowedUrl(loc)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
+        var folder = /\/$/.test(loc.pathname) ? loc : new URL(loc.href + "/");
+        root = folder.href;
+        files = await loadBundleFromFolder(folder.href, depth);
+        if (!files) {
+          overlayMsg.textContent = "No bundle at ?bundle=" + bundle + " (no index.md).";
+          return false;
+        }
+      } else {
+        // Default: bundles/ next to the page, else index.md beside the page.
+        var bundlesRoot = new URL("bundles/", location.href);
+        root = bundlesRoot.href;
+        files = await loadBundleFromFolder(bundlesRoot.href, depth);
+        if (!files) {
+          root = new URL("./", location.href).href;
+          files = await crawlFromUrl(new URL("index.md", location.href).href, depth);
+        }
+      }
+      if (files && files.length) { load(files, root); return true; }
+      overlayMsg.textContent = "Nothing to load: add bundles/index.md, or pass ?bundle=<name>.";
+    } catch (e) {
+      overlayMsg.textContent = "Auto-load failed: " + e.message;
+    }
+    return false;
+  }
+
+  function hideOverlay() { overlay.classList.remove("show"); }
+
+  // ---------------------------------------------------------------- resize
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    if (view.x === 0 && view.y === 0) { view.x = W / 2; view.y = H / 2; }
+  }
+  window.addEventListener("resize", function () {
+    var oldW = W, oldH = H;
+    resize();
+    view.x += (W - oldW) / 2;
+    view.y += (H - oldH) / 2;
+    recomputeRadii();
+    alpha = Math.max(alpha, 0.6);
+  });
+
+  // ---------------------------------------------------------------- init
+  resize();
+  view.x = W / 2; view.y = H / 2;
+  autoLoad(false);
+})();
+</script>
+</body>
+</html>
