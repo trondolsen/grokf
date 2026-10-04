@@ -2225,8 +2225,9 @@
   // Compressed object streams (PDF 1.5+) are inflated with DecompressionStream
   // so their objects join the scan. Encrypted PDFs may yield nothing; every
   // field is optional.
-  var PDF_PEEK_BYTES = 2 * 1024 * 1024;      // head/tail window for very large files
-  var PDF_MAX_BYTES = 16 * 1024 * 1024;      // read the whole file up to this cap
+  var PDF_PEEK_BYTES = 2 * 1024 * 1024;      // head/tail window for very large local files
+  var PDF_HTTP_WINDOW = 512 * 1024;          // head/tail window fetched over HTTP (Range)
+  var PDF_MAX_BYTES = 16 * 1024 * 1024;      // read the whole local file up to this cap
   var PDF_STREAM_TEXT_MAX = 8 * 1024 * 1024; // cap on inflated object-stream text
   var PDF_WS = " \t\r\n\f";
 
@@ -2244,26 +2245,54 @@
     return u;
   }
 
-  // Read the bytes to scan. Files up to the cap are read whole, so compressed
-  // object streams can be located and inflated; larger ones fall back to a
-  // head+tail window separated by a newline.
+  // The bytes to scan. Local files up to the cap are read whole, so compressed
+  // object streams can be located and inflated; larger local files and all
+  // network PDFs use a head+tail window separated by a newline. Over HTTP that
+  // window is fetched with byte-range requests, so the whole file is only
+  // downloaded when the server does not honour ranges.
   async function readPdfBytes(node) {
     var src = node.src;
     if (!src) return null;
-    if (typeof src === "string") {
-      var res = await trackedFetch(src, { cache: "force-cache" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return new Uint8Array(await res.arrayBuffer());
-    }
+    if (typeof src === "string") return await readPdfUrl(src);
     var size = src.size || 0;
     if (!size || size <= PDF_MAX_BYTES) return new Uint8Array(await src.arrayBuffer());
     var head = new Uint8Array(await src.slice(0, PDF_PEEK_BYTES).arrayBuffer());
     var tail = new Uint8Array(await src.slice(size - PDF_PEEK_BYTES).arrayBuffer());
+    return joinPdfWindows(head, tail);
+  }
+
+  function joinPdfWindows(head, tail) {
+    if (!tail || !tail.length) return head;
     var out = new Uint8Array(head.length + 1 + tail.length);
     out.set(head, 0);
-    out[head.length] = 10;
+    out[head.length] = 10;   // newline so a stream cut in half cannot merge the halves
     out.set(tail, head.length + 1);
     return out;
+  }
+
+  // Fetch only the head and tail of a remote PDF. Byte ranges keep the download
+  // bounded even for large files; a server that ignores Range (HTTP 200) simply
+  // returns the whole file, which we then use as-is.
+  async function readPdfUrl(url) {
+    var headRes = await trackedFetch(url, {
+      cache: "force-cache",
+      headers: { Range: "bytes=0-" + (PDF_HTTP_WINDOW - 1) }
+    });
+    if (!headRes.ok) throw new Error("HTTP " + headRes.status);
+    var head = new Uint8Array(await headRes.arrayBuffer());
+    if (headRes.status !== 206) return head;   // no range support: the whole file
+    var m = /\/(\d+)\s*$/.exec(headRes.headers.get("content-range") || "");
+    var total = m ? parseInt(m[1], 10) : 0;
+    if (!total || head.length >= total) return head;   // file fits in the head window
+    var tail = null;
+    try {
+      var tailRes = await trackedFetch(url, {
+        cache: "force-cache",
+        headers: { Range: "bytes=-" + PDF_HTTP_WINDOW }
+      });
+      if (tailRes.status === 206) tail = new Uint8Array(await tailRes.arrayBuffer());
+    } catch (e) { tail = null; }
+    return joinPdfWindows(head, tail);
   }
 
   // Object streams (/Type /ObjStm) keep their payload DEFLATE-compressed but
@@ -2499,7 +2528,8 @@
   }
 
   // File-system details. For a File/Blob we read size and lastModified
-  // directly; for a served URL we ask the server with a HEAD request.
+  // directly; for a served URL we use a HEAD request, falling back to a one-byte
+  // range request when the server omits Content-Length. Neither pulls the file.
   function peekFileInfo(node) {
     if (node.fileInfo) return Promise.resolve(node.fileInfo);
     if (!node.fileInfoPromise) {
@@ -2516,6 +2546,26 @@
               if (lm) { var t = Date.parse(lm); if (!isNaN(t)) info.modified = t; }
             }
           } catch (e) {}
+          // Some hosts omit Content-Length on HEAD. A one-byte range request then
+          // reveals the size (the Content-Range total, or Content-Length when the
+          // server ignores the range) without downloading the file: the body is
+          // cancelled as soon as the headers arrive.
+          if (info.size == null) {
+            try {
+              var rr = await trackedFetch(src, { cache: "force-cache", headers: { Range: "bytes=0-0" } });
+              var m = /\/(\d+)\s*$/.exec(rr.headers.get("content-range") || "");
+              if (m) info.size = parseInt(m[1], 10);
+              else {
+                var cl2 = rr.headers.get("content-length");
+                if (cl2) info.size = parseInt(cl2, 10);
+              }
+              if (info.modified == null) {
+                var lm2 = rr.headers.get("last-modified");
+                if (lm2) { var t2 = Date.parse(lm2); if (!isNaN(t2)) info.modified = t2; }
+              }
+              if (rr.body && typeof rr.body.cancel === "function") { try { rr.body.cancel(); } catch (e2) {} }
+            } catch (e) {}
+          }
         } else {
           if (typeof src.size === "number") info.size = src.size;
           if (typeof src.lastModified === "number" && src.lastModified) info.modified = src.lastModified;
