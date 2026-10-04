@@ -249,6 +249,11 @@
   #pvTagPop[hidden] { display: none; }
   #pvTagPop .tp-head { font-size: 12px; color: var(--muted); padding: 2px 6px 8px; }
   #pvTagPop .tp-head b { color: var(--text); }
+  #pvTagPop .tp-expand {
+    appearance: none; border: 0; background: transparent; color: var(--accent);
+    font: inherit; font-size: 12px; padding: 0; cursor: pointer;
+  }
+  #pvTagPop .tp-expand:hover { text-decoration: underline; }
   #pvTagPop .tp-item {
     display: block; width: 100%; text-align: left; background: transparent;
     border: 0; color: var(--text); font: inherit; padding: 6px 8px;
@@ -465,6 +470,7 @@
         <button id="resetView">Reset view</button>
         <button id="resetLayout">Reset layout</button>
         <button id="labels" aria-pressed="true">Labels</button>
+        <button id="tags" aria-pressed="false" title="Tag links">Tags</button>
       </div>
     </div>
     <div class="group group-dir">
@@ -643,6 +649,7 @@
   var INDEX_COLOR = "#37b6c4";
   var FILE_COLOR = "#c9a24d";
   var ATTACH_COLOR = "#c06a5b";
+  var TAG_COLOR = DIR_COLOR;   // tag hubs share the Directory colour
   var OTHER_COLOR = "#a274d6";
 
   // ---------------------------------------------------------------- dom
@@ -726,13 +733,16 @@
   var lastPointerType = "mouse";
   var MIN_ZOOM = 0.02, MAX_ZOOM = 4;
   var showLabels = true;
+  var showTags = false;   // tag-hub links are opt-in (toolbar "Tags")
+  var hubsOn = false;     // whether tag hubs are currently built into the graph
+  var tagMaxSegs = 1;     // deepest namespace level among tag hubs (for sizing)
   var query = "";
   var searchField = "";
   var tagInclude = new Set(), tagExclude = new Set();
   var kindInclude = new Set(), kindExclude = new Set();
   var typeInclude = new Set(), typeExclude = new Set();
   var statusInclude = new Set(), statusExclude = new Set();
-  var KIND_LABELS = ["Directory", "Index file", "Concept", "File", "Attachment"];
+  var KIND_LABELS = ["Directory", "Index file", "Concept", "File", "Attachment", "Tag"];
   var popovers = [];
   var allTags = [];
   var dragging = false, moved = false;
@@ -779,9 +789,17 @@
       for (var i = 0; i < block.length; i++) {
         var lm = /^\s*-\s*(.*)$/.exec(block[i]);
         if (lm) {
-          current = {};
-          items.push(current);
-          if (lm[1].trim()) addKeyVal(current, lm[1].trim());
+          var val = lm[1].trim();
+          // A list item is either a mapping ("- id: x") or a plain scalar
+          // ("- meta/inbox"); only the former starts an object we add keys to.
+          if (/^[A-Za-z0-9_.\-]+:(\s|$)/.test(val)) {
+            current = {};
+            items.push(current);
+            addKeyVal(current, val);
+          } else {
+            current = null;
+            items.push(parseScalar(val));
+          }
         } else if (current) {
           addKeyVal(current, block[i].trim());
         }
@@ -823,18 +841,44 @@
     return { fm: parseYaml(m[1]), body: text.slice(m[0].length) };
   }
 
+  // An embed reference (Obsidian ![[..]] or markdown ![](..)) is marked with a
+  // leading control char so callers can tell embeds from plain links.
+  var EMBED_MARK = "\u0002";
+  function isEmbedRef(l) { return String(l).charAt(0) === EMBED_MARK; }
+  function stripEmbedMark(l) { l = String(l); return isEmbedRef(l) ? l.slice(1) : l; }
+
+  // Image extensions that are shown inline in the preview.
+  var IMG_EXT = { png: 1, jpg: 1, jpeg: 1, gif: 1, webp: 1, bmp: 1, tif: 1, tiff: 1, ico: 1, avif: 1, svg: 1 };
+  function imageKind(name) { var e = extOf(name); return e && IMG_EXT[e] ? e : null; }
+
   function extractLinks(body) {
-    var out = [], re = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, m;
+    var out = [], re = /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, m;
     while ((m = re.exec(body))) {
-      var t = m[1];
+      var t = m[3];
       if (/^(https?:|mailto:|tel:|#)/i.test(t)) continue;
       t = t.split("#")[0].split("?")[0];
-      if (t) out.push(t);
+      if (t) out.push((m[1] === "!" ? EMBED_MARK : "") + t);
+    }
+    // Obsidian wikilinks and embeds: [[Note]], [[Note|alias]], [[Note#heading]],
+    // [[folder/Note]], ![[image.png]]. Notes omit the .md extension, so add it
+    // back for targets without one; alias/heading/block markers end the capture.
+    var wre = /(!?)\[\[([^\]|#^]+)/g;
+    while ((m = wre.exec(body))) {
+      var w = m[2].trim();
+      if (!w || /^(https?:|mailto:)/i.test(w)) continue;
+      out.push((m[1] === "!" ? EMBED_MARK : "") + (extOf(w) ? w : w + ".md"));
     }
     return out;
   }
 
   function dirOf(from) { return from.indexOf("/") >= 0 ? from.slice(0, from.lastIndexOf("/")) : ""; }
+
+  // True when any directory segment of `path` starts with "." (e.g. .obsidian/).
+  function inDotDir(path) {
+    var segs = String(path).split("/");
+    for (var i = 0; i < segs.length - 1; i++) { if (segs[i].charAt(0) === ".") return true; }
+    return false;
+  }
 
   // Normalize base+link into a bundle-relative path; null if it escapes the root.
   function joinPath(base, link) {
@@ -869,7 +913,7 @@
   // Candidates for a body markdown link. "./"/"../" are file-relative; a leading
   // "/" is bundle-root-relative (OKF §6.1); a bare path is file-relative.
   function linkCandidates(from, link) {
-    link = String(link).trim();
+    link = stripEmbedMark(link).trim();
     if (!link || /^(https?:|mailto:|tel:|#)/i.test(link)) return [];
     link = link.split("#")[0].split("?")[0];
     if (!link || /\/$/.test(link)) return [];
@@ -934,6 +978,7 @@
     if (n.kind === "index") return INDEX_COLOR;
     if (n.kind === "file") return FILE_COLOR;
     if (n.kind === "attachment") return ATTACH_COLOR;
+    if (n.kind === "tag") return TAG_COLOR;
     return TYPE_COLORS[n.type] || OTHER_COLOR;
   }
   function groupOf(n) {
@@ -941,10 +986,12 @@
     if (n.kind === "index") return "Index files";
     if (n.kind === "file") return "Files";
     if (n.kind === "attachment") return "Attachments";
+    if (n.kind === "tag") return "Tags";
     return n.type || "Other concepts";
   }
   function displayLabel(n) {
     if (n.kind === "dir") return n.path === "" ? (n.label || "bundle") : n.label + "/";
+    if (n.kind === "tag") return "#" + (n.label || "");
     return n.title || n.path.split("/").pop();
   }
 
@@ -995,6 +1042,7 @@
         var rel;
         try { rel = decodeURIComponent(u.pathname.slice(base.pathname.length)); }
         catch (e) { continue; }
+        if (/(^|\/)\.obsidian\//i.test(rel)) continue;   // skip Obsidian's config folder
         var res;
         try { res = await trackedFetch(url, { cache: "no-store" }); }
         catch (e) { continue; }
@@ -1006,7 +1054,7 @@
         var found = extractLinks(text);
         for (var i = 0; i < found.length; i++) {
           var abs;
-          try { abs = new URL(found[i], url); } catch (e) { continue; }
+          try { abs = new URL(stripEmbedMark(found[i]), url); } catch (e) { continue; }
           if (abs.origin !== base.origin) continue;
           if (!abs.pathname.startsWith(base.pathname)) continue;
           if (fileKind(abs.pathname)) {
@@ -1027,13 +1075,15 @@
     var out = [];
     for (var i = 0; i < fileList.length; i++) {
       var f = fileList[i];
+      var rel = f.webkitRelativePath || f.name;
+      if (inDotDir(rel)) continue;   // skip files inside dot-folders, e.g. .obsidian/
       if (attachKind(f.name)) {
-        out.push({ path: f.webkitRelativePath || f.name, text: "", binary: true, src: f });
+        out.push({ path: rel, text: "", binary: true, src: f });
         continue;
       }
       if (!fileKind(f.name)) continue;
       if (f.size && f.size > MAX_FILE_BYTES) continue;
-      out.push({ path: f.webkitRelativePath || f.name, text: await f.text() });
+      out.push({ path: rel, text: await f.text() });
     }
     return stripCommonPrefix(out);
   }
@@ -1059,7 +1109,7 @@
           if (!file.size || file.size <= MAX_FILE_BYTES) out.push({ path: p, text: await file.text() });
         }
       } else if (entry.kind === "directory") {
-        await walkDirAt(entry, p, out, depth + 1);
+        if (entry.name.charAt(0) !== ".") await walkDirAt(entry, p, out, depth + 1);  // skip dot-folders, e.g. .obsidian/
       }
     }
   }
@@ -1081,6 +1131,7 @@
   }
   async function walkEntry(entry, prefix, out, depth) {
     if (depth > 12 || out.length > 5000) return; // guard against cycles and huge trees
+    if (entry.isDirectory && entry.name.charAt(0) === ".") return;  // skip dot-folders, e.g. .obsidian/
     var p = prefix ? prefix + "/" + entry.name : entry.name;
     if (entry.isFile) {
       if (attachKind(entry.name)) {
@@ -1184,17 +1235,19 @@
         var key = node.id + "\u2192" + ph.id;
         if (!seenEdge.has(key)) { seenEdge.add(key); links.push({ source: node, target: ph, kind: "ref" }); }
       }
-      function consider(cands) {
+      function consider(cands, embed) {
         if (!cands.length) return;
         var hit = null;
         for (var ci = 0; ci < cands.length; ci++) { if (fileMapLocal.has(cands[ci])) { hit = cands[ci]; break; } }
         if (hit) { targets.add(hit); return; }
+        // Embedded images render inline in the preview, so they get no node.
+        if (embed && imageKind(cands[0])) return;
         // Unresolved: attachments become visible placeholders; other references
         // stay in `missing` for the existing click-to-load behaviour.
         if (attachKind(cands[0])) { addPlaceholder(cands); return; }
         cands.forEach(function (c) { if (pending.indexOf(c) < 0) pending.push(c); });
       }
-      extractLinks(node.body).forEach(function (l) { consider(linkCandidates(f.path, l)); });
+      extractLinks(node.body).forEach(function (l) { consider(linkCandidates(f.path, l), isEmbedRef(l)); });
       var srcs = node.fm && node.fm.sources;
       if (Array.isArray(srcs)) {
         srcs.forEach(function (s) { if (s && s.resource) consider(resourceCandidates(f.path, s.resource)); });
@@ -1212,6 +1265,56 @@
       // candidate so a click can fetch this "next level" on demand.
       pending.forEach(function (c) {
         if (c !== node.id && fileKind(c) && node.missing.indexOf(c) < 0) node.missing.push(c);
+      });
+    });
+
+    // Tag hubs, with namespaced tags (a/b) nested as a hierarchy. Built while the
+    // "Tags" toggle is on or a tag filter is active; otherwise the graph is
+    // unchanged.
+    var tagNodes = new Map();
+    var tagRoot = dirMap.get("");
+    // Hubs are built while the toggle is on, and also while a tag filter is
+    // active, so filtering a tag shows its hub and namespace ancestors.
+    hubsOn = showTags || tagInclude.size > 0 || tagExclude.size > 0;
+    tagMaxSegs = 1;
+    function hubFor(name) {
+      var id = "tag:" + name, hn = tagNodes.get(id);
+      if (!hn) {
+        hn = {
+          id: id, path: id, kind: "tag", label: name, tags: [name],
+          type: "", title: "", description: "", status: "",
+          fm: {}, body: "", src: null, pdfMeta: null, metaPromise: null,
+          children: [], depth: 0, angle: 0, targetR: 0,
+          x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+        };
+        tagNodes.set(id, hn);
+        nodes.push(hn);
+        tagMaxSegs = Math.max(tagMaxSegs, name.split("/").length);
+      }
+      return hn;
+    }
+    files.forEach(function (f) {
+      if (!hubsOn) return;   // no hubs when neither the toggle nor a tag filter is active
+      var node = fileMapLocal.get(f.path);
+      if (!node || (node.kind !== "concept" && node.kind !== "index")) return;
+      var tags = Array.isArray(node.tags) ? node.tags : [];
+      tags.forEach(function (tag) {
+        var segs = String(tag).split("/"), parent = null;
+        for (var i = 1; i <= segs.length; i++) {
+          var name = segs.slice(0, i).join("/");
+          var hn = hubFor(name);
+          if (parent) {
+            // Namespace -> child namespace hierarchy edge.
+            if (parent.children.indexOf(hn) < 0) {
+              parent.children.push(hn);
+              links.push({ source: parent, target: hn, kind: "tag", solid: true });
+            }
+          } else if (tagRoot && tagRoot.children.indexOf(hn) < 0) {
+            tagRoot.children.push(hn);   // top-level namespace gets a ring slot
+          }
+          parent = hn;
+        }
+        links.push({ source: node, target: parent, kind: "tag" });   // node -> leaf tag
       });
     });
 
@@ -1253,6 +1356,7 @@
     MIN_DIST2 = md * md;
     treeDist = ringGap;
     refDist = ringGap * 1.4;
+    tagDist = ringGap * 1.7;
     MAX_SPEED = clamp(ringGap * 0.15, 14, 46);
     MAX_ACC = MAX_SPEED * 3;
   }
@@ -1285,6 +1389,7 @@
   function applyFocus() {
     var f = graphFocus, prefix = f ? f + "/" : "";
     nodes = allNodes.filter(function (n) {
+      if (n.kind === "tag" && !showTags && !tagInclude.size && !tagExclude.size) return false;
       if (!matchesAttrFilters(n)) return false;
       if (f === "") return true;
       if (n.kind === "dir") return (n.path === f) || n.path.indexOf(prefix) === 0;
@@ -1325,6 +1430,10 @@
   // Rebuild the view after a sidebar filter change, keeping the surviving nodes
   // where they are so the change reads as a removal, not a full re-flow.
   function updateView() {
+    // If tag visibility flips because of a filter change, rebuild so the hubs
+    // exist when needed (and disappear again when they are not).
+    var want = showTags || tagInclude.size > 0 || tagExclude.size > 0;
+    if (want !== hubsOn && bundleFiles) { load(bundleFiles, bundleRootUrl, bundleKnown, true); return; }
     applyFocus();
     relayout(true);
     updateStats();
@@ -1386,8 +1495,8 @@
   var CHARGE = -900;                 // many-body strength (negative = repulsion)
   var THETA = 0.9;                   // Barnes-Hut accuracy (smaller = finer)
   var MIN_DIST2 = 36;                // softening, avoids singular forces
-  var treeDist = 150, refDist = 220;
-  var treeStrength = 0.8, refStrength = 0.05;
+  var treeDist = 150, refDist = 220, tagDist = 260;
+  var treeStrength = 0.8, refStrength = 0.05, tagStrength = 0.03;
   var radialStrength = 0.35, centerStrength = 0.003, collideStrength = 1.0;
   var MAX_SPEED = 20, MAX_ACC = 60;
 
@@ -1569,8 +1678,8 @@
       var d = Math.sqrt(dx * dx + dy * dy);
       if (d < 1e-6) { dx = jiggle(); dy = jiggle(); d = Math.sqrt(dx * dx + dy * dy); }
       var dd = d < 1e-3 ? 1e-3 : d;
-      var rest = l.kind === "tree" ? treeDist : refDist;
-      var strength = (l.kind === "tree" ? treeStrength : refStrength) * alpha;
+      var rest = l.kind === "tree" ? treeDist : (l.kind === "tag" ? tagDist : refDist);
+      var strength = (l.kind === "tree" ? treeStrength : (l.kind === "tag" ? tagStrength : refStrength)) * alpha;
       var f = (d - rest) / dd * strength;
       s.ax += dx * f; s.ay += dy * f;
       t.ax -= dx * f; t.ay -= dy * f;
@@ -1640,7 +1749,14 @@
 
   function radiusOf(n) {
     var base = n.kind === "dir" ? 7 : 5.5;
-    return base + Math.min(9, Math.sqrt(n.degree) * 2.1);
+    var r = base + Math.min(9, Math.sqrt(n.degree) * 2.1);
+    if (n.kind === "tag") {
+      // Higher namespaces (fewer segments) are drawn larger, so the size grows
+      // the further up the tag hierarchy a hub sits.
+      var lvl = (n.label || "").split("/").length;
+      r += Math.max(0, tagMaxSegs - lvl) * 1.8;
+    }
+    return r;
   }
 
   function kindLabel(n) {
@@ -1648,13 +1764,14 @@
       : n.kind === "index" ? "Index file"
       : n.kind === "file" ? "File"
       : n.kind === "attachment" ? "Attachment"
+      : n.kind === "tag" ? "Tag"
       : "Concept";
   }
 
   // Kinds actually present in the current bundle, in a stable order.
   function presentKinds() {
     var set = new Set();
-    allNodes.forEach(function (n) { set.add(kindLabel(n)); });
+    allNodes.forEach(function (n) { if (n.kind === "tag" && !showTags) return; set.add(kindLabel(n)); });
     return KIND_LABELS.filter(function (k) { return set.has(k); });
   }
 
@@ -1701,15 +1818,44 @@
     if (statusInclude.size && !statusInclude.has(status)) return false;
     if (statusExclude.size && statusExclude.has(status)) return false;
     var tags = Array.isArray(n.tags) ? n.tags : [];
-    if (tagInclude.size) {
-      var has = false;
-      for (var i = 0; i < tags.length; i++) { if (tagInclude.has(tags[i])) { has = true; break; } }
-      if (!has) return false;
+    if (n.kind === "tag") {
+      // Keep a tag hub when it is selected, a descendant of a selection, or an
+      // ancestor of one, so the namespace chain stays visible.
+      var t = tags[0] || n.label || "";
+      if (tagInclude.size && !(tagInSet(t, tagInclude) || tagHasIncludedDescendant(t))) return false;
+      if (tagExclude.size && tagHitAny(tags, tagExclude)) return false;
+      return true;
     }
-    if (tagExclude.size) {
-      for (var j = 0; j < tags.length; j++) { if (tagExclude.has(tags[j])) return false; }
-    }
+    if (tagInclude.size && !tagHitAny(tags, tagInclude)) return false;
+    if (tagExclude.size && tagHitAny(tags, tagExclude)) return false;
     return true;
+  }
+
+  // A tag matches a filter entry when it is that tag or a namespaced descendant,
+  // so including "ml" matches "ml" and "ml/vision".
+  function tagInSet(t, set) {
+    var hit = false;
+    set.forEach(function (s) { if (!hit && (t === s || t.indexOf(s + "/") === 0)) hit = true; });
+    return hit;
+  }
+  function tagHitAny(tags, set) {
+    for (var i = 0; i < tags.length; i++) { if (tagInSet(tags[i], set)) return true; }
+    return false;
+  }
+  // True when some included tag is a strict descendant of `t` (t is its ancestor).
+  function tagHasIncludedDescendant(t) {
+    var hit = false;
+    tagInclude.forEach(function (inc) { if (!hit && inc !== t && inc.indexOf(t + "/") === 0) hit = true; });
+    return hit;
+  }
+  // A tag hub that is only an ancestor of a selected tag (kept visible, drawn
+  // like an unloaded node to signal it can be expanded). Once the hub itself is
+  // selected (expanded), it is drawn solid.
+  function tagIsAncestor(n) {
+    if (n.kind !== "tag" || !tagInclude.size) return false;
+    var t = (n.tags && n.tags[0]) || n.label || "";
+    if (tagInclude.has(t)) return false;
+    return tagHasIncludedDescendant(t);
   }
 
   // Attribute filters remove nodes from the view entirely; text search only dims.
@@ -1736,13 +1882,15 @@
     var i, l;
     for (i = 0; i < links.length; i++) {
       l = links[i];
-      if (l.kind === "ref") continue;
-      drawEdge(l, false, active);
+      if (l.kind === "tree") drawEdge(l, "tree", active);
     }
     for (i = 0; i < links.length; i++) {
       l = links[i];
-      if (l.kind !== "ref") continue;
-      drawEdge(l, true, active);
+      if (l.kind === "tag") drawEdge(l, "tag", active);
+    }
+    for (i = 0; i < links.length; i++) {
+      l = links[i];
+      if (l.kind === "ref") drawEdge(l, "ref", active);
     }
 
     // Nodes
@@ -1760,10 +1908,11 @@
 
       var unloaded = n.loaded === false;                  // attachment placeholder
       var missing = !unloaded && hasLoadableMissing(n);   // page with unloaded references
+      var ancestorTag = n.kind === "tag" && tagIsAncestor(n);  // namespace ancestor of a selected tag
       ctx.beginPath();
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.fillStyle = col;
-      ctx.globalAlpha = dim ? 0.18 : (unloaded || missing ? 0.5 : 1);
+      ctx.globalAlpha = dim ? 0.18 : ((unloaded || missing || ancestorTag) ? 0.5 : 1);
       ctx.fill();
 
       if (n.kind === "dir" || n.kind === "index") {
@@ -1780,9 +1929,10 @@
         ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 1; ctx.stroke();
       }
 
-      // Unloaded indicator, shared by attachment placeholders and pages whose
-      // references are not loaded yet: a dashed blue ring means "click to load".
-      if (unloaded || missing) {
+      // Unloaded indicator, shared by attachment placeholders, pages whose
+      // references are not loaded yet, and namespace-ancestor tag hubs (click to
+      // load/expand): a dashed blue ring.
+      if (unloaded || missing || ancestorTag) {
         ctx.beginPath();
         ctx.arc(px, py, r + Math.max(1.5, 1.5 * view.k), 0, Math.PI * 2);
         ctx.setLineDash([Math.max(2, 3 * view.k), Math.max(2, 3 * view.k)]);
@@ -1808,13 +1958,36 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawEdge(l, ref, active) {
+  function drawEdge(l, style, active) {
     var s = l.source, t = l.target;
     var x1 = sx(s.x), y1 = sy(s.y), x2 = sx(t.x), y2 = sy(t.y);
     var dim = isDimmed(s) && isDimmed(t);
     var hot = active && active.has(s.id) && active.has(t.id);
-    ctx.globalAlpha = dim ? 0.06 : (hot ? 0.95 : (ref ? 0.4 : 0.22));
-    if (!ref) {
+    if (style === "tag") {
+      // Node -> tag-hub links are dashed; namespace -> child-namespace hierarchy
+      // links (l.solid) are drawn solid. The arrowhead points at the tag end.
+      ctx.globalAlpha = dim ? 0.05 : (hot ? 0.8 : 0.3);
+      ctx.strokeStyle = hot ? "#cfd5e2" : "#7d8698";
+      ctx.lineWidth = hot ? 1.4 : 1;
+      if (!l.solid) ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.setLineDash([]);
+      var ang = Math.atan2(y2 - y1, x2 - x1);
+      var rr = radiusOf(t) * view.k;
+      var ax = x2 - Math.cos(ang) * rr, ay = y2 - Math.sin(ang) * rr;
+      var a = 5 + 2 * view.k;
+      ctx.fillStyle = hot ? "#cfd5e2" : "#7d8698";
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - Math.cos(ang - 0.4) * a, ay - Math.sin(ang - 0.4) * a);
+      ctx.lineTo(ax - Math.cos(ang + 0.4) * a, ay - Math.sin(ang + 0.4) * a);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      return;
+    }
+    ctx.globalAlpha = dim ? 0.06 : (hot ? 0.95 : (style === "ref" ? 0.4 : 0.22));
+    if (style !== "ref") {
       ctx.strokeStyle = "#5a6274";
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
@@ -1989,6 +2162,8 @@
           // Double-click is unreliable on touch, so a single tap enters the
           // directory there; on desktop a single click stays inert.
           if (touch && node.path !== graphFocus) { enterDir(node.path); fitView(); }
+        } else if (node.kind === "tag") {
+          toggleTag(node.label);
         } else if (node.kind === "attachment" && node.loaded === false) {
           loadAttachmentNode(node);
         } else if (hasLoadableMissing(node)) {
@@ -2070,6 +2245,38 @@
   }
 
   // ------------------------------------------------------------ markdown
+
+  // Resolve an embedded image (![[..]] or ![](..)) to a displayable URL: a loaded
+  // node's src, a locally read File as an object URL, or a server URL.
+  var embedUrlCache = Object.create(null);
+  function blobUrlFor(path, blob) {
+    if (embedUrlCache[path]) return embedUrlCache[path];
+    if (window.URL && URL.createObjectURL) { try { return (embedUrlCache[path] = URL.createObjectURL(blob)); } catch (e) {} }
+    return null;
+  }
+  function imageSrcFor(path, src) {
+    if (typeof src === "string") return src;
+    return src ? blobUrlFor(path, src) : null;
+  }
+  function resolveEmbedSrc(target) {
+    var cands = linkCandidates(previewPath || "", target);
+    for (var i = 0; i < cands.length; i++) {
+      var n = fileMap && fileMap.get(cands[i]);
+      if (n && n.src) { var u = imageSrcFor(cands[i], n.src); if (u) return u; }
+      var kf = bundleKnown && bundleKnown.get(cands[i]);
+      if (kf && kf.src) { var u2 = imageSrcFor(cands[i], kf.src); if (u2) return u2; }
+    }
+    // Local vault: Obsidian resolves by name, so match any file with this basename.
+    if (bundleKnown && target.indexOf("/") < 0) {
+      var hit = null;
+      bundleKnown.forEach(function (f, p) { if (!hit && p.split("/").pop() === target) hit = p; });
+      if (hit) { var kf2 = bundleKnown.get(hit); var u3 = kf2 && imageSrcFor(hit, kf2.src); if (u3) return u3; }
+    }
+    // Server bundle: build the URL directly; the <img> 404s if it is not present.
+    if (bundleRootUrl && cands.length) return new URL(cands[0], bundleRootUrl).href;
+    return null;
+  }
+
   // A small, dependency-free CommonMark-ish renderer: headings, emphasis,
   // inline code, fenced code, links/images, lists, blockquotes, tables, hr,
   // and GFM-style [^id] footnotes. Input is escaped, so raw HTML is inert.
@@ -2079,7 +2286,14 @@
     var s = esc(raw);
     s = s.replace(/`([^`]+)`/g, function (m, c) { return stash("<code>" + c + "</code>"); });
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, url) {
-      return stash('<img alt="' + alt + '" src="' + url + '">');
+      var src = /^(https?:|data:|blob:)/i.test(url) ? url : (resolveEmbedSrc(url) || url);
+      return stash('<img alt="' + alt + '" src="' + src + '">');
+    });
+    s = s.replace(/!\[\[([^\]|#^]+)(?:[#^][^\]]*)?(?:\|[^\]]*)?\]\]/g, function (m, target) {
+      target = target.trim();
+      var src = imageKind(target) ? resolveEmbedSrc(target) : null;
+      if (!src) return stash('<span class="pv-note">' + target + "</span>");
+      return stash('<img alt="' + target + '" src="' + src + '">');
     });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, function (m, text, url) {
       var ext = /^(https?:|mailto:)/i.test(url);
@@ -2672,7 +2886,7 @@
   // back/forward controls — including mouse side buttons, which browsers
   // reserve for history navigation — drive the preview.
   function openPreview(node) {
-    if (!node || node.kind === "dir") return;
+    if (!node || node.kind === "dir" || node.kind === "tag") return;
     var showing = preview.classList.contains("show");
     if (showing && pvIndex >= 0 && pvStack[pvIndex] === node) { renderPreviewEntry(node); return; }
     if (pvIndex < pvStack.length - 1) pvStack = pvStack.slice(0, pvIndex + 1);
@@ -2793,7 +3007,8 @@
     if (pvTagPopTimer) { clearTimeout(pvTagPopTimer); pvTagPopTimer = null; }
     pvTagPopTag = tag;
     var nodes = nodesWithTag(tag);
-    var html = '<div class="tp-head">Pages tagged <b>#' + esc(tag) + "</b> (" + nodes.length + ")</div>";
+    var html = '<div class="tp-head">Pages tagged <b>#' + esc(tag) + "</b> (" + nodes.length + ") " +
+      '<button type="button" class="tp-expand" data-tag="' + esc(tag) + '">Expand in graph</button></div>';
     if (!nodes.length) {
       html += '<div class="tp-item tp-cur">No pages with this tag.</div>';
     } else {
@@ -2820,6 +3035,8 @@
       pvTagPop.addEventListener("mouseleave", pvScheduleHideTagPop);
     }
     pvTagPop.addEventListener("click", function (e) {
+      var ex = e.target.closest ? e.target.closest(".tp-expand") : null;
+      if (ex) { expandTagInGraph(ex.getAttribute("data-tag")); return; }
       var b = e.target.closest ? e.target.closest(".tp-item") : null;
       if (!b || !b.getAttribute) return;
       var p = b.getAttribute("data-path");
@@ -2902,9 +3119,19 @@
   // ---- tag combobox: include / exclude chips + embedded search -------------
   function computeAllTags() {
     var counts = new Map();
+    // Count a tag and each of its namespace ancestors, so "ml" is selectable
+    // even when only "ml/vision" is used.
+    function bump(t) {
+      var segs = String(t).split("/");
+      for (var i = 1; i <= segs.length; i++) {
+        var name = segs.slice(0, i).join("/");
+        counts.set(name, (counts.get(name) || 0) + 1);
+      }
+    }
     allNodes.forEach(function (n) {
+      if (n.kind === "tag") return;   // hubs must not double-count their own tag
       var tags = Array.isArray(n.tags) ? n.tags : (n.tags ? [n.tags] : []);
-      tags.forEach(function (t) { if (t) counts.set(t, (counts.get(t) || 0) + 1); });
+      tags.forEach(function (t) { if (t) bump(t); });
     });
     allTags = Array.from(counts.keys()).sort();
     Array.from(tagInclude).forEach(function (t) { if (allTags.indexOf(t) < 0) tagInclude.delete(t); });
@@ -2928,6 +3155,31 @@
   function renderKindChips() { renderChipsInto("kindChips", kindInclude, kindExclude); }
   function renderTypeChips() { renderChipsInto("typeChips", typeInclude, typeExclude); }
   function renderStatusChips() { renderChipsInto("statusChips", statusInclude, statusExclude); }
+
+  // Filter the graph to a tag and reveal it (plus its namespace ancestors) in the
+  // graph view, closing the preview so the graph is visible.
+  function expandTagInGraph(tag) {
+    if (!tag) return;
+    pvHideTagPop();
+    closePreview();
+    if (graphFocus !== "") enterDir("");
+    tagExclude.delete(tag);
+    tagInclude.add(tag);
+    renderChips();
+    updateFilterSummary();
+    if (tagPop && tagPop.render) tagPop.render();
+    updateView();
+  }
+
+  // Toggle one tag in the include filter (used when a tag hub is clicked).
+  function toggleTag(tag) {
+    if (tagInclude.has(tag)) tagInclude.delete(tag);
+    else { tagInclude.add(tag); tagExclude.delete(tag); }
+    renderChips();
+    updateFilterSummary();
+    if (tagPop && tagPop.render) tagPop.render();
+    updateView();
+  }
 
   // ---- reusable tri-state popover (none -> include -> exclude -> none) ----
   function makeTriPopover(cfg) {
@@ -3029,6 +3281,22 @@
     showLabels = !showLabels;
     labelsBtn.setAttribute("aria-pressed", showLabels ? "true" : "false");
   });
+  var tagsBtn = document.getElementById("tags");
+  function setShowTags(on) {
+    showTags = !!on;
+    if (tagsBtn) tagsBtn.setAttribute("aria-pressed", showTags ? "true" : "false");
+    // Tag hubs read best without the directory ring: disable Directories while
+    // tags are shown, and re-enable them when tags are hidden again.
+    if (showTags) kindExclude.add("Directory");
+    else kindExclude.delete("Directory");
+    renderKindChips();
+    updateFilterSummary();
+    if (kindPop && kindPop.render) kindPop.render();
+    // Rebuild in place: the graph is unchanged while Tags is off, and hubs are
+    // seeded next to their notes when it is turned on.
+    if (bundleFiles) load(bundleFiles, bundleRootUrl, bundleKnown, true);
+  }
+  if (tagsBtn) tagsBtn.addEventListener("click", function () { setShowTags(!showTags); });
   graphBackBtn.addEventListener("click", graphBack);
   graphFwdBtn.addEventListener("click", graphForward);
   graphTopBtn.addEventListener("click", graphTop);
