@@ -300,6 +300,7 @@
     box-shadow: 0 20px 60px rgba(0,0,0,.5);
   }
   #card h1 { margin: 0 0 6px; font-size: 19px; }
+  #card .card-logo { float: right; margin: 0 0 8px 12px; }
   #card p { color: var(--muted); margin: 0 0 12px; }
   #card ul { margin: 0 0 16px; padding-left: 20px; color: var(--text); }
   #card li { margin: 5px 0; }
@@ -343,6 +344,13 @@
     font-size: 11px; padding: 2px 8px; border: 1px solid var(--line);
     border-radius: 999px; color: var(--muted);
   }
+  .md-meta .pv-view {
+    margin-left: auto; font: inherit; font-size: 11px;
+    padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: transparent; color: var(--text); cursor: pointer;
+  }
+  .md-meta .pv-view:hover { border-color: var(--accent); }
+  .md-meta .pv-view:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 1px; }
   #pvBody h1, #pvBody h2, #pvBody h3, #pvBody h4, #pvBody h5, #pvBody h6 {
     line-height: 1.25; margin: 1.1em 0 .5em;
   }
@@ -373,6 +381,9 @@
   #pvBody th { background: var(--panel-2); }
   #pvBody hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
   #pvBody img { max-width: 100%; }
+  #pvBody.pv-imgmode { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  #pvBody.pv-imgmode .pv-imgwrap { position: relative; flex: 1 1 auto; min-height: 0; margin: 0 0 6px; }
+  #pvBody.pv-imgmode .pv-imgwrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   #pvBody .fnref { font-size: .8em; }
   #pvBody .fnref + .fnref { margin-left: .3em; }
   #pvBody .fnref + .fnref::before { content: ","; }
@@ -626,6 +637,20 @@
 
 <div id="overlay" class="show">
   <div id="card">
+    <svg class="card-logo" width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="OKF Graph Explorer">
+      <path d="M15.5 15 L21 21.5 M15.5 15 L9.5 22 M9.5 22 L6.5 29 M21 21.5 L27 29 M3.5 13 L8 11 M20 6 L27 3 M15.5 15 L10.5 8.5 M10.5 8.5 L8 5 M3.5 13 L10.5 8.5 M10.5 8.5 L20 6" fill="none" stroke="#6a7488" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="8" cy="5" r="2.4" fill="#5b8def"/>
+      <circle cx="10.5" cy="8.5" r="1.4" fill="#5b8def"/>
+      <circle cx="8" cy="11" r="1.3" fill="#5b8def"/>
+      <circle cx="3.5" cy="13" r="1.5" fill="#5b8def"/>
+      <circle cx="20" cy="6" r="1.5" fill="#5b8def"/>
+      <circle cx="27" cy="3" r="1.8" fill="#5b8def"/>
+      <circle cx="9.5" cy="22" r="1.5" fill="#c9a24d"/>
+      <circle cx="6.5" cy="29" r="1.8" fill="#c9a24d"/>
+      <circle cx="21" cy="21.5" r="1.5" fill="#c9a24d"/>
+      <circle cx="27" cy="29" r="1.8" fill="#c9a24d"/>
+      <ellipse cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
+    </svg>
     <h1>OKF Graph Explorer</h1>
     <p>Single-file, dependency-free viewer for this knowledge bundle.</p>
     <ul>
@@ -3388,13 +3413,16 @@
   function renderPreviewEntry(node) {
     previewRenderId++;
     pvHideTagPop();
+    pvBody.classList.remove("pv-imgmode");
     previewPath = node.path;
     pvTitle.textContent = displayLabel(node);
     pvPath.textContent = node.path || "";
     if (node.kind === "attachment") {
-      renderAttachmentPreview(node);
+      if (imageKind(node.path)) renderImagePreview(node);
+      else renderAttachmentPreview(node);
     } else if (node.kind === "file") {
-      pvBody.innerHTML = '<pre class="md-pre plain">' + esc(node.body || "") + "</pre>";
+      if (imageKind(node.path)) renderImagePreview(node);
+      else pvBody.innerHTML = '<pre class="md-pre plain">' + esc(node.body || "") + "</pre>";
     } else {
       var meta = [];
       if (node.type) meta.push('<span class="chip2">' + esc(node.type) + "</span>");
@@ -3433,6 +3461,50 @@
     if (node.pdfMeta) { paintPdfMeta(node, node.pdfMeta); return; }
     peekPdfMeta(node).then(function (m) { if (current()) paintPdfMeta(node, m); },
       function () { if (current()) paintPdfMeta(node, null); });
+  }
+
+  // Preview for an image file. A text-based image (kind "file", e.g. SVG) can be
+  // toggled between the rendered image and its source text; a binary attachment
+  // shows the image with its file details and no text view.
+  function renderImagePreview(node) {
+    var ext = extOf(node.path) || "";
+    var hasText = node.kind === "file";
+    var showText = hasText && node.pvText === true;
+    var toggle = hasText
+      ? '<button type="button" class="pv-view" id="pvViewToggle" aria-pressed="' + (showText ? "true" : "false") +
+        '" title="Show the image or its source text">' + (showText ? "Show image" : "Show source") + "</button>"
+      : "";
+    var body = '<div class="md-meta"><span class="chip2">' + esc((ext || "image").toUpperCase()) + "</span>" + toggle + "</div>";
+    if (showText) {
+      body += '<pre class="md-pre plain">' + esc(node.body || "") + "</pre>";
+    } else {
+      body += '<div class="pv-imgwrap"><p class="pv-note" id="pvImgNote">Loading image\u2026</p>' +
+        '<img id="pvImg" alt="' + esc(node.path) + '" hidden></div>';
+    }
+    if (node.kind === "attachment") {
+      body += '<h3 class="pv-sec">File</h3><div id="pvFile"><p class="pv-note">Reading file details\u2026</p></div>';
+    }
+    pvBody.innerHTML = body;
+    if (!showText) pvBody.classList.add("pv-imgmode");
+    var toggleEl = document.getElementById("pvViewToggle");
+    if (toggleEl) toggleEl.addEventListener("click", function () { node.pvText = !showText; renderPreviewEntry(node); });
+    if (node.kind === "attachment") {
+      peekFileInfo(node).then(function () { if (previewPath === node.path) paintFileSection(node); });
+    }
+    if (showText) return;
+    var renderId = previewRenderId, generation = bundleGeneration;
+    var src = node.src || (bundleRootUrl ? bundleUrl(node.path, bundleRootUrl) : null);
+    imageSrcFor(node.path, src, generation, bundleRootUrl).then(function (url) {
+      if (renderId !== previewRenderId || generation !== bundleGeneration || previewPath !== node.path) return;
+      var img = document.getElementById("pvImg"), note = document.getElementById("pvImgNote");
+      if (!url) { if (note) note.textContent = "Image could not be displayed."; return; }
+      if (note && note.parentNode) note.parentNode.removeChild(note);
+      if (img) { img.src = url; img.hidden = false; }
+    }, function () {
+      if (renderId !== previewRenderId || generation !== bundleGeneration) return;
+      var note = document.getElementById("pvImgNote");
+      if (note) note.textContent = "Image could not be displayed.";
+    });
   }
 
   function paintFileSection(node) {

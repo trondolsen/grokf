@@ -41,7 +41,7 @@ Shared styling keeps the controls consistent:[^source]
 
 # Favicon and mascot
 
-The page declares an SVG favicon as an inline `data:` URI, keeping the single-file format: the tool never loads `data:` images from bundle content, so the favicon is the only inline image. The CSP therefore allows `blob:` and `data:` for `img-src`. The figure is the project's **mascot**: a stick figure in a victory pose whose nodes follow the graph vocabulary — the torso is the root directory, the head, shoulder, elbows and hands are concepts, the knees and feet are files, and each arm and leg is drawn as two links. It is drawn inline in the About panel and kept as [`attachments/favicon.svg`](attachments/favicon.svg) for documentation.[^source]
+The page declares an SVG favicon as an inline `data:` URI, keeping the single-file format: the tool never loads `data:` images from bundle content, so the favicon is the only inline image. The CSP therefore allows `blob:` and `data:` for `img-src`. The figure is the project's **mascot**: a stick figure in a victory pose whose nodes follow the graph vocabulary — the torso is the root directory, the head, shoulder, elbows and hands are concepts, the knees and feet are files, and each arm and leg is drawn as two links. It is drawn inline in the About panel and the bundle load dialog, and kept as [`attachments/favicon.svg`](attachments/favicon.svg) for documentation.[^source]
 
 ![OKF Graph Explorer mascot](attachments/favicon.svg)
 
