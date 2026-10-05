@@ -1,7 +1,7 @@
 ---
 type: Algorithm
 title: Force layout
-description: A d3-force-style simulation with Barnes-Hut repulsion, link and radial forces, and grid collision, run on a canvas.
+description: A d3-force-style simulation with Barnes-Hut repulsion, link and radial forces, and grid collision, run on a canvas, on a physics module shared with the mascot.
 tags: [algorithm, layout, simulation, canvas]
 okfx:
   mode: reference
@@ -9,7 +9,7 @@ okfx:
 sources:
   - id: source
     resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – the forces, integrate and draw sections
+    title: okf-graph-explorer.html – the physics, layout step and draw sections
 ---
 
 # Context
@@ -28,7 +28,11 @@ The simulation accumulates acceleration from several forces:[^source]
 
 # Integration
 
-Velocities are updated with a velocity-Verlet step and clamped to a maximum speed and acceleration. A cooling factor `alpha` decays each tick and never drops below a floor, so the layout keeps a slow, continuous motion instead of freezing.
+Velocities are updated with a velocity-Verlet step and clamped to a maximum speed and acceleration. A cooling factor `alpha` decays each tick and never drops below a floor, so the layout keeps a slow, continuous motion instead of freezing.[^source]
+
+# Shared physics
+
+The force primitives (softened repulsion, link springs, centering, the acceleration clamp) and the velocity-Verlet integrator are factored into one **shared physics module**. The graph supplies its own bodies, Barnes-Hut repulsion, ring targets and collision, while the mascot animation reuses the same primitives and step with its own bodies, link topology and parameters — so both run the same simulation at the same pace. The mascot idles its loop as soon as the released figure has converged and while its panel is hidden, so it costs nothing outside the brief settle.
 
 # Trade-offs
 
@@ -40,4 +44,4 @@ A continuous simulation keeps the graph alive and self-organising, but it costs 
 - [Graph model](../model/graph-model.md)
 - [Local processing](../principles/local-processing.md)
 
-[^source]: The forces, integrate and draw sections of the tool source.
+[^source]: The physics, layout step and draw sections of the tool source.

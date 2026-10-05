@@ -20,6 +20,7 @@ test/
 │   ├── paths.cjs
 │   └── serve.mjs
 ├── scripts/
+│   ├── mascot-perf.mjs
 │   └── screenshot.mjs
 └── fixtures/
     └── basic/
@@ -104,6 +105,20 @@ be inside the container's writable `/artifacts/` tree.
 Run the browser tests and the screenshot script sequentially: both use port 8080
 and cannot run at the same time in the same container. Separate Podman runs each
 have their own loopback server.
+
+### Mascot performance
+
+```sh
+bash tools/playwright-cli/run.sh --workdir . -- \
+  test/scripts/mascot-perf.mjs
+```
+
+The script drives the tool with Playwright's clock and reports, per simulated
+second of animation, the wall-clock cost with the mascot hidden, held in its
+fixed pose and released into the physics. It also asserts that the mascot is
+only active while its panel is visible: the mascot SVGs must not change while
+hidden or while it holds its pose. It starts its own server on port 8080, so run
+it sequentially with the browser tests and the screenshot script.
 
 ## Results
 

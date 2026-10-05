@@ -44,11 +44,13 @@ Shared styling keeps the controls consistent:[^source]
 
 The page declares an SVG favicon as an inline `data:` URI, keeping the single-file format: the tool never loads `data:` images from bundle content, so the favicon is the only inline image. The CSP therefore allows `blob:` and `data:` for `img-src`. The figure is the project's **mascot**: a stick figure in a victory pose whose nodes follow the graph vocabulary — the torso is the root directory, the head, shoulder, elbows and hands are concepts, the knees and feet are files, and each arm and leg is drawn as two links. It is drawn inline in the About panel and the bundle load dialog, and kept as [`attachments/favicon.svg`](attachments/favicon.svg) for documentation.[^source]
 
+In those two panels the figure starts in a fixed pose and alternates on a 10-second timer: it holds the pose, then releases it and lets physics run — the same velocity-Verlet force layout the graph uses (softened repulsion, link springs, a decaying temperature), so the joints relax into a laid-out arrangement at the graph's rapid pace — and then forcibly drags the joints back into the fixed pose. The cycle restarts when a panel becomes visible. Joint rest positions come from the markup; the link topology and the physics weights live in the script. A hidden panel is skipped, and `prefers-reduced-motion` leaves the figure static.
+
 ![OKF Graph Explorer mascot](attachments/favicon.svg)
 
 # Accessibility
 
-State is carried by attributes, not colour alone where it matters: `aria-pressed` on the toggles, `aria-expanded` on the title, labelled inputs, and a reduced-motion fallback for the loading spinner. Panels are reachable by keyboard, and external links open with `rel="noopener noreferrer"`.[^source]
+State is carried by attributes, not colour alone where it matters: `aria-pressed` on the toggles, `aria-expanded` on the title, labelled inputs, and a reduced-motion fallback for the loading spinner and the mascot figure. Panels are reachable by keyboard, and external links open with `rel="noopener noreferrer"`.[^source]
 
 # Guidance
 
