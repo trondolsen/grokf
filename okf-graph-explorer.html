@@ -4,10 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="referrer" content="no-referrer">
-<!-- Defense-in-depth for a tool that renders untrusted bundles. connect-src/img-src
-     keep content from contacting other origins; script/style need 'unsafe-inline'
-     because this is a single-file app with an inline script and styles. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<!-- Inline application code preserves the single-file format; inline event
+     handlers are forbidden. Images use validated, bounded blob URLs only. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>OKF Graph Explorer</title>
 <style>
   :root {
@@ -722,11 +721,128 @@
     if (next) next();          // hand the slot straight to the next waiter
     else activeFetches--;
   }
-  async function trackedFetch(url, opts) {
+  var MAX_PENDING_FETCHES = 64;
+  var FETCH_TIMEOUT_MS = 30000;
+  var MAX_BUNDLE_FILES = 2000;
+  var MAX_BUNDLE_BYTES = 32 * 1024 * 1024;
+  var MAX_GRAPH_NODES = 8000, MAX_GRAPH_LINKS = 20000;
+  var MAX_REFERENCES_PER_FILE = 256;
+  var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+  var MAX_IMAGE_TOTAL_BYTES = 16 * 1024 * 1024;
+  var MAX_PREVIEW_IMAGES = 64;
+  var bundleBudget = null, bundleGeneration = 0, bundleLoadRequest = 0;
+
+  async function readBoundedStream(stream, maxBytes) {
+    if (!stream || typeof stream.getReader !== "function") throw new Error("Streaming reads are not supported.");
+    var reader = stream.getReader(), chunks = [], size = 0, complete = false;
+    try {
+      while (true) {
+        var part = await reader.read();
+        if (part.done) { complete = true; break; }
+        if (part.value.byteLength > maxBytes - size) throw new Error("Content exceeds the byte limit.");
+        size += part.value.byteLength;
+        chunks.push(part.value);
+      }
+      var bytes = new Uint8Array(size), offset = 0;
+      chunks.forEach(function (chunk) { bytes.set(chunk, offset); offset += chunk.byteLength; });
+      return bytes;
+    } finally {
+      if (!complete) { try { await reader.cancel(); } catch (e) {} }
+      reader.releaseLock();
+    }
+  }
+
+  // The slot and deadline cover both response headers and bounded body reads.
+  async function trackedFetch(url, opts, maxBytes, rootHref) {
+    var root = rootHref || bundleRootUrl;
+    if (!urlWithinBundle(url, root)) throw new Error("URL is outside the bundle root.");
+    if (fetchWaiters.length >= MAX_PENDING_FETCHES) throw new Error("Too many queued requests.");
     await acquireFetchSlot();
     busyStart();
-    try { return await fetch(url, opts); }
-    finally { busyEnd(); releaseFetchSlot(); }
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, FETCH_TIMEOUT_MS);
+    var res = null;
+    opts = opts || {};
+    maxBytes = maxBytes == null ? MAX_FILE_BYTES : maxBytes;
+    try {
+      var method = opts.method === "HEAD" ? "HEAD" : "GET";
+      res = await fetch(url, {
+        method: method, cache: opts.cache || "no-store", headers: opts.headers,
+        credentials: "omit", redirect: "error", signal: controller.signal
+      });
+      if (res.url && !urlWithinBundle(res.url, root)) throw new Error("Response URL is outside the bundle root.");
+      var bytes = new Uint8Array(0);
+      if (res.ok && method !== "HEAD" && !opts.headersOnly) {
+        var length = Number(res.headers.get("content-length"));
+        if (length > maxBytes) throw new Error("Response exceeds the byte limit.");
+        if (res.body) bytes = await readBoundedStream(res.body, maxBytes);
+      }
+      return { ok: res.ok, status: res.status, headers: res.headers, bytes: bytes };
+    } finally {
+      if (res && res.body && !res.body.locked) { try { await res.body.cancel(); } catch (e) {} }
+      clearTimeout(timer);
+      busyEnd();
+      releaseFetchSlot();
+    }
+  }
+
+  function createBundleBudget() {
+    return { paths: new Set(), bytes: 0, entries: 0, reservedBytes: 0, reservedFiles: 0, imageBytes: 0, imageReservedBytes: 0, imageWaiters: [], textWaiters: [] };
+  }
+  async function fetchBundleText(path, url, budget, root) {
+    var allowance, generation = bundleGeneration;
+    while (true) {
+      allowance = Math.min(MAX_FILE_BYTES, MAX_BUNDLE_BYTES - budget.bytes - budget.reservedBytes);
+      if (budget.bytes >= MAX_BUNDLE_BYTES || budget.paths.size >= MAX_BUNDLE_FILES) {
+        throw new Error("Bundle exceeds the file or total byte limit.");
+      }
+      if (!budget.reservedFiles || (allowance === MAX_FILE_BYTES && budget.paths.size + budget.reservedFiles < MAX_BUNDLE_FILES)) break;
+      await new Promise(function (resolve) { budget.textWaiters.push(resolve); });
+      if (generation !== bundleGeneration) throw new Error("Bundle was replaced.");
+    }
+    budget.reservedBytes += allowance;
+    budget.reservedFiles++;
+    try {
+      var res = await trackedFetch(url, { cache: "no-store" }, allowance, root);
+      if (!res.ok) { var error = new Error("HTTP " + res.status); error.status = res.status; throw error; }
+      var file = { path: path, text: new TextDecoder().decode(res.bytes), bytes: res.bytes.byteLength };
+      return accountBundleFile(budget, file) ? file : null;
+    } finally {
+      budget.reservedBytes -= allowance;
+      budget.reservedFiles--;
+      budget.textWaiters.splice(0).forEach(function (resolve) { resolve(); });
+    }
+  }
+  function releaseBundleFile(budget, file) {
+    if (budget.paths.delete(file.path) && !file.binary) {
+      budget.bytes -= file.bytes == null ? new TextEncoder().encode(file.text || "").byteLength : file.bytes;
+    }
+  }
+  function visitBundleEntry(budget) {
+    if (++budget.entries > MAX_GRAPH_NODES) throw new Error("Bundle contains too many directory entries.");
+  }
+  function accountBundleFile(budget, file) {
+    if (budget.paths.has(file.path)) return false;
+    var size = file.binary ? 0 : (file.bytes == null ? new TextEncoder().encode(file.text || "").byteLength : file.bytes);
+    if (budget.paths.size >= MAX_BUNDLE_FILES || size > MAX_BUNDLE_BYTES - budget.bytes) {
+      throw new Error("Bundle exceeds the file or total byte limit.");
+    }
+    budget.paths.add(file.path);
+    budget.bytes += size;
+    return true;
+  }
+  function addBundleFile(out, file, budget) {
+    if (validBundlePath(file.path) && accountBundleFile(budget, file)) out.push(file);
+  }
+  function pushGraphNode(node, target) {
+    target = target || nodes;
+    if (target.length >= MAX_GRAPH_NODES) throw new Error("Graph contains too many nodes.");
+    target.push(node);
+  }
+  function pushGraphLink(link, target) {
+    target = target || links;
+    if (target.length >= MAX_GRAPH_LINKS) throw new Error("Graph contains too many links.");
+    target.push(link);
   }
   var hover = null, dragNode = null, panning = null;
   var activePointers = new Map(), pinchPrev = null;
@@ -768,12 +884,12 @@
   function normalizeTags(value) {
     if (value == null) return [];
     if (Array.isArray(value)) {
-      return value.map(function (t) { return String(t).trim(); })
-        .filter(function (t) { return t !== ""; });
+      return value.slice(0, 64).map(function (t) { return String(t).trim(); })
+        .filter(function (t) { return t !== "" && t.length <= 256 && t.split("/").length <= 16; });
     }
-    return String(value).split(",")
+    return String(value).split(",").slice(0, 64)
       .map(function (t) { return t.trim(); })
-      .filter(function (t) { return t !== ""; });
+      .filter(function (t) { return t !== "" && t.length <= 256 && t.split("/").length <= 16; });
   }
 
   function addKeyVal(obj, text) {
@@ -793,7 +909,7 @@
           // A list item is either a mapping ("- id: x") or a plain scalar
           // ("- meta/inbox"); only the former starts an object we add keys to.
           if (/^[A-Za-z0-9_.\-]+:(\s|$)/.test(val)) {
-            current = {};
+            current = Object.create(null);
             items.push(current);
             addKeyVal(current, val);
           } else {
@@ -806,13 +922,13 @@
       }
       return items;
     }
-    var obj = {};
+    var obj = Object.create(null);
     for (var j = 0; j < block.length; j++) addKeyVal(obj, block[j].trim());
     return obj;
   }
 
   function parseYaml(src) {
-    var out = {};
+    var out = Object.create(null);
     var lines = src.split(/\r?\n/);
     for (var i = 0; i < lines.length; i++) {
       var raw = lines[i];
@@ -852,22 +968,41 @@
   function imageKind(name) { var e = extOf(name); return e && IMG_EXT[e] ? e : null; }
 
   function extractLinks(body) {
-    var out = [], re = /(!?)\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, m;
-    while ((m = re.exec(body))) {
-      var t = m[3];
-      if (/^(https?:|mailto:|tel:|#)/i.test(t)) continue;
-      t = t.split("#")[0].split("?")[0];
-      if (t) out.push((m[1] === "!" ? EMBED_MARK : "") + t);
-    }
-    // Obsidian wikilinks and embeds: [[Note]], [[Note|alias]], [[Note#heading]],
-    // [[folder/Note]], ![[image.png]]. Notes omit the .md extension, so add it
-    // back for targets without one; alias/heading/block markers end the capture.
-    var wre = /(!?)\[\[([^\]|#^]+)/g;
-    while ((m = wre.exec(body))) {
-      var w = m[2].trim();
-      if (!w || /^(https?:|mailto:)/i.test(w)) continue;
-      out.push((m[1] === "!" ? EMBED_MARK : "") + (extOf(w) ? w : w + ".md"));
-    }
+    var out = [], state = markdownState();
+    try {
+      var fence = null;
+      var text = markdownInput(body).split(/\r?\n/).map(function (line) {
+        if (fence) { if (markdownFenceCloses(line, fence)) fence = null; return ""; }
+        fence = markdownFence(line);
+        return fence ? "" : line;
+      }).join("\n");
+      for (var i = 0; i < text.length && out.length < MAX_REFERENCES_PER_FILE;) {
+        markdownWork(state, 1);
+        var c = text.charAt(i);
+        if (c === "\\") { i += 2; continue; }
+        if (c === "`") {
+          var run = i;
+          while (i < text.length && text.charAt(i) === "`") i++;
+          var codeEnd = markdownCodeEnd(text, i, i - run, text.length, state);
+          if (codeEnd >= 0) i = codeEnd + i - run;
+          continue;
+        }
+        var image = c === "!" && text.charAt(i + 1) === "[", open = image ? i + 1 : i;
+        if (c !== "[" && !image) { i++; continue; }
+        var close = markdownBracketEnd(text, open, text.length, state);
+        if (close < 0) { i++; continue; }
+        var target = null, next = close + 1;
+        if (text.charAt(open + 1) === "[" && text.charAt(close - 1) === "]") {
+          target = text.slice(open + 2, close - 1).split(/[|#^]/)[0].trim();
+          if (target && !extOf(target)) target += ".md";
+        } else {
+          var dest = markdownDestination(text, close + 1, text.length, state);
+          if (dest) { target = dest.target; next = dest.next; }
+        }
+        if (target && normalizeLinkPath(target)) out.push((image ? EMBED_MARK : "") + target);
+        i = next;
+      }
+    } catch (e) { if (e !== markdownLimit) throw e; }
     return out;
   }
 
@@ -878,6 +1013,38 @@
     var segs = String(path).split("/");
     for (var i = 0; i < segs.length - 1; i++) { if (segs[i].charAt(0) === ".") return true; }
     return false;
+  }
+
+  function normalizeLinkPath(link) {
+    link = String(link).trim().split("#")[0].split("?")[0];
+    if (!link || /[\\\x00-\x1f\x7f]/.test(link) || /%(?:2f|5c|25)/i.test(link)) return null;
+    try { link = decodeURIComponent(link); } catch (e) { return null; }
+    if (/[\\:\x00-\x1f\x7f]/.test(link) || /^\/\//.test(link)) return null;
+    return link;
+  }
+  function validBundlePath(path) {
+    return typeof path === "string" && path.length > 0 && path.length <= 2048 &&
+      !/[\\:\x00-\x1f\x7f]/.test(path) && path.charAt(0) !== "/" &&
+      path.split("/").length <= 24 && joinPath("", path) === path && !inDotDir(path);
+  }
+  function urlWithinBundle(href, rootHref) {
+    if (!rootHref) return false;
+    try {
+      var root = new URL(rootHref), url = new URL(href);
+      return isAllowedUrl(root) && isAllowedUrl(url) && !root.username && !root.password &&
+        !url.username && !url.password && !url.search && !url.hash &&
+        /\/$/.test(root.pathname) && url.pathname.startsWith(root.pathname) &&
+        !/%(?:2f|5c|25)/i.test(url.pathname);
+    } catch (e) { return false; }
+  }
+  function bundleUrl(path, rootHref) {
+    if (!validBundlePath(path)) return null;
+    var root = rootHref || bundleRootUrl;
+    if (!root) return null;
+    try {
+      var url = new URL(path.split("/").map(encodeURIComponent).join("/"), root);
+      return urlWithinBundle(url.href, root) ? url.href : null;
+    } catch (e) { return null; }
   }
 
   // Normalize base+link into a bundle-relative path; null if it escapes the root.
@@ -913,9 +1080,7 @@
   // Candidates for a body markdown link. "./"/"../" are file-relative; a leading
   // "/" is bundle-root-relative (OKF §6.1); a bare path is file-relative.
   function linkCandidates(from, link) {
-    link = stripEmbedMark(link).trim();
-    if (!link || /^(https?:|mailto:|tel:|#)/i.test(link)) return [];
-    link = link.split("#")[0].split("?")[0];
+    link = normalizeLinkPath(stripEmbedMark(link));
     if (!link || /\/$/.test(link)) return [];
     if (/^\.\.?\//.test(link)) { var r = joinPath(dirOf(from), link); return r ? [r] : []; }
     if (link.charAt(0) === "/") return pathCandidates(from, link.replace(/^\//, ""), true);
@@ -926,9 +1091,7 @@
   // `executor`, `attester`, …). Bare and "/"-prefixed paths are
   // bundle-root-relative (as in the OKF examples); "./"/"../" are file-relative.
   function resourceCandidates(from, link) {
-    link = String(link).trim();
-    if (!link || /^(https?:|mailto:|tel:|#)/i.test(link)) return [];
-    link = link.split("#")[0].split("?")[0];
+    link = normalizeLinkPath(link);
     if (!link || !/\.md$/i.test(link)) return [];
     if (/^\.\.?\//.test(link)) { var r = joinPath(dirOf(from), link); return r ? [r] : []; }
     return pathCandidates(from, link.charAt(0) === "/" ? link.replace(/^\//, "") : link, true);
@@ -1013,77 +1176,94 @@
     if (c >= minLen) c = minLen - 1; // never strip the filename itself
     if (c <= 0) return files;
     return files.map(function (f) {
-      return { path: f.path.split("/").slice(c).join("/"), text: f.text, binary: f.binary, src: f.src };
+      return { path: f.path.split("/").slice(c).join("/"), text: f.text, binary: f.binary, src: f.src, bytes: f.bytes };
     }).filter(function (f) { return f.path; });
   }
 
   // Depth-limited link crawl. `maxDepth` caps how many link hops are prefetched
   // (0 = the start file only, null/undefined = all levels).
-  async function crawlFromUrl(startHref, maxDepth) {
+  async function crawlFromUrl(startHref, maxDepth, rootHref) {
+    var request = bundleLoadRequest;
     var limit = (maxDepth == null) ? Infinity : maxDepth;
-    var base = new URL("./", location.href);
     var start = new URL(startHref || "index.md", location.href);
-    var seen = new Set();
-    var queue = [{ url: start.href, depth: 0 }];
-    var out = [];
-    var guard = 0;
+    var base = new URL(rootHref || "./", start);
+    if (!urlWithinBundle(start.href, base.href)) return [];
+    var first = { url: start.href, depth: 0, alternatives: [], status: "pending" };
+    var scheduled = new Map([[start.href, first]]);
+    var queue = [first];
+    var out = [], budget = createBundleBudget();
+    function schedule(url, depth, alternatives) {
+      alternatives = alternatives || [];
+      while (url) {
+        var existing = scheduled.get(url);
+        if (existing && existing.status === "missing") { url = alternatives[0]; alternatives = alternatives.slice(1); continue; }
+        if (existing) {
+          if (existing.status === "pending") existing.alternatives = Array.from(new Set(existing.alternatives.concat(alternatives)));
+          return;
+        }
+        if (scheduled.size >= MAX_BUNDLE_FILES) throw new Error("Bundle crawl exceeds the URL limit.");
+        var entry = { url: url, depth: depth, alternatives: alternatives, status: "pending" };
+        scheduled.set(url, entry);
+        queue.push(entry);
+        queuedAdd(1);
+        return;
+      }
+    }
+    function fallback(item) {
+      item.status = "missing";
+      if (item.alternatives.length) schedule(item.alternatives[0], item.depth, item.alternatives.slice(1));
+    }
     queuedAdd(queue.length);
     try {
-      while (queue.length && guard++ < 2000) {
+      while (queue.length) {
+        if (request !== bundleLoadRequest) return [];
         var item = queue.shift();
         queuedDone(1);
-        var url = item.url, depth = item.depth;
-        if (seen.has(url)) continue;
-        seen.add(url);
-        // Only fetch same-origin text files within the page directory. The check
-        // runs BEFORE the request so out-of-scope URLs are never contacted.
-        var u = new URL(url);
-        if (u.origin !== base.origin || !u.pathname.startsWith(base.pathname) || !fileKind(u.pathname)) continue;
-        var rel;
+        var u = new URL(item.url), rel;
         try { rel = decodeURIComponent(u.pathname.slice(base.pathname.length)); }
         catch (e) { continue; }
-        if (/(^|\/)\.obsidian\//i.test(rel)) continue;   // skip Obsidian's config folder
-        var res;
-        try { res = await trackedFetch(url, { cache: "no-store" }); }
-        catch (e) { continue; }
-        if (!res.ok) continue;
-        var text = await res.text();
-        if (text.length > MAX_FILE_BYTES) continue;
-        out.push({ path: rel, text: text });
-        if (depth >= limit) continue;   // stop prefetching beyond the requested depth
-        var found = extractLinks(text);
-        for (var i = 0; i < found.length; i++) {
-          var abs;
-          try { abs = new URL(stripEmbedMark(found[i]), url); } catch (e) { continue; }
-          if (abs.origin !== base.origin) continue;
-          if (!abs.pathname.startsWith(base.pathname)) continue;
-          if (fileKind(abs.pathname)) {
-            abs.hash = "";
-            if (!seen.has(abs.href)) { queue.push({ url: abs.href, depth: depth + 1 }); queuedAdd(1); }
-          }
-          // Attachments are not loaded during the crawl. They stay as unresolved
-          // references ("missing") and materialize only when a node is expanded.
-        }
+        if (!validBundlePath(rel) || !fileKind(rel)) continue;
+        var file;
+        if (budget.bytes >= MAX_BUNDLE_BYTES) throw new Error("Bundle exceeds the total byte limit.");
+        try { file = await fetchBundleText(rel, u.href, budget, base.href); }
+        catch (e) { if (e.status === 404) fallback(item); else item.status = "blocked"; continue; }
+        if (!file) { item.status = "loaded"; continue; }
+        item.status = "loaded";
+        var text = file.text;
+        out.push(file);
+        if (item.depth >= limit) continue;
+        extractLinks(text).forEach(function (link) {
+          var urls = linkCandidates(rel, link).filter(fileKind).map(function (path) { return bundleUrl(path, base.href); }).filter(Boolean);
+          if (urls.length) schedule(urls[0], item.depth + 1, urls.slice(1));
+        });
       }
     } finally {
-      queuedDone(queue.length);   // release whatever is still outstanding, even on error
+      queuedDone(queue.length);
     }
-    return stripCommonPrefix(out);
+    // Server paths remain relative to the declared root, not a common file prefix.
+    return out;
+  }
+
+  async function appendLocalFile(out, file, path, budget) {
+    if (!validBundlePath(path) || (!attachKind(file.name) && !fileKind(file.name))) return;
+    if (budget.paths.size >= MAX_BUNDLE_FILES) throw new Error("Bundle contains too many files.");
+    if (attachKind(file.name)) {
+      addBundleFile(out, { path: path, text: "", binary: true, src: file }, budget);
+      return;
+    }
+    if (typeof file.size !== "number" || !isFinite(file.size) || file.size > MAX_FILE_BYTES) return;
+    if (file.size > MAX_BUNDLE_BYTES - budget.bytes) throw new Error("Bundle exceeds the total byte limit.");
+    var bytes = file.stream ? await readBoundedStream(file.stream(), MAX_FILE_BYTES) : null;
+    var text = bytes ? new TextDecoder().decode(bytes) : await file.text();
+    addBundleFile(out, { path: path, text: text, src: file, bytes: bytes ? bytes.byteLength : file.size }, budget);
   }
 
   async function fromFileList(fileList) {
-    var out = [];
+    var out = [], budget = createBundleBudget();
     for (var i = 0; i < fileList.length; i++) {
-      var f = fileList[i];
-      var rel = f.webkitRelativePath || f.name;
-      if (inDotDir(rel)) continue;   // skip files inside dot-folders, e.g. .obsidian/
-      if (attachKind(f.name)) {
-        out.push({ path: rel, text: "", binary: true, src: f });
-        continue;
-      }
-      if (!fileKind(f.name)) continue;
-      if (f.size && f.size > MAX_FILE_BYTES) continue;
-      out.push({ path: rel, text: await f.text() });
+      visitBundleEntry(budget);
+      var file = fileList[i];
+      await appendLocalFile(out, file, file.webkitRelativePath || file.name, budget);
     }
     return stripCommonPrefix(out);
   }
@@ -1095,21 +1275,18 @@
   }
 
   async function walkDir(handle, prefix, out) {
-    await walkDirAt(handle, prefix, out, 0);
+    await walkDirAt(handle, prefix, out, 0, createBundleBudget());
   }
-  async function walkDirAt(handle, prefix, out, depth) {
-    if (depth > 12 || out.length > 5000) return; // guard against cycles and huge trees
+  async function walkDirAt(handle, prefix, out, depth, budget) {
+    if (depth > 12) throw new Error("Bundle directory tree is too deep.");
     for await (var entry of handle.values()) {
+      visitBundleEntry(budget);
       var p = prefix ? prefix + "/" + entry.name : entry.name;
+      if (!validBundlePath(p)) continue;
       if (entry.kind === "file") {
-        if (attachKind(entry.name)) {
-          out.push({ path: p, text: "", binary: true, src: await entry.getFile() });
-        } else if (fileKind(entry.name)) {
-          var file = await entry.getFile();
-          if (!file.size || file.size <= MAX_FILE_BYTES) out.push({ path: p, text: await file.text() });
-        }
-      } else if (entry.kind === "directory") {
-        if (entry.name.charAt(0) !== ".") await walkDirAt(entry, p, out, depth + 1);  // skip dot-folders, e.g. .obsidian/
+        if (attachKind(entry.name) || fileKind(entry.name)) await appendLocalFile(out, await entry.getFile(), p, budget);
+      } else if (entry.kind === "directory" && entry.name.charAt(0) !== ".") {
+        await walkDirAt(entry, p, out, depth + 1, budget);
       }
     }
   }
@@ -1117,7 +1294,7 @@
   // Drag-and-drop of a folder.
   async function fromDataTransfer(dt) {
     var items = dt.items;
-    var out = [];
+    var out = [], budget = createBundleBudget();
     var entries = [];
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
@@ -1126,33 +1303,31 @@
       if (e) entries.push(e);
     }
     if (!entries.length) return fromFileList(dt.files);
-    for (var k = 0; k < entries.length; k++) await walkEntry(entries[k], "", out, 0);
+    for (var k = 0; k < entries.length; k++) await walkEntry(entries[k], "", out, 0, budget);
     return stripCommonPrefix(out);
   }
-  async function walkEntry(entry, prefix, out, depth) {
-    if (depth > 12 || out.length > 5000) return; // guard against cycles and huge trees
-    if (entry.isDirectory && entry.name.charAt(0) === ".") return;  // skip dot-folders, e.g. .obsidian/
+  async function walkEntry(entry, prefix, out, depth, budget) {
+    visitBundleEntry(budget);
+    if (depth > 12) throw new Error("Bundle directory tree is too deep.");
+    if (entry.isDirectory && entry.name.charAt(0) === ".") return;
     var p = prefix ? prefix + "/" + entry.name : entry.name;
-    if (entry.isFile) {
-      if (attachKind(entry.name)) {
-        out.push({ path: p, text: "", binary: true, src: await new Promise(function (res, rej) { entry.file(res, rej); }) });
-      } else if (fileKind(entry.name)) {
-        var file = await new Promise(function (res, rej) { entry.file(res, rej); });
-        if (!file.size || file.size <= MAX_FILE_BYTES) out.push({ path: p, text: await file.text() });
-      }
+    if (!validBundlePath(p)) return;
+    if (entry.isFile && (attachKind(entry.name) || fileKind(entry.name))) {
+      var file = await new Promise(function (res, rej) { entry.file(res, rej); });
+      await appendLocalFile(out, file, p, budget);
     } else if (entry.isDirectory) {
       var reader = entry.createReader();
       while (true) {
         var batch = await new Promise(function (res, rej) { reader.readEntries(res, rej); });
         if (!batch.length) break;
-        for (var i = 0; i < batch.length; i++) await walkEntry(batch[i], p, out, depth + 1);
+        for (var i = 0; i < batch.length; i++) await walkEntry(batch[i], p, out, depth + 1, budget);
       }
     }
   }
 
   // ---------------------------------------------------------------- graph
   function buildGraph(files) {
-    nodes = []; links = [];
+    var nodes = [], links = [], hubsOn = false, tagMaxSegs = 1;
     var fileMapLocal = new Map();
     var dirSet = new Set([""]);
 
@@ -1171,14 +1346,14 @@
         children: [], depth: 0, angle: 0, targetR: 0,
         x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
       };
-      dirMap.set(d, n); nodes.push(n);
+      dirMap.set(d, n); pushGraphNode(n, nodes);
     });
 
     dirMap.forEach(function (n, d) {
       if (d === "") return;
       var parent = d.indexOf("/") >= 0 ? d.slice(0, d.lastIndexOf("/")) : "";
       var pn = dirMap.get(parent);
-      if (pn) { pn.children.push(n); links.push({ source: pn, target: n, kind: "tree" }); }
+      if (pn) { pn.children.push(n); pushGraphLink({ source: pn, target: n, kind: "tree" }, links); }
     });
 
     files.forEach(function (f) {
@@ -1194,15 +1369,15 @@
       var dir = f.path.indexOf("/") >= 0 ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
       var n = {
         id: f.path, path: f.path, kind: kind,
-        type: fm.type || "", title: fm.title || "",
-        description: fm.description || "", tags: normalizeTags(fm.tags), status: fm.status || "",
+        type: typeof fm.type === "string" ? fm.type : "", title: typeof fm.title === "string" ? fm.title : "",
+        description: typeof fm.description === "string" ? fm.description : "", tags: normalizeTags(fm.tags), status: typeof fm.status === "string" ? fm.status : "",
         fm: fm, body: body, src: f.src || null, pdfMeta: null, metaPromise: null,
         children: [], depth: 0, angle: 0, targetR: 0,
         x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
       };
-      fileMapLocal.set(f.path, n); nodes.push(n);
+      fileMapLocal.set(f.path, n); pushGraphNode(n, nodes);
       var pn = dirMap.get(dir);
-      if (pn) { pn.children.push(n); links.push({ source: pn, target: n, kind: "tree" }); }
+      if (pn) { pn.children.push(n); pushGraphLink({ source: pn, target: n, kind: "tree" }, links); }
     });
 
     // Reference edges from markdown links and .md source resources.
@@ -1227,13 +1402,13 @@
             x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
           };
           placeholderMap.set(path, ph);
-          nodes.push(ph);
+          pushGraphNode(ph, nodes);
           var pn = dirMap.get(dirOf(path));
-          if (pn) { pn.children.push(ph); links.push({ source: pn, target: ph, kind: "tree" }); }
+          if (pn) { pn.children.push(ph); pushGraphLink({ source: pn, target: ph, kind: "tree" }, links); }
         }
         if (ph === node) return;
         var key = node.id + "\u2192" + ph.id;
-        if (!seenEdge.has(key)) { seenEdge.add(key); links.push({ source: node, target: ph, kind: "ref" }); }
+        if (!seenEdge.has(key)) { seenEdge.add(key); pushGraphLink({ source: node, target: ph, kind: "ref" }, links); }
       }
       function consider(cands, embed) {
         if (!cands.length) return;
@@ -1250,7 +1425,7 @@
       extractLinks(node.body).forEach(function (l) { consider(linkCandidates(f.path, l), isEmbedRef(l)); });
       var srcs = node.fm && node.fm.sources;
       if (Array.isArray(srcs)) {
-        srcs.forEach(function (s) { if (s && s.resource) consider(resourceCandidates(f.path, s.resource)); });
+        srcs.slice(0, MAX_REFERENCES_PER_FILE).forEach(function (s) { if (s && s.resource) consider(resourceCandidates(f.path, s.resource)); });
       }
       node.missing = [];
       targets.forEach(function (t) {
@@ -1259,7 +1434,7 @@
         var key = node.id + "\u2192" + tn.id;
         if (seenEdge.has(key)) return;
         seenEdge.add(key);
-        links.push({ source: node, target: tn, kind: "ref" });
+        pushGraphLink({ source: node, target: tn, kind: "ref" }, links);
       });
       // Referenced but not loaded (e.g. a depth-limited crawl): remember every
       // candidate so a click can fetch this "next level" on demand.
@@ -1288,7 +1463,7 @@
           x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
         };
         tagNodes.set(id, hn);
-        nodes.push(hn);
+        pushGraphNode(hn, nodes);
         tagMaxSegs = Math.max(tagMaxSegs, name.split("/").length);
       }
       return hn;
@@ -1307,24 +1482,21 @@
             // Namespace -> child namespace hierarchy edge.
             if (parent.children.indexOf(hn) < 0) {
               parent.children.push(hn);
-              links.push({ source: parent, target: hn, kind: "tag", solid: true });
+              pushGraphLink({ source: parent, target: hn, kind: "tag", solid: true }, links);
             }
           } else if (tagRoot && tagRoot.children.indexOf(hn) < 0) {
             tagRoot.children.push(hn);   // top-level namespace gets a ring slot
           }
           parent = hn;
         }
-        links.push({ source: node, target: parent, kind: "tag" });   // node -> leaf tag
+        pushGraphLink({ source: node, target: parent, kind: "tag" }, links);   // node -> leaf tag
       });
     });
 
     nodes.forEach(function (n) { n.degree = 0; });
     links.forEach(function (l) { l.source.degree++; l.target.degree++; });
 
-    dirNodes = dirMap; fileMap = fileMapLocal;
-    allNodes = nodes.slice(); allLinks = links.slice();
-    graphStack = [""]; graphIndex = 0; graphFocus = "";
-    return files.length;
+    return { nodes: nodes, links: links, dirs: dirMap, files: fileMapLocal, hubsOn: hubsOn, tagMaxSegs: tagMaxSegs };
   }
 
   // ---------------------------------------------------------------- layout
@@ -2169,8 +2341,12 @@
         } else if (hasLoadableMissing(node)) {
           // First click loads this node's next level; once there is nothing more to
           // load, a later click opens the preview instead.
-          expandNode(node).then(function (added) { if (!added) openPreview(node); })
-            .catch(function () { openPreview(node); });
+          var generation = bundleGeneration;
+          function previewCurrentNode() {
+            if (generation === bundleGeneration && fileMap && fileMap.has(node.path)) openPreview(fileMap.get(node.path));
+          }
+          expandNode(node).then(function (added) { if (!added) previewCurrentNode(); })
+            .catch(previewCurrentNode);
         } else {
           openPreview(node);
         }
@@ -2248,88 +2424,399 @@
 
   // Resolve an embedded image (![[..]] or ![](..)) to a displayable URL: a loaded
   // node's src, a locally read File as an object URL, or a server URL.
-  var embedUrlCache = Object.create(null);
+  var embedUrlCache = Object.create(null), embedLoads = new Map(), previewRenderId = 0;
   function blobUrlFor(path, blob) {
-    if (embedUrlCache[path]) return embedUrlCache[path];
-    if (window.URL && URL.createObjectURL) { try { return (embedUrlCache[path] = URL.createObjectURL(blob)); } catch (e) {} }
-    return null;
+    if (!bundleBudget || !blob || blob.size > MAX_IMAGE_BYTES) return null;
+    var cached = embedUrlCache[path];
+    if (cached && cached.blob === blob) return cached.url;
+    if (blob.size > MAX_IMAGE_TOTAL_BYTES - bundleBudget.imageBytes - bundleBudget.imageReservedBytes) return null;
+    var url;
+    try { url = URL.createObjectURL(blob); } catch (e) { return null; }
+    if (cached) { URL.revokeObjectURL(cached.url); bundleBudget.imageBytes -= cached.blob.size; }
+    embedUrlCache[path] = { blob: blob, url: url };
+    bundleBudget.imageBytes += blob.size;
+    return url;
   }
-  function imageSrcFor(path, src) {
-    if (typeof src === "string") return src;
-    return src ? blobUrlFor(path, src) : null;
+  function resetBundleResources() {
+    if (bundleBudget) {
+      bundleBudget.imageWaiters.splice(0).forEach(function (resolve) { resolve(); });
+      bundleBudget.textWaiters.splice(0).forEach(function (resolve) { resolve(); });
+    }
+    Object.keys(embedUrlCache).forEach(function (path) { URL.revokeObjectURL(embedUrlCache[path].url); });
+    embedUrlCache = Object.create(null);
+    embedLoads = new Map();
+    previewRenderId++;
+    pvStack = []; pvIndex = -1; pvPushed = false; pvSuppress = false;
+    previewPath = null;
+    pvBody.textContent = "";
+    hidePreview();
+    try { history.replaceState(null, "", location.href); } catch (e) {}
   }
-  function resolveEmbedSrc(target) {
-    var cands = linkCandidates(previewPath || "", target);
+  async function imageSrcFor(path, src, generation, root) {
+    if (generation !== bundleGeneration) return null;
+    if (typeof src !== "string") {
+      if (!src || src.size > MAX_IMAGE_BYTES) return null;
+      while (bundleBudget.imageReservedBytes && src.size > MAX_IMAGE_TOTAL_BYTES - bundleBudget.imageBytes - bundleBudget.imageReservedBytes) {
+        await new Promise(function (resolve) { bundleBudget.imageWaiters.push(resolve); });
+        if (generation !== bundleGeneration) return null;
+      }
+      return blobUrlFor(path, src);
+    }
+    if (!urlWithinBundle(src, root)) return null;
+    if (embedUrlCache[path]) return embedUrlCache[path].url;
+    var budget = bundleBudget;
+    var allowance;
+    while (true) {
+      allowance = Math.min(MAX_IMAGE_BYTES, MAX_IMAGE_TOTAL_BYTES - budget.imageBytes - budget.imageReservedBytes);
+      if (allowance === MAX_IMAGE_BYTES || !budget.imageReservedBytes) break;
+      await new Promise(function (resolve) { budget.imageWaiters.push(resolve); });
+      if (generation !== bundleGeneration) return null;
+    }
+    if (allowance <= 0) return null;
+    budget.imageReservedBytes += allowance;
+    var res;
+    try { res = await trackedFetch(src, { cache: "force-cache" }, allowance, root); }
+    finally {
+      budget.imageReservedBytes -= allowance;
+      budget.imageWaiters.splice(0).forEach(function (resolve) { resolve(); });
+    }
+    if (!res.ok || generation !== bundleGeneration) return null;
+    var type = (res.headers.get("content-type") || "application/octet-stream").split(";")[0];
+    return blobUrlFor(path, new Blob([res.bytes], { type: type }));
+  }
+  async function resolveEmbedSrc(target, from, generation) {
+    var cands = linkCandidates(from || "", target);
+    if (!cands.length || !imageKind(cands[0]) || generation !== bundleGeneration) return null;
+    var path = cands[0], src = null, root = bundleRootUrl;
     for (var i = 0; i < cands.length; i++) {
-      var n = fileMap && fileMap.get(cands[i]);
-      if (n && n.src) { var u = imageSrcFor(cands[i], n.src); if (u) return u; }
-      var kf = bundleKnown && bundleKnown.get(cands[i]);
-      if (kf && kf.src) { var u2 = imageSrcFor(cands[i], kf.src); if (u2) return u2; }
+      var file = (fileMap && fileMap.get(cands[i])) || (bundleKnown && bundleKnown.get(cands[i]));
+      if (file) { path = cands[i]; src = file.src || (root && bundleUrl(path, root)); if (src) break; }
     }
-    // Local vault: Obsidian resolves by name, so match any file with this basename.
-    if (bundleKnown && target.indexOf("/") < 0) {
-      var hit = null;
-      bundleKnown.forEach(function (f, p) { if (!hit && p.split("/").pop() === target) hit = p; });
-      if (hit) { var kf2 = bundleKnown.get(hit); var u3 = kf2 && imageSrcFor(hit, kf2.src); if (u3) return u3; }
+    var normalized = normalizeLinkPath(target);
+    if (!src && bundleKnown && normalized && normalized.indexOf("/") < 0) {
+      bundleKnown.forEach(function (file, p) {
+        if (!src && p.split("/").pop() === normalized) { path = p; src = file.src; }
+      });
     }
-    // Server bundle: build the URL directly; the <img> 404s if it is not present.
-    if (bundleRootUrl && cands.length) return new URL(cands[0], bundleRootUrl).href;
+    async function loadImage(p, source) {
+      if (!source || generation !== bundleGeneration) return null;
+      if (embedLoads.has(p)) return embedLoads.get(p);
+      var pending = imageSrcFor(p, source, generation, root).catch(function () { return null; });
+      embedLoads.set(p, pending);
+      try { return await pending; }
+      finally { if (generation === bundleGeneration) embedLoads.delete(p); }
+    }
+    if (src) return await loadImage(path, src);
+    if (root) {
+      for (var ci = 0; ci < cands.length; ci++) {
+        var url = await loadImage(cands[ci], bundleUrl(cands[ci], root));
+        if (url || generation !== bundleGeneration) return url;
+      }
+    }
     return null;
+  }
+  function hydratePreviewImages() {
+    var renderId = previewRenderId, generation = bundleGeneration, from = previewPath;
+    var images = Array.from(pvBody.querySelectorAll("img[data-embed]")), next = 0;
+    function unavailable(image) { image.replaceWith(document.createTextNode(image.alt || "Image unavailable.")); }
+    images.slice(MAX_PREVIEW_IMAGES).forEach(unavailable);
+    images = images.slice(0, MAX_PREVIEW_IMAGES);
+    async function worker() {
+      while (next < images.length && renderId === previewRenderId && generation === bundleGeneration) {
+        var image = images[next++];
+        var src = await resolveEmbedSrc(image.getAttribute("data-embed"), from, generation);
+        if (renderId !== previewRenderId || generation !== bundleGeneration) return;
+        if (src) image.src = src;
+        else unavailable(image);
+      }
+    }
+    for (var i = 0; i < Math.min(MAX_CONCURRENT_FETCHES, images.length); i++) worker().catch(function () {});
   }
 
-  // A small, dependency-free CommonMark-ish renderer: headings, emphasis,
-  // inline code, fenced code, links/images, lists, blockquotes, tables, hr,
-  // and GFM-style [^id] footnotes. Input is escaped, so raw HTML is inert.
-  function renderInline(raw) {
-    var store = [];
-    function stash(htmlStr) { store.push(htmlStr); return "\u0001" + (store.length - 1) + "\u0001"; }
-    var s = esc(raw);
-    s = s.replace(/`([^`]+)`/g, function (m, c) { return stash("<code>" + c + "</code>"); });
-    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (m, alt, url) {
-      var src = /^(https?:|data:|blob:)/i.test(url) ? url : (resolveEmbedSrc(url) || url);
-      return stash('<img alt="' + alt + '" src="' + src + '">');
-    });
-    s = s.replace(/!\[\[([^\]|#^]+)(?:[#^][^\]]*)?(?:\|[^\]]*)?\]\]/g, function (m, target) {
-      target = target.trim();
-      var src = imageKind(target) ? resolveEmbedSrc(target) : null;
-      if (!src) return stash('<span class="pv-note">' + target + "</span>");
-      return stash('<img alt="' + target + '" src="' + src + '">');
-    });
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, function (m, text, url) {
-      var ext = /^(https?:|mailto:)/i.test(url);
-      var href = ext ? url : "#";
-      var extra = ext ? ' target="_blank" rel="noopener"' : "";
-      return stash('<a href="' + href + '" data-link="' + url + '"' + extra + ">" + text + "</a>");
-    });
-    // Consecutive footnote references should read as a comma-separated list,
-    // so drop whitespace between them; the .fnref CSS adds the commas.
-    s = s.replace(/\]\s+(\[\^)/g, "]$1");
-    s = s.replace(/\[\^([^\]]+)\]/g, function (m, id) {
-      return stash('<sup class="fnref" id="fnref-' + id + '"><a href="#fn-' + id + '" data-fn="' + id + '">' + id + "</a></sup>");
-    });
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    s = s.replace(/(^|[^_\w])_([^_\n]+)_/g, "$1<em>$2</em>");
-    s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-    // Placeholders may nest (e.g. inline code inside a link label), so restore
-    // repeatedly until none remain.
-    var guard = 0;
-    while (/\u0001\d+\u0001/.test(s) && guard++ < 20) {
-      s = s.replace(/\u0001(\d+)\u0001/g, function (m, i) { return store[+i]; });
+  // Parse raw syntax and escape leaves at their sinks; generated HTML is never
+  // parsed again or substituted into attributes. All writers share one budget.
+  var MAX_MARKDOWN_CHARS = 512 * 1024;
+  var MAX_RENDERED_CHARS = 2 * 1024 * 1024;
+  var MAX_MARKDOWN_DEPTH = 24;
+  var markdownLimit = {};
+  var markdownLimitNotice = "Markdown preview omitted: safety limit exceeded.";
+
+  function markdownInput(raw) {
+    var s = String(raw == null ? "" : raw);
+    if (s.length > MAX_MARKDOWN_CHARS) throw markdownLimit;
+    // Replace controls instead of deleting them and accidentally joining syntax.
+    return s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "\ufffd");
+  }
+  function markdownState() { return { parts: [], size: 0, work: 0 }; }
+  function markdownAppend(state, s) {
+    if (s.length > MAX_RENDERED_CHARS - state.size) throw markdownLimit;
+    state.size += s.length;
+    state.parts.push(s);
+  }
+  function markdownWork(state, n) {
+    state.work += n;
+    // Failed delimiter searches must not turn bounded input into quadratic work.
+    if (state.work > MAX_MARKDOWN_CHARS * 32) throw markdownLimit;
+  }
+  function markdownDepth(depth) { if (depth > MAX_MARKDOWN_DEPTH) throw markdownLimit; }
+  function markdownAttr(s) { return esc(s).replace(/'/g, "&#39;"); }
+
+  function markdownExternalUrl(raw) {
+    if (!raw || raw.length > MAX_MARKDOWN_CHARS || /[\s\u0000-\u001f\u007f-\u009f\ufffd\\]/.test(raw) ||
+        /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(raw)) return null;
+    var scheme = /^(https?|mailto):/i.exec(raw);
+    if (!scheme) return null;
+    try {
+      var url = new URL(raw), protocol = scheme[1].toLowerCase() + ":";
+      if (url.protocol !== protocol) return null;
+      if (protocol === "mailto:") {
+        if (!url.pathname || /^\/\//.test(url.pathname)) return null;
+      } else if (!/^https?:\/\//i.test(raw) || !url.hostname || url.username || url.password) return null;
+      if (/[\u0000-\u001f\u007f-\u009f]/.test(url.href)) return null;
+      return url.href;
+    } catch (err) { return null; }
+  }
+
+  function markdownCodeEnd(s, start, count, end, state) {
+    for (var i = start; i < end;) {
+      markdownWork(state, 1);
+      if (s.charAt(i) !== "`") { i++; continue; }
+      var j = i;
+      while (j < end && s.charAt(j) === "`") { markdownWork(state, 1); j++; }
+      if (j - i === count) return i;
+      i = j;
     }
-    return s;
+    return -1;
+  }
+  function markdownBracketEnd(s, start, end, state) {
+    var level = 1;
+    for (var i = start + 1; i < end; i++) {
+      markdownWork(state, 1);
+      var c = s.charAt(i);
+      if (c === "\\") { i++; continue; }
+      if (c === "`") {
+        var run = i;
+        while (i + 1 < end && s.charAt(i + 1) === "`") { markdownWork(state, 1); i++; }
+        var close = markdownCodeEnd(s, i + 1, i - run + 1, end, state);
+        if (close >= 0) i = close + i - run;
+        continue;
+      }
+      if (c === "[") { level++; markdownDepth(level); }
+      else if (c === "]") { level--; if (!level) return i; }
+    }
+    return -1;
+  }
+  function markdownDestination(s, start, end, state) {
+    if (s.charAt(start) !== "(") return null;
+    var i = start + 1, level = 0, target;
+    while (i < end && /[ \t]/.test(s.charAt(i))) { markdownWork(state, 1); i++; }
+    var first = i;
+    if (s.charAt(i) === "<") {
+      first = ++i;
+      while (i < end && s.charAt(i) !== ">") {
+        markdownWork(state, 1);
+        if (s.charAt(i) === "\n" || s.charAt(i) === "<") return null;
+        if (s.charAt(i) === "\\") i++;
+        i++;
+      }
+      if (i >= end) return null;
+      target = s.slice(first, i++);
+    } else {
+      while (i < end) {
+        markdownWork(state, 1);
+        var c = s.charAt(i);
+        if (c === "\\") { i += 2; continue; }
+        if (c === "(") { level++; markdownDepth(level); }
+        if (c === ")") { if (!level) break; level--; }
+        if (/\s/.test(c)) { if (level) return null; break; }
+        i++;
+      }
+      if (level) return null;
+      target = s.slice(first, i);
+    }
+    if (!target || /[\u0000-\u001f\u007f-\u009f\ufffd]/.test(target)) return null;
+    while (i < end && /[ \t]/.test(s.charAt(i))) { markdownWork(state, 1); i++; }
+    if (s.charAt(i) === '"' || s.charAt(i) === "'") {
+      var quote = s.charAt(i++);
+      while (i < end && s.charAt(i) !== quote) {
+        markdownWork(state, 1);
+        if (s.charAt(i) === "\n") return null;
+        if (s.charAt(i) === "\\") i++;
+        i++;
+      }
+      if (i >= end) return null;
+      i++;
+      while (i < end && /[ \t]/.test(s.charAt(i))) { markdownWork(state, 1); i++; }
+    }
+    return s.charAt(i) === ")" ? { target: target, next: i + 1 } : null;
+  }
+  function markdownDelimiterEnd(s, start, marker, end, state) {
+    for (var i = start; i < end;) {
+      markdownWork(state, 1);
+      var c = s.charAt(i);
+      if (c === "\\") { i += 2; continue; }
+      if (c === "`") {
+        var j = i;
+        while (j < end && s.charAt(j) === "`") { markdownWork(state, 1); j++; }
+        var codeEnd = markdownCodeEnd(s, j, j - i, end, state);
+        i = codeEnd < 0 ? j : codeEnd + j - i;
+        continue;
+      }
+      if (c === "[") {
+        var bracket = markdownBracketEnd(s, i, end, state);
+        if (bracket >= 0) {
+          var dest = markdownDestination(s, bracket + 1, end, state);
+          i = dest ? dest.next : bracket + 1;
+          continue;
+        }
+      }
+      if (c === marker.charAt(0)) {
+        var stop = i;
+        while (stop < end && s.charAt(stop) === c) { markdownWork(state, 1); stop++; }
+        if (stop - i === marker.length && i > start && !/\s/.test(s.charAt(i - 1)) &&
+            (c !== "_" || !/[\w]/.test(s.charAt(stop)))) return i;
+        i = stop;
+      } else i++;
+    }
+    return -1;
+  }
+
+  function writeMarkdownInline(s, start, end, allowLinks, depth, state) {
+    markdownDepth(depth);
+    for (var i = start; i < end;) {
+      markdownWork(state, 1);
+      var c = s.charAt(i);
+      if (c === "\\" && i + 1 < end && /[\\`*{}\[\]()#+.!_>~|\-]/.test(s.charAt(i + 1))) {
+        markdownAppend(state, esc(s.charAt(i + 1))); i += 2; continue;
+      }
+      if (c === "`") {
+        var j = i;
+        while (j < end && s.charAt(j) === "`") { markdownWork(state, 1); j++; }
+        var codeEnd = markdownCodeEnd(s, j, j - i, end, state);
+        if (codeEnd >= 0) {
+          markdownAppend(state, "<code>" + esc(s.slice(j, codeEnd)) + "</code>");
+          i = codeEnd + j - i; continue;
+        }
+        markdownAppend(state, esc(s.slice(i, j))); i = j; continue;
+      }
+      var image = c === "!" && s.charAt(i + 1) === "[";
+      var open = image ? i + 1 : i;
+      if ((c === "[" || image) && allowLinks) {
+        var close = markdownBracketEnd(s, open, end, state);
+        if (close >= 0) {
+          if (s.charAt(open + 1) === "[" && s.charAt(close - 1) === "]") {
+            var wiki = s.slice(open + 2, close - 1), pipe = wiki.indexOf("|");
+            var target = (pipe < 0 ? wiki : wiki.slice(0, pipe)).trim();
+            var label = pipe < 0 ? target : wiki.slice(pipe + 1);
+            if (target && target.indexOf("\n") < 0) {
+              if (image) {
+                var embed = target.split(/[#^]/)[0].trim();
+                if (imageKind(embed)) markdownAppend(state, '<img alt="' + markdownAttr(label) + '" data-embed="' + markdownAttr(embed) + '">');
+                else markdownAppend(state, '<span class="pv-note">' + esc(embed) + "</span>");
+              } else {
+                markdownAppend(state, '<a href="#" data-link="' + markdownAttr(target) + '">');
+                writeMarkdownInline(label, 0, label.length, false, depth + 1, state);
+                markdownAppend(state, "</a>");
+              }
+              i = close + 1; continue;
+            }
+          }
+          var dest = markdownDestination(s, close + 1, end, state);
+          if (dest) {
+            if (image) {
+              markdownAppend(state, '<img alt="' + markdownAttr(s.slice(open + 1, close)) + '" data-embed="' + markdownAttr(dest.target) + '">');
+            } else {
+              var href = markdownExternalUrl(dest.target);
+              var invalidExternal = !href && /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(dest.target);
+              if (!invalidExternal) markdownAppend(state, '<a href="' + markdownAttr(href || "#") + '" data-link="' + markdownAttr(dest.target) + '"' + (href ? ' target="_blank" rel="noopener noreferrer"' : "") + ">");
+              writeMarkdownInline(s, open + 1, close, false, depth + 1, state);
+              if (!invalidExternal) markdownAppend(state, "</a>");
+            }
+            i = dest.next; continue;
+          }
+          if (!image && s.charAt(open + 1) === "^") {
+            var id = s.slice(open + 2, close);
+            if (id && !/[\[\]\n]/.test(id)) {
+              markdownAppend(state, '<sup class="fnref" id="fnref-' + markdownAttr(id) + '"><a href="#fn-' + markdownAttr(id) + '" data-fn="' + markdownAttr(id) + '">' + esc(id) + "</a></sup>");
+              i = close + 1;
+              var next = i;
+              while (next < end && /\s/.test(s.charAt(next))) { markdownWork(state, 1); next++; }
+              if (s.slice(next, next + 2) === "[^") i = next;
+              continue;
+            }
+          }
+        }
+      }
+      if (c === "*" || c === "_" || c === "~") {
+        var runEnd = i;
+        while (runEnd < end && s.charAt(runEnd) === c) { markdownWork(state, 1); runEnd++; }
+        var count = runEnd - i, marker = s.slice(i, runEnd);
+        if ((c === "~" ? count === 2 : count <= 3) && !/\s/.test(s.charAt(runEnd)) &&
+            (c !== "_" || i === start || !/\w/.test(s.charAt(i - 1)))) {
+          var finish = markdownDelimiterEnd(s, runEnd, marker, end, state);
+          if (finish >= 0) {
+            var before = c === "~" ? "<del>" : count === 1 ? "<em>" : count === 2 ? "<strong>" : "<em><strong>";
+            var after = c === "~" ? "</del>" : count === 1 ? "</em>" : count === 2 ? "</strong>" : "</strong></em>";
+            markdownAppend(state, before);
+            writeMarkdownInline(s, runEnd, finish, allowLinks, depth + 1, state);
+            markdownAppend(state, after);
+            i = finish + count; continue;
+          }
+        }
+        markdownAppend(state, esc(marker)); i = runEnd; continue;
+      }
+      if (c === "\n") { markdownAppend(state, "<br>"); i++; continue; }
+      var leaf = i++;
+      while (i < end && !/[\\`!\[\]*_~\n]/.test(s.charAt(i))) { markdownWork(state, 1); i++; }
+      markdownAppend(state, esc(s.slice(leaf, i)));
+    }
+  }
+  function renderInline(raw, allowLinks, depth) {
+    var state = markdownState();
+    try {
+      var s = markdownInput(raw);
+      writeMarkdownInline(s, 0, s.length, allowLinks !== false, depth || 0, state);
+      return state.parts.join("");
+    } catch (err) {
+      if (err !== markdownLimit) throw err;
+      return esc(markdownLimitNotice);
+    }
   }
 
   function isTableStart(lines, i) {
     return lines[i].indexOf("|") >= 0 && i + 1 < lines.length &&
       lines[i + 1].indexOf("|") >= 0 && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1]);
   }
-
-  function parseTable(lines, i) {
+  function parseTable(lines, i, state, depth) {
+    markdownDepth(depth);
     function cells(row) {
-      return row.trim().replace(/^\|/, "").replace(/\|$/, "")
-        .split("|").map(function (c) { return c.trim(); });
+      var text = row.trim(), result = [], first = 0;
+      for (var pos = 0; pos < text.length;) {
+        markdownWork(state, 1);
+        var c = text.charAt(pos);
+        if (c === "\\") { pos += 2; continue; }
+        if (c === "`") {
+          var runEnd = pos;
+          while (runEnd < text.length && text.charAt(runEnd) === "`") { markdownWork(state, 1); runEnd++; }
+          var codeEnd = markdownCodeEnd(text, runEnd, runEnd - pos, text.length, state);
+          pos = codeEnd < 0 ? runEnd : codeEnd + runEnd - pos;
+          continue;
+        }
+        if (c === "[") {
+          var bracket = markdownBracketEnd(text, pos, text.length, state);
+          if (bracket >= 0) {
+            var dest = markdownDestination(text, bracket + 1, text.length, state);
+            pos = dest ? dest.next : bracket + 1;
+            continue;
+          }
+        }
+        if (c === "|") { result.push(text.slice(first, pos).trim()); first = pos + 1; }
+        pos++;
+      }
+      result.push(text.slice(first).trim());
+      if (text.charAt(0) === "|") result.shift();
+      if (text.charAt(text.length - 1) === "|" && result[result.length - 1] === "") result.pop();
+      return result;
     }
     var header = cells(lines[i]);
     var align = cells(lines[i + 1]).map(function (s) {
@@ -2338,97 +2825,145 @@
       if (/^:-{2,}$/.test(s)) return "left";
       return "";
     });
-    i += 2;
-    var html = "<table><thead><tr>";
-    header.forEach(function (c, idx) {
-      html += "<th" + (align[idx] ? ' style="text-align:' + align[idx] + '"' : "") + ">" + renderInline(c) + "</th>";
-    });
-    html += "</tr></thead><tbody>";
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && lines[i].indexOf("|") >= 0) {
-      var row = cells(lines[i]);
-      html += "<tr>";
-      header.forEach(function (_, idx) {
-        html += "<td" + (align[idx] ? ' style="text-align:' + align[idx] + '"' : "") + ">" + renderInline(row[idx] || "") + "</td>";
-      });
-      html += "</tr>";
-      i++;
+    function cell(tag, text, idx) {
+      markdownAppend(state, "<" + tag + (align[idx] ? ' style="text-align:' + align[idx] + '"' : "") + ">");
+      writeMarkdownInline(text, 0, text.length, true, depth, state);
+      markdownAppend(state, "</" + tag + ">");
     }
-    return { html: html + "</tbody></table>", next: i };
+    i += 2;
+    markdownAppend(state, "<table><thead><tr>");
+    header.forEach(function (text, idx) { cell("th", text, idx); });
+    markdownAppend(state, "</tr></thead><tbody>");
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && lines[i].indexOf("|") >= 0) {
+      var row = cells(lines[i++]);
+      markdownAppend(state, "<tr>");
+      header.forEach(function (_, idx) { cell("td", row[idx] || "", idx); });
+      markdownAppend(state, "</tr>");
+    }
+    markdownAppend(state, "</tbody></table>");
+    return i;
   }
-
-  function parseList(lines, i) {
+  function parseList(lines, i, state, depth) {
+    markdownDepth(depth);
     var ordered = /^\s*\d+\.\s+/.test(lines[i]);
-    var base = lines[i].match(/^\s*/)[0].length;
-    var parts = [], open = false;
+    var base = lines[i].match(/^\s*/)[0].length, open = false;
+    var tag = ordered ? "ol" : "ul";
+    markdownAppend(state, "<" + tag + ">");
     while (i < lines.length) {
+      markdownWork(state, lines[i].length);
       var m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i]);
-      if (!m) break;
-      var indent = m[1].length;
-      if (indent < base) break;
-      if (indent > base) {
-        var sub = parseList(lines, i);
-        parts.push(open ? sub.html : "<li>" + sub.html + "</li>");
-        i = sub.next;
+      if (!m || m[1].length < base) break;
+      if (m[1].length > base) {
+        if (!open) markdownAppend(state, "<li>");
+        i = parseList(lines, i, state, depth + 1);
+        if (!open) markdownAppend(state, "</li>");
         continue;
       }
-      if (open) parts.push("</li>");
-      parts.push("<li>" + renderInline(m[3]));
-      open = true;
-      i++;
+      if (open) markdownAppend(state, "</li>");
+      markdownAppend(state, "<li>");
+      writeMarkdownInline(m[3], 0, m[3].length, true, depth, state);
+      open = true; i++;
     }
-    if (open) parts.push("</li>");
-    var tag = ordered ? "ol" : "ul";
-    return { html: "<" + tag + ">" + parts.join("") + "</" + tag + ">", next: i };
+    if (open) markdownAppend(state, "</li>");
+    markdownAppend(state, "</" + tag + ">");
+    return i;
   }
 
-  function renderMarkdown(md) {
-    var lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
-    var footnotes = {}, order = [], kept = [];
+  function markdownFence(line) { return /^\s*(`{3,}|~{3,})([\w-]*)\s*$/.exec(line); }
+  function markdownFenceCloses(line, fence) {
+    var close = /^\s*(`{3,}|~{3,})\s*$/.exec(line);
+    return close && close[1].charAt(0) === fence[1].charAt(0) && close[1].length >= fence[1].length;
+  }
+  function writeMarkdownBlocks(lines, depth, state) {
+    markdownDepth(depth);
+    var footnotes = Object.create(null), order = [], kept = [], activeFence = null, inlineCode = 0;
     for (var k = 0; k < lines.length; k++) {
-      var fm = /^\[\^([^\]]+)\]:\s*(.*)$/.exec(lines[k]);
-      if (fm) { if (!(fm[1] in footnotes)) order.push(fm[1]); footnotes[fm[1]] = fm[2]; continue; }
-      kept.push(lines[k]);
+      var sourceLine = lines[k];
+      markdownWork(state, sourceLine.length + 1);
+      if (activeFence) {
+        if (markdownFenceCloses(sourceLine, activeFence)) activeFence = null;
+      } else {
+        var blockStart = startsBlock(sourceLine);
+        if (blockStart || /^\s*$/.test(sourceLine)) inlineCode = 0;
+        activeFence = markdownFence(sourceLine);
+        var fm = activeFence || inlineCode ? null : /^\[\^([^\]]+)\]:\s*(.*)$/.exec(sourceLine);
+        if (fm) { if (!(fm[1] in footnotes)) order.push(fm[1]); footnotes[fm[1]] = fm[2]; continue; }
+        if (!activeFence && !blockStart) {
+          // Footnote-looking lines inside multiline code remain literal code.
+          for (var pos = 0; pos < sourceLine.length; pos++) {
+            markdownWork(state, 1);
+            if (!inlineCode && sourceLine.charAt(pos) === "\\") { pos++; continue; }
+            if (sourceLine.charAt(pos) !== "`") continue;
+            var run = pos;
+            while (pos + 1 < sourceLine.length && sourceLine.charAt(pos + 1) === "`") { markdownWork(state, 1); pos++; }
+            var count = pos - run + 1;
+            if (!inlineCode) inlineCode = count;
+            else if (inlineCode === count) inlineCode = 0;
+          }
+        }
+      }
+      kept.push(sourceLine);
     }
     lines = kept;
     function startsBlock(t) {
-      return /^\s*(#{1,6}\s|```|>|([-*+]|\d+\.)\s)/.test(t) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(t);
+      return /^\s*(#{1,6}\s|`{3,}|~{3,}|>|([-*+]|\d+\.)\s)/.test(t) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(t);
     }
-    var html = [], i = 0;
+    function inline(text) { writeMarkdownInline(text, 0, text.length, true, depth, state); }
+    var i = 0;
     while (i < lines.length) {
       var line = lines[i];
+      markdownWork(state, line.length + 1);
       if (/^\s*$/.test(line)) { i++; continue; }
-      var fence = /^\s*```(\w*)\s*$/.exec(line);
+      var fence = markdownFence(line);
       if (fence) {
-        var lang = fence[1], code = []; i++;
-        while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) { code.push(lines[i]); i++; }
-        i++;
-        html.push('<pre class="md-pre"><code' + (lang ? ' class="language-' + esc(lang) + '"' : "") + ">" + esc(code.join("\n")) + "</code></pre>");
+        var code = []; i++;
+        while (i < lines.length && !markdownFenceCloses(lines[i], fence)) { markdownWork(state, lines[i].length + 1); code.push(lines[i++]); }
+        if (i < lines.length) i++;
+        markdownAppend(state, '<pre class="md-pre"><code' + (fence[2] ? ' class="language-' + markdownAttr(fence[2]) + '"' : "") + ">" + esc(code.join("\n")) + "</code></pre>");
         continue;
       }
-      var h = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
-      if (h) { var lv = h[1].length; html.push("<h" + lv + ">" + renderInline(h[2]) + "</h" + lv + ">"); i++; continue; }
-      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { html.push("<hr>"); i++; continue; }
+      var h = /^(#{1,6})[ \t]+(.*)$/.exec(line);
+      if (h) {
+        var lv = h[1].length, heading = h[2].trim(), headingEnd = heading.length;
+        while (headingEnd && heading.charAt(headingEnd - 1) === "#") { markdownWork(state, 1); headingEnd--; }
+        markdownAppend(state, "<h" + lv + ">"); inline(heading.slice(0, headingEnd).trim()); markdownAppend(state, "</h" + lv + ">");
+        i++; continue;
+      }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { markdownAppend(state, "<hr>"); i++; continue; }
       if (/^\s*>/.test(line)) {
+        markdownDepth(depth + 1);
         var bq = [];
-        while (i < lines.length && /^\s*>/.test(lines[i])) { bq.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
-        html.push("<blockquote>" + renderMarkdown(bq.join("\n")) + "</blockquote>");
+        while (i < lines.length && /^\s*>/.test(lines[i])) { markdownWork(state, lines[i].length + 1); bq.push(lines[i++].replace(/^\s*>\s?/, "")); }
+        markdownAppend(state, "<blockquote>");
+        writeMarkdownBlocks(bq, depth + 1, state);
+        markdownAppend(state, "</blockquote>");
         continue;
       }
-      if (isTableStart(lines, i)) { var tb = parseTable(lines, i); html.push(tb.html); i = tb.next; continue; }
-      if (/^\s*([-*+]|\d+\.)\s+/.test(line)) { var ls = parseList(lines, i); html.push(ls.html); i = ls.next; continue; }
+      if (isTableStart(lines, i)) { i = parseTable(lines, i, state, depth); continue; }
+      if (/^\s*([-*+]|\d+\.)\s+/.test(line)) { i = parseList(lines, i, state, depth + 1); continue; }
       var para = [];
       while (i < lines.length && !/^\s*$/.test(lines[i]) && !startsBlock(lines[i]) && !isTableStart(lines, i)) {
-        para.push(lines[i]); i++;
+        markdownWork(state, lines[i].length + 1); para.push(lines[i++]);
       }
       if (!para.length) { para.push(line); i++; }
-      html.push("<p>" + renderInline(para.join("\n")).replace(/\n/g, "<br>") + "</p>");
+      markdownAppend(state, "<p>"); inline(para.join("\n")); markdownAppend(state, "</p>");
     }
     if (order.length) {
-      var fh = '<section class="md-footnotes"><hr><ol>';
-      order.forEach(function (id) { fh += '<li id="fn-' + esc(id) + '">' + renderInline(footnotes[id]) + "</li>"; });
-      html.push(fh + "</ol></section>");
+      markdownAppend(state, '<section class="md-footnotes"><hr><ol>');
+      order.forEach(function (id) { markdownAppend(state, '<li id="fn-' + markdownAttr(id) + '">'); inline(footnotes[id]); markdownAppend(state, "</li>"); });
+      markdownAppend(state, "</ol></section>");
     }
-    return html.join("\n");
+  }
+  function renderMarkdown(md) {
+    var state = markdownState();
+    try {
+      var s = markdownInput(md).replace(/\r\n?/g, "\n");
+      writeMarkdownBlocks(s.split("\n"), 0, state);
+      return state.parts.join("");
+    } catch (err) {
+      if (err !== markdownLimit) throw err;
+      return '<p class="pv-note">' + esc(markdownLimitNotice) + "</p>";
+    }
   }
 
   // ------------------------------------------------------------ pdf peek
@@ -2461,17 +2996,27 @@
 
   // The bytes to scan. Local files up to the cap are read whole, so compressed
   // object streams can be located and inflated; larger local files and all
-  // network PDFs use a head+tail window separated by a newline. Over HTTP that
-  // window is fetched with byte-range requests, so the whole file is only
-  // downloaded when the server does not honour ranges.
+  // network PDFs use a head+tail window separated by a newline. Reads are
+  // bounded before buffering, even if a server ignores byte-range requests.
   async function readPdfBytes(node) {
     var src = node.src;
     if (!src) return null;
     if (typeof src === "string") return await readPdfUrl(src);
-    var size = src.size || 0;
-    if (!size || size <= PDF_MAX_BYTES) return new Uint8Array(await src.arrayBuffer());
-    var head = new Uint8Array(await src.slice(0, PDF_PEEK_BYTES).arrayBuffer());
-    var tail = new Uint8Array(await src.slice(size - PDF_PEEK_BYTES).arrayBuffer());
+    function blobSize(blob) {
+      try { return Object.getOwnPropertyDescriptor(Blob.prototype, "size").get.call(blob); }
+      catch (e) { return null; }
+    }
+    async function readLocal(blob, maxBytes) {
+      if (typeof blob.stream === "function") return await readBoundedStream(blob.stream(), maxBytes);
+      // Without streaming, only a verified native Blob can be buffered safely.
+      var size = blobSize(blob);
+      if (size == null || size > maxBytes) throw new Error("Cannot read PDF within byte limit");
+      return new Uint8Array(await Blob.prototype.arrayBuffer.call(blob));
+    }
+    var size = blobSize(src);
+    if (size == null || size <= PDF_MAX_BYTES) return await readLocal(src, PDF_MAX_BYTES);
+    var head = await readLocal(src.slice(0, PDF_PEEK_BYTES), PDF_PEEK_BYTES);
+    var tail = await readLocal(src.slice(size - PDF_PEEK_BYTES, size), PDF_PEEK_BYTES);
     return joinPdfWindows(head, tail);
   }
 
@@ -2484,17 +3029,19 @@
     return out;
   }
 
-  // Fetch only the head and tail of a remote PDF. Byte ranges keep the download
-  // bounded even for large files; a server that ignores Range (HTTP 200) simply
-  // returns the whole file, which we then use as-is.
+  // Fetch only the head and tail of a remote PDF. Each response is bounded to
+  // the HTTP window, so ignoring Range cannot trigger an oversized download.
+  // A non-range head response is usable only when it fits within that window.
   async function readPdfUrl(url) {
+    var root = bundleRootUrl, generation = bundleGeneration;
     var headRes = await trackedFetch(url, {
       cache: "force-cache",
       headers: { Range: "bytes=0-" + (PDF_HTTP_WINDOW - 1) }
-    });
+    }, PDF_HTTP_WINDOW, root);
+    if (generation !== bundleGeneration) throw new Error("Bundle was replaced.");
     if (!headRes.ok) throw new Error("HTTP " + headRes.status);
-    var head = new Uint8Array(await headRes.arrayBuffer());
-    if (headRes.status !== 206) return head;   // no range support: the whole file
+    var head = headRes.bytes;
+    if (headRes.status !== 206) return head;
     var m = /\/(\d+)\s*$/.exec(headRes.headers.get("content-range") || "");
     var total = m ? parseInt(m[1], 10) : 0;
     if (!total || head.length >= total) return head;   // file fits in the head window
@@ -2503,8 +3050,9 @@
       var tailRes = await trackedFetch(url, {
         cache: "force-cache",
         headers: { Range: "bytes=-" + PDF_HTTP_WINDOW }
-      });
-      if (tailRes.status === 206) tail = new Uint8Array(await tailRes.arrayBuffer());
+      }, PDF_HTTP_WINDOW, root);
+      if (generation !== bundleGeneration) throw new Error("Bundle was replaced.");
+      if (tailRes.status === 206) tail = tailRes.bytes;
     } catch (e) { tail = null; }
     return joinPdfWindows(head, tail);
   }
@@ -2543,23 +3091,29 @@
   }
 
   // Inflate a zlib (RFC 1950) payload, which is what PDF FlateDecode uses.
-  async function inflateDeflate(latin1) {
+  // Bound decompressed bytes before conversion; discard failed or oversized streams.
+  async function inflateDeflate(latin1, maxBytes) {
     if (typeof DecompressionStream !== "function") return "";
+    if (maxBytes == null) maxBytes = PDF_STREAM_TEXT_MAX;
+    if (maxBytes <= 0) return "";
     try {
       var stream = new Response(latin1ToBytes(latin1)).body
         .pipeThrough(new DecompressionStream("deflate"));
-      return bytesToLatin1(await new Response(stream).arrayBuffer());
+      return bytesToLatin1(await readBoundedStream(stream, maxBytes));
     } catch (e) { return ""; }
   }
 
   // Inflate every FlateDecode object stream we can find, so their objects join
-  // the text the metadata scan sees. Bounded and best-effort.
+  // the text the metadata scan sees. All streams and separators share one budget.
   async function inflateObjStreams(text) {
     if (typeof DecompressionStream !== "function") return "";
     var payloads = findObjStmPayloads(text), parts = [], total = 0;
     for (var i = 0; i < payloads.length && i < 200; i++) {
-      var t = await inflateDeflate(payloads[i]);
-      if (t) { parts.push(t); total += t.length; if (total > PDF_STREAM_TEXT_MAX) break; }
+      var separator = parts.length ? 1 : 0;
+      var remaining = PDF_STREAM_TEXT_MAX - total - separator;
+      if (remaining <= 0) break;
+      var t = await inflateDeflate(payloads[i], remaining);
+      if (t) { parts.push(t); total += separator + t.length; }
     }
     return parts.join("\n");
   }
@@ -2748,11 +3302,11 @@
     if (node.fileInfo) return Promise.resolve(node.fileInfo);
     if (!node.fileInfoPromise) {
       node.fileInfoPromise = (async function () {
-        var src = node.src, info = {};
+        var src = node.src, info = {}, root = bundleRootUrl, generation = bundleGeneration;
         if (!src) return info;
         if (typeof src === "string") {
           try {
-            var res = await trackedFetch(src, { method: "HEAD", cache: "force-cache" });
+            var res = await trackedFetch(src, { method: "HEAD", cache: "force-cache" }, 0, root);
             if (res.ok) {
               var cl = res.headers.get("content-length");
               if (cl) info.size = parseInt(cl, 10);
@@ -2764,9 +3318,10 @@
           // reveals the size (the Content-Range total, or Content-Length when the
           // server ignores the range) without downloading the file: the body is
           // cancelled as soon as the headers arrive.
-          if (info.size == null) {
+          if (info.size == null && generation === bundleGeneration) {
             try {
-              var rr = await trackedFetch(src, { cache: "force-cache", headers: { Range: "bytes=0-0" } });
+              var rr = await trackedFetch(src, { cache: "force-cache", headersOnly: true, headers: { Range: "bytes=0-0" } }, 0, root);
+              if (!rr.ok || generation !== bundleGeneration) return info;
               var m = /\/(\d+)\s*$/.exec(rr.headers.get("content-range") || "");
               if (m) info.size = parseInt(m[1], 10);
               else {
@@ -2777,7 +3332,7 @@
                 var lm2 = rr.headers.get("last-modified");
                 if (lm2) { var t2 = Date.parse(lm2); if (!isNaN(t2)) info.modified = t2; }
               }
-              if (rr.body && typeof rr.body.cancel === "function") { try { rr.body.cancel(); } catch (e2) {} }
+
             } catch (e) {}
           }
         } else {
@@ -2796,6 +3351,7 @@
   var pvStack = [], pvIndex = -1, pvSuppress = false, pvPushed = false;
 
   function renderPreviewEntry(node) {
+    previewRenderId++;
     pvHideTagPop();
     previewPath = node.path;
     pvTitle.textContent = displayLabel(node);
@@ -2815,12 +3371,15 @@
       pvBody.innerHTML = (metaHtml ? '<div class="md-meta">' + metaHtml + "</div>" : "") +
         renderMarkdown(node.body || "");
     }
+    hydratePreviewImages();
     pvBody.scrollTop = 0;
     preview.classList.add("show");
     updatePvNav();
   }
 
   function renderAttachmentPreview(node) {
+    var renderId = previewRenderId, generation = bundleGeneration;
+    function current() { return renderId === previewRenderId && generation === bundleGeneration; }
     var ext = extOf(node.path) || "";
     var isPdf = ext === "pdf";
     var head = '<div class="md-meta"><span class="chip2">' + esc((ext || "file").toUpperCase()) + "</span>" +
@@ -2834,11 +3393,11 @@
     }
     body += '<p class="pv-note pv-attach-note">Binary attachments are shown as graph nodes. Open the file from the bundle directory to view it.</p>';
     pvBody.innerHTML = body;
-    peekFileInfo(node).then(function () { paintFileSection(node); });
+    peekFileInfo(node).then(function () { if (current()) paintFileSection(node); });
     if (!isPdf) return;
     if (node.pdfMeta) { paintPdfMeta(node, node.pdfMeta); return; }
-    peekPdfMeta(node).then(function (m) { paintPdfMeta(node, m); },
-      function () { paintPdfMeta(node, null); });
+    peekPdfMeta(node).then(function (m) { if (current()) paintPdfMeta(node, m); },
+      function () { if (current()) paintPdfMeta(node, null); });
   }
 
   function paintFileSection(node) {
@@ -2892,7 +3451,7 @@
     if (pvIndex < pvStack.length - 1) pvStack = pvStack.slice(0, pvIndex + 1);
     pvStack.push(node);
     pvIndex = pvStack.length - 1;
-    try { history.pushState({ okfPv: pvIndex }, "", location.href); pvPushed = true; }
+    try { history.pushState({ okfPv: pvIndex, okfGeneration: bundleGeneration }, "", location.href); pvPushed = true; }
     catch (e) { pvPushed = false; /* e.g. file:// */ }
     renderPreviewEntry(node);
   }
@@ -2917,7 +3476,7 @@
     if (pvFwdBtn) pvFwdBtn.disabled = pvIndex >= pvStack.length - 1;
   }
 
-  function hidePreview() { preview.classList.remove("show"); pvHideTagPop(); }
+  function hidePreview() { previewRenderId++; preview.classList.remove("show"); pvHideTagPop(); }
   function closePreview() {
     if (!preview.classList.contains("show")) return;
     hidePreview();
@@ -2928,35 +3487,39 @@
   window.addEventListener("popstate", function (e) {
     if (pvSuppress) {
       pvSuppress = false;
-      if (e.state && typeof e.state.okfPv === "number") pvIndex = e.state.okfPv;
+      if (e.state && e.state.okfGeneration === bundleGeneration && typeof e.state.okfPv === "number") pvIndex = e.state.okfPv;
       return;
     }
     var st = e.state;
-    if (st && typeof st.okfPv === "number" && st.okfPv >= 0 && st.okfPv < pvStack.length) {
+    if (st && st.okfGeneration === bundleGeneration && typeof st.okfPv === "number" && st.okfPv >= 0 && st.okfPv < pvStack.length) {
       showPreviewAt(st.okfPv);
     } else {
       hidePreview(); // navigated back before the first preview entry
     }
   });
   function handlePreviewClick(e) {
-    var a = e.target.closest ? e.target.closest("a") : null;
-    if (!a) return;
-    var raw = a.getAttribute("data-link");
-    if (raw) {
-      if (/^(https?:|mailto:)/i.test(raw)) return; // let the browser open it
+    var a = e.target && e.target.closest ? e.target.closest("a") : null;
+    if (!a || !pvBody.contains(a)) return;
+    var raw = a.getAttribute("data-link"), href = a.getAttribute("href") || "";
+    if (raw !== null) {
+      var external = markdownExternalUrl(raw);
+      if (external && href === external) return;
       e.preventDefault();
-      var tn = null, cands = linkCandidates(previewPath, raw);
+      if (!raw || raw.length > MAX_MARKDOWN_CHARS || /[\u0000-\u001f\u007f-\u009f\ufffd]/.test(raw) ||
+          /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) return;
+      var tn = null, cands = linkCandidates(previewPath || "", raw);
       for (var ci = 0; ci < cands.length && fileMap; ci++) { if (fileMap.has(cands[ci])) { tn = fileMap.get(cands[ci]); break; } }
       if (tn) openPreview(tn);
       return;
     }
-    var href = a.getAttribute("href") || "";
     if (href.charAt(0) === "#") {
       e.preventDefault();
-      var el = null;
-      try { el = pvBody.querySelector(href); } catch (err) { el = null; } // guard against malformed fragments
-      if (el) el.scrollIntoView({ block: "start" });
+      var id = href.slice(1), el = document.getElementById(id);
+      if (el && pvBody.contains(el)) el.scrollIntoView({ block: "start" });
+      return;
     }
+    // Preview metadata can also contain anchors; validate their actual href.
+    if (!markdownExternalUrl(href)) e.preventDefault();
   }
 
   // Hovering a tag chip in the preview lists the other pages that carry the
@@ -3436,7 +3999,7 @@
   // source repository link. Outside click / Escape dismisses it.
   // Shown in the About panel so a deployed copy is easy to identify. Bump this
   // number whenever this file is revised.
-  var REVISION = 1;
+  var REVISION = 2;
   var titleBtn = document.getElementById("titleBtn");
   var aboutPop = document.getElementById("aboutPop");
   var aboutRevEl = document.getElementById("aboutRev");
@@ -3544,11 +4107,14 @@
   });
 
   async function pickFolder() {
+    var request = ++bundleLoadRequest;
     if (!window.showDirectoryPicker) { dirInput.click(); return; }
     var dir;
     try {
       dir = await window.showDirectoryPicker({ mode: "read" });
+      if (request !== bundleLoadRequest) return;
     } catch (e) {
+      if (request !== bundleLoadRequest) return;
       if (e && e.name === "AbortError") return; // the user dismissed the picker
       overlay.classList.add("show");
       overlayMsg.textContent = "Folder picker failed: " + (e && e.message ? e.message : e);
@@ -3557,9 +4123,11 @@
     busyStart();
     try {
       var files = await fromDirectoryHandle(dir);
+      if (request !== bundleLoadRequest) return;
       if (files.length) loadLocal(files);
       else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
     } catch (e) {
+      if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
       overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
       if (window.console && console.error) console.error(e);
@@ -3570,12 +4138,15 @@
 
   dirInput.addEventListener("change", async function () {
     if (!dirInput.files || !dirInput.files.length) return;
+    var request = ++bundleLoadRequest;
     busyStart();
     try {
       var files = await fromFileList(dirInput.files);
+      if (request !== bundleLoadRequest) return;
       if (files.length) loadLocal(files);
       else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
     } catch (e) {
+      if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
       overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
       if (window.console && console.error) console.error(e);
@@ -3598,12 +4169,15 @@
   window.addEventListener("drop", async function (e) {
     e.preventDefault();
     document.getElementById("card").classList.remove("dropping");
+    var request = ++bundleLoadRequest;
     busyStart();
     try {
       var files = await fromDataTransfer(e.dataTransfer);
+      if (request !== bundleLoadRequest) return;
       if (files.length) loadLocal(files);
       else overlayMsg.textContent = "No Markdown files found in the dropped folder.";
     } catch (err) {
+      if (request !== bundleLoadRequest) return;
       overlayMsg.textContent = "Could not read the dropped folder: " + err.message;
     } finally {
       busyEnd();
@@ -3628,16 +4202,35 @@
   // rebuilding it: node positions, the focused directory and the current view are
   // kept, so adding nodes does not re-flow or re-zoom the graph.
   function load(files, rootUrl, known, preserve) {
+    var nextBudget = preserve ? bundleBudget : createBundleBudget();
+    try {
+      (known || files).forEach(function (file) {
+        if (!validBundlePath(file.path)) throw new Error("Invalid bundle file path.");
+        accountBundleFile(nextBudget, file);
+      });
+    } catch (e) {
+      overlay.classList.add("show");
+      overlayMsg.textContent = e.message;
+      return false;
+    }
     var prev = null;
     if (preserve && nodes.length) {
       prev = { pos: new Map(), focus: graphFocus, stack: graphStack.slice(), index: graphIndex };
       allNodes.forEach(function (n) { prev.pos.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy, fx: n.fx, fy: n.fy }); });
     }
-    bundleFiles = files;
-    bundleRootUrl = rootUrl || null;
-    bundleKnown = known || null;
     try {
-      buildGraph(files);
+      var graph = buildGraph(files);
+      if (!preserve) { bundleGeneration++; resetBundleResources(); }
+      bundleBudget = nextBudget;
+      bundleFiles = files;
+      bundleRootUrl = rootUrl || null;
+      bundleKnown = known || null;
+      nodes = graph.nodes; links = graph.links;
+      allNodes = nodes.slice(); allLinks = links.slice();
+      dirNodes = graph.dirs; fileMap = graph.files;
+      hubsOn = graph.hubsOn; tagMaxSegs = graph.tagMaxSegs;
+      graphStack = [""]; graphIndex = 0; graphFocus = "";
+      if (!preserve) { prefetchLimited = urlDepth() !== Infinity; attemptedUrls = new Set(); }
       resize();
       if (prev) {
         // Stay in the same directory and restore every surviving node's position.
@@ -3681,7 +4274,7 @@
       overlay.classList.add("show");
       overlayMsg.textContent = "Could not build the graph: " + (e && e.message ? e.message : e);
       if (window.console && console.error) console.error(e);
-      return;
+      return false;
     }
     // Sidebar updates are isolated so one failure can't blank the others.
     function safe(label, fn) {
@@ -3697,6 +4290,7 @@
     safe("kinds", function () { kindPop.render(); });
     safe("types", function () { typePop.render(); });
     safe("status", function () { statusPop.render(); });
+    return true;
   }
 
   // Keep only files reachable within `maxDepth` link hops from the start file
@@ -3718,7 +4312,7 @@
     }
     var reached = new Set([start]);
     var frontier = [start];
-    for (var d = 0; d < maxDepth; d++) {
+    for (var d = 0; d < maxDepth && frontier.length; d++) {
       var next = [];
       frontier.forEach(function (p) {
         var f = map.get(p); if (!f || f.binary) return;
@@ -3742,13 +4336,11 @@
   // reveal instead of being shown up front.
   function loadLocal(files) {
     var depth = urlDepth();
-    prefetchLimited = depth !== Infinity;
-    attemptedUrls = new Set();
     var known = new Map();
     files.forEach(function (f) { known.set(f.path, f); });
     // Attachments are kept out of the loaded set: they appear as visible
     // placeholders and load from `known` when clicked.
-    var visible = (prefetchLimited ? filterByDepth(files, depth) : files)
+    var visible = (depth !== Infinity ? filterByDepth(files, depth) : files)
       .filter(function (f) { return !f.binary; });
     load(visible, null, known);
   }
@@ -3776,11 +4368,20 @@
     }
     if (!path && bundleRootUrl) {
       path = node.path;
-      file = { path: path, text: "", binary: true, src: new URL(path, bundleRootUrl).href };
+      var url = bundleUrl(path);
+      if (!url) return false;
+      file = { path: path, text: "", binary: true, src: url };
     }
     if (!path || !file) return false;
-    if (!bundleFiles.some(function (f) { return f.path === path; })) bundleFiles.push(file);
-    load(bundleFiles, bundleRootUrl, bundleKnown, true);
+    var candidate = bundleFiles, charged = false;
+    if (!bundleFiles.some(function (f) { return f.path === path; })) {
+      try { charged = accountBundleFile(bundleBudget, file); candidate = bundleFiles.concat([file]); }
+      catch (e) { overlayMsg.textContent = e.message; overlay.classList.add("show"); return false; }
+    }
+    if (!load(candidate, bundleRootUrl, bundleKnown, true)) {
+      if (charged) releaseBundleFile(bundleBudget, file);
+      return false;
+    }
     if (fileMap && fileMap.has(path)) openPreview(fileMap.get(path));
     return true;
   }
@@ -3790,36 +4391,56 @@
   // local folders.
   async function expandNode(node) {
     if (!hasLoadableMissing(node)) return false;
+    var generation = bundleGeneration, root = bundleRootUrl, budget = bundleBudget;
     var pending = node.missing.filter(function (p) {
       if (fileMap && fileMap.has(p)) return false;
       if (bundleKnown && bundleKnown.has(p)) return true;
-      if (bundleRootUrl) return !attemptedUrls.has(new URL(p, bundleRootUrl).href);
-      return false;
-    });
+      var url = bundleUrl(p, root);
+      return url && !attemptedUrls.has(url);
+    }).slice(0, MAX_REFERENCES_PER_FILE);
     if (!pending.length) return false;
-    // Fetch the next level in parallel (bounded by trackedFetch's semaphore) so
-    // the toolbar spinner shows the number of requests in flight; local files
-    // resolve without a request.
-    var results = await Promise.all(pending.map(async function (p) {
-      if (bundleKnown && bundleKnown.has(p)) return bundleKnown.get(p);
-      var url = new URL(p, bundleRootUrl).href;
-      attemptedUrls.add(url);
-      if (attachKind(p)) return { path: p, text: "", binary: true, src: url };
-      if (!fileKind(p)) return null;
-      var res; try { res = await trackedFetch(url, { cache: "no-store" }); } catch (e) { return null; }
-      if (!res.ok) return null;
-      var text = await res.text();
-      if (text.length > MAX_FILE_BYTES) return null;
-      return { path: p, text: text };
-    }));
-    var added = false;
-    var have = new Set();
-    bundleFiles.forEach(function (f) { have.add(f.path); });
-    results.forEach(function (r) { if (r && !have.has(r.path)) { have.add(r.path); bundleFiles.push(r); added = true; } });
-    if (!added) return false;
+    var results = [], next = 0;
+    async function worker() {
+      while (next < pending.length && generation === bundleGeneration) {
+        var p = pending[next++], file = bundleKnown && bundleKnown.get(p);
+        if (!file) {
+          var url = bundleUrl(p, root);
+          if (!url || attemptedUrls.has(url) || attemptedUrls.size >= MAX_BUNDLE_FILES) continue;
+          attemptedUrls.add(url);
+          if (attachKind(p)) file = { path: p, text: "", binary: true, src: url };
+          else if (fileKind(p)) {
+            try {
+              file = await fetchBundleText(p, url, budget, root);
+              if (!file || generation !== bundleGeneration) continue;
+              results.push(file);
+              continue;
+            } catch (e) { continue; }
+          }
+        }
+        if (!file || generation !== bundleGeneration) continue;
+        // Local files are already charged when their known set is installed.
+        if (bundleKnown && bundleKnown.has(p)) results.push(file);
+        else if (accountBundleFile(budget, file)) results.push(file);
+      }
+    }
+    var completed = await Promise.allSettled(Array.from({ length: Math.min(MAX_CONCURRENT_FETCHES, pending.length) }, worker));
+    var failed = completed.find(function (result) { return result.status === "rejected"; });
+    if (failed && generation === bundleGeneration) { overlayMsg.textContent = failed.reason.message; overlay.classList.add("show"); }
+    if (generation !== bundleGeneration) return false;
+    var candidate = bundleFiles.slice(), have = new Set(candidate.map(function (file) { return file.path; }));
+    results.forEach(function (file) { if (!have.has(file.path)) { have.add(file.path); candidate.push(file); } });
+    if (candidate.length === bundleFiles.length) return false;
     var showing = preview.classList.contains("show");
     var openPath = previewPath;
-    load(bundleFiles, bundleRootUrl, bundleKnown, true);
+    if (!load(candidate, bundleRootUrl, bundleKnown, true)) {
+      results.forEach(function (file) {
+        if (!bundleKnown || !bundleKnown.has(file.path)) {
+          releaseBundleFile(budget, file);
+          attemptedUrls.delete(bundleUrl(file.path, root));
+        }
+      });
+      return false;
+    }
     if (showing && fileMap && fileMap.has(openPath)) renderPreviewEntry(fileMap.get(openPath));
     return true;
   }
@@ -3856,10 +4477,10 @@
     var startRel = urlParam("start");
     var start = startRel ? new URL(startRel, folder) : new URL("index.md", folder);
     // Keep ?start same-origin and inside the bundle folder; otherwise use index.md.
-    if (!isAllowedUrl(start) || !start.pathname.startsWith(folder.pathname)) {
+    if (!urlWithinBundle(start.href, folder.href)) {
       start = new URL("index.md", folder);
     }
-    var files = await crawlFromUrl(start.href, maxDepth);
+    var files = await crawlFromUrl(start.href, maxDepth, folder.href);
     return files.length ? files : null;
   }
 
@@ -3872,21 +4493,23 @@
     overlayMsg.textContent = "Loading bundle…";
     var bundle = urlParam("bundle");
     var depth = urlDepth();
-    prefetchLimited = depth !== Infinity;
-    attemptedUrls = new Set();   // fresh bundle: forget any earlier on-demand fetches
+    var request = ++bundleLoadRequest;
     try {
       var files = null, root = null;
       if (bundle && /\.md$/i.test(bundle)) {
         var bUrl = new URL(bundle, location.href);
         if (!isAllowedUrl(bUrl)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
         root = new URL("./", bUrl).href;
-        files = await crawlFromUrl(bUrl.href, depth);
+        files = await crawlFromUrl(bUrl.href, depth, root);
       } else if (bundle) {
         var loc = resolveBundleLoc(bundle);
         if (!isAllowedUrl(loc)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
-        var folder = /\/$/.test(loc.pathname) ? loc : new URL(loc.href + "/");
+        loc.search = ""; loc.hash = "";
+        if (!/\/$/.test(loc.pathname)) loc.pathname += "/";
+        var folder = loc;
         root = folder.href;
         files = await loadBundleFromFolder(folder.href, depth);
+        if (request !== bundleLoadRequest) return false;
         if (!files) {
           overlayMsg.textContent = "No bundle at ?bundle=" + bundle + " (no index.md).";
           return false;
@@ -3896,14 +4519,17 @@
         var bundlesRoot = new URL("bundles/", location.href);
         root = bundlesRoot.href;
         files = await loadBundleFromFolder(bundlesRoot.href, depth);
+        if (request !== bundleLoadRequest) return false;
         if (!files) {
           root = new URL("./", location.href).href;
-          files = await crawlFromUrl(new URL("index.md", location.href).href, depth);
+          files = await crawlFromUrl(new URL("index.md", location.href).href, depth, root);
         }
       }
-      if (files && files.length) { load(files, root); return true; }
+      if (request !== bundleLoadRequest) return false;
+      if (files && files.length) return load(files, root);
       overlayMsg.textContent = "Nothing to load: add bundles/index.md, or pass ?bundle=<name>.";
     } catch (e) {
+      if (request !== bundleLoadRequest) return false;
       overlayMsg.textContent = "Auto-load failed: " + e.message;
     }
     return false;
