@@ -27,7 +27,7 @@ Every URL the tool loads passes through the same checks before any request is ma
 
 # Effect
 
-A malicious bundle cannot probe other hosts, read another origin, or smuggle a different resource in through a redirect. Images follow the same rules; external and `data:` images are not shown, and valid bundle images are displayed from blob URLs.[^review]
+A malicious bundle cannot probe other hosts, read another origin, or smuggle a different resource in through a redirect. Images in bundle content follow the same rules; external and `data:` images from content are not shown, and valid bundle images are displayed from blob URLs. The only `data:` image the page itself uses is its inline SVG favicon, which is page chrome and not part of a bundle.[^review]
 
 # Limits of the control
 
