@@ -10,7 +10,7 @@ Tool for exploring [Open Knowledge Format (OKF)](https://github.com/GoogleCloudP
 
 ## Demo
 
-See https://trondolsen.github.io/okf-graph-explorer/okf-graph-explorer.html?bundle=bundles/&depth=2.
+See https://trondolsen.github.io/okf-graph-explorer/okf-graph-explorer.html.
 
 ## Usage
 
