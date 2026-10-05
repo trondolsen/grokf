@@ -105,8 +105,10 @@
     max-width: 260px; backdrop-filter: blur(6px);
   }
   #legend h2 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-  .lg { display: flex; align-items: center; gap: 8px; padding: 2px 0; cursor: pointer; border-radius: 6px; }
+  .lg { display: flex; align-items: center; gap: 8px; padding: 2px 8px; cursor: pointer; border-radius: 6px; }
   .lg:hover { background: var(--panel-2); }
+  .lg.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .lg:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .lg.off { opacity: .4; }
   .lg .sw, .sw { width: 11px; height: 11px; border-radius: 50%; flex: none; }
   .lg .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -426,7 +428,7 @@
     body:not(.hide-side) .bar { right: 12px; }
     .bar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
     .bar-head { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-    .nav-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 6px 11px; }
+    .nav-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: stretch; padding: 6px 11px; }
     .nav-groups {
       display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
     }
@@ -890,7 +892,8 @@
     if (target.length >= MAX_GRAPH_LINKS) throw new Error("Graph contains too many links.");
     target.push(link);
   }
-  var hover = null, dragNode = null, panning = null;
+  var hover = null, dragNode = null, panning = null, legendHover = null;
+  var legendFilter = new Set();
   var activePointers = new Map(), pinchPrev = null;
   var lastPointerType = "mouse";
   var MIN_ZOOM = 0.02, MAX_ZOOM = 4;
@@ -1667,6 +1670,7 @@
     applyFocus();
     relayout(true);
     updateStats();
+    buildLegend();
   }
 
   function setFocus(path) {
@@ -1676,6 +1680,7 @@
     autoFit = true;   // re-frame the new subgraph as it settles
     updateGraphNav();
     updateStats();
+    buildLegend();
   }
 
   function enterDir(path) {
@@ -2102,11 +2107,29 @@
     return set;
   }
 
+  // The graph "active" set while legend groups are hovered and/or filtered: the
+  // union of the selected groups and the hovered one, so hovering adds to the
+  // selection instead of replacing it.
+  var legendActiveCache = null, legendActiveFor = null, legendActiveKey = null;
+  function legendActiveSet() {
+    if (!legendHover && !legendFilter.size) return null;
+    var key = (legendHover || "") + "\u0001" + Array.from(legendFilter).sort().join("\u0002");
+    if (legendActiveFor === nodes && legendActiveKey === key) return legendActiveCache;
+    var want = new Set(legendFilter);
+    if (legendHover) want.add(legendHover);
+    var set = new Set();
+    for (var i = 0; i < nodes.length; i++) { if (want.has(groupOf(nodes[i]))) set.add(nodes[i].id); }
+    legendActiveFor = nodes;
+    legendActiveKey = key;
+    legendActiveCache = set;
+    return set;
+  }
+
   function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
-    var active = hover ? neighborSet(hover) : null;
+    var active = hover ? neighborSet(hover) : legendActiveSet();
 
     // Edges
     var i, l;
@@ -2191,7 +2214,7 @@
   function drawEdge(l, style, active) {
     var s = l.source, t = l.target;
     var x1 = sx(s.x), y1 = sy(s.y), x2 = sx(t.x), y2 = sy(t.y);
-    var dim = isDimmed(s) && isDimmed(t);
+    var dim = (isDimmed(s) || (active && !active.has(s.id))) && (isDimmed(t) || (active && !active.has(t.id)));
     var hot = active && active.has(s.id) && active.has(t.id);
     if (style === "tag") {
       // Node -> tag-hub links are dashed; namespace -> child-namespace hierarchy
@@ -3757,12 +3780,16 @@
 
   // ---------------------------------------------------------------- legend
   function buildLegend() {
+    legendHover = null;
     var groups = new Map();
     nodes.forEach(function (n) {
       var g = groupOf(n);
       if (!groups.has(g)) groups.set(g, { count: 0, node: n });
       groups.get(g).count++;
     });
+    // Drop selections for groups no longer in view (directory or tag navigation),
+    // so the filter never leaves the graph fully dimmed.
+    Array.from(legendFilter).forEach(function (g) { if (!groups.has(g)) legendFilter.delete(g); });
     var order = ["Directories", "Index files"];
     var rest = Array.from(groups.keys()).filter(function (g) { return order.indexOf(g) < 0; }).sort();
     var keys = order.concat(rest);
@@ -3770,12 +3797,26 @@
     keys.forEach(function (g) {
       if (!groups.has(g)) return;
       var n = groups.get(g).node;
-      html += '<div class="lg">' +
+      var cls = "lg" + (legendFilter.size ? (legendFilter.has(g) ? " sel" : " off") : "");
+      html += '<div class="' + cls + '" data-g="' + esc(g) + '" role="button" tabindex="0"' +
+        ' title="Filter the graph by this group">' +
         '<span class="sw" style="background:' + colorFor(n) + '"></span>' +
         "<span>" + esc(g) + "</span>" +
         '<span class="n">' + groups.get(g).count + "</span></div>";
     });
     legendBody.innerHTML = html;
+    Array.prototype.forEach.call(legendBody.querySelectorAll(".lg"), function (el) {
+      var group = el.getAttribute("data-g");
+      el.addEventListener("mouseenter", function () { legendHover = group; });
+      el.addEventListener("mouseleave", function () { if (legendHover === group) legendHover = null; });
+      el.addEventListener("click", function () {
+        if (legendFilter.has(group)) legendFilter.delete(group); else legendFilter.add(group);
+        buildLegend();
+      });
+      el.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); }
+      });
+    });
   }
 
   // ---------------------------------------------------------------- legend
@@ -4328,7 +4369,7 @@
     }
     try {
       var graph = buildGraph(files);
-      if (!preserve) { bundleGeneration++; resetBundleResources(); }
+      if (!preserve) { bundleGeneration++; resetBundleResources(); legendFilter.clear(); }
       bundleBudget = nextBudget;
       bundleFiles = files;
       bundleRootUrl = rootUrl || null;
