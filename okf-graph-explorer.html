@@ -596,7 +596,7 @@
     <ul>
       <li>Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
       <li>Choose a bundle with <code>?bundle=&lt;name|path&gt;</code> (or <code>?start=</code>).</li>
-      <li>Prefetch fewer levels with <code>?depth=N</code> (default: all). A node with a dashed ring (page or attachment) has unloaded content — click it to load, then click again to preview.</li>
+      <li>Prefetch fewer levels with <code>?depth=N</code> (default: all). A node with a dashed ring (page, file or attachment) has unloaded content — click it to load, then click again to preview.</li>
       <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
       <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
     </ul>
@@ -1094,9 +1094,11 @@
   // Candidates for a path-valued frontmatter field (`sources[].resource`,
   // `executor`, `attester`, …). Bare and "/"-prefixed paths are
   // bundle-root-relative (as in the OKF examples); "./"/"../" are file-relative.
+  // A source may name any file, so non-Markdown sources resolve like body links:
+  // loaded Markdown gets a node, other files become placeholders fetched on click.
   function resourceCandidates(from, link) {
     link = normalizeLinkPath(link);
-    if (!link || !/\.md$/i.test(link)) return [];
+    if (!link || /\/$/.test(link)) return [];
     if (/^\.\.?\//.test(link)) { var r = joinPath(dirOf(from), link); return r ? [r] : []; }
     return pathCandidates(from, link.charAt(0) === "/" ? link.replace(/^\//, "") : link, true);
   }
@@ -1140,6 +1142,9 @@
     return ext && ATTACH_EXT[ext] ? ext : null;
   }
 
+  // True for Markdown files, the only files the crawl loads into the graph.
+  function isMarkdownPath(name) { return /\.md$/i.test(String(name)); }
+
   function colorFor(n) {
     if (n.kind === "dir") return DIR_COLOR;
     if (n.kind === "index") return INDEX_COLOR;
@@ -1180,7 +1185,7 @@
     if (c >= minLen) c = minLen - 1; // never strip the filename itself
     if (c <= 0) return files;
     return files.map(function (f) {
-      return { path: f.path.split("/").slice(c).join("/"), text: f.text, binary: f.binary, src: f.src, bytes: f.bytes };
+      return { path: f.path.split("/").slice(c).join("/"), text: f.text, binary: f.binary, src: f.src, bytes: f.bytes, lazy: f.lazy };
     }).filter(function (f) { return f.path; });
   }
 
@@ -1226,7 +1231,7 @@
         var u = new URL(item.url), rel;
         try { rel = decodeURIComponent(u.pathname.slice(base.pathname.length)); }
         catch (e) { continue; }
-        if (!validBundlePath(rel) || !fileKind(rel)) continue;
+        if (!validBundlePath(rel) || !isMarkdownPath(rel)) continue;
         var file;
         if (budget.bytes >= MAX_BUNDLE_BYTES) throw new Error("Bundle exceeds the total byte limit.");
         try { file = await fetchBundleText(rel, u.href, budget, base.href); }
@@ -1237,7 +1242,7 @@
         out.push(file);
         if (item.depth >= limit) continue;
         extractLinks(text).forEach(function (link) {
-          var urls = linkCandidates(rel, link).filter(fileKind).map(function (path) { return bundleUrl(path, base.href); }).filter(Boolean);
+          var urls = linkCandidates(rel, link).filter(isMarkdownPath).map(function (path) { return bundleUrl(path, base.href); }).filter(Boolean);
           if (urls.length) schedule(urls[0], item.depth + 1, urls.slice(1));
         });
       }
@@ -1257,9 +1262,14 @@
     }
     if (typeof file.size !== "number" || !isFinite(file.size) || file.size > MAX_FILE_BYTES) return;
     if (file.size > MAX_BUNDLE_BYTES - budget.bytes) throw new Error("Bundle exceeds the total byte limit.");
-    var bytes = file.stream ? await readBoundedStream(file.stream(), MAX_FILE_BYTES) : null;
-    var text = bytes ? new TextDecoder().decode(bytes) : await file.text();
-    addBundleFile(out, { path: path, text: text, src: file, bytes: bytes ? bytes.byteLength : file.size }, budget);
+    if (isMarkdownPath(path)) {
+      var bytes = file.stream ? await readBoundedStream(file.stream(), MAX_FILE_BYTES) : null;
+      var text = bytes ? new TextDecoder().decode(bytes) : await file.text();
+      addBundleFile(out, { path: path, text: text, src: file, bytes: bytes ? bytes.byteLength : file.size }, budget);
+      return;
+    }
+    // Non-Markdown text files stay lazy: read on demand, like attachments.
+    addBundleFile(out, { path: path, text: "", binary: false, src: file, bytes: file.size, lazy: true }, budget);
   }
 
   async function fromFileList(fileList) {
@@ -1386,20 +1396,20 @@
 
     // Reference edges from markdown links and .md source resources.
     var seenEdge = new Set();
-    var placeholderMap = new Map();   // path -> unloaded attachment node
+    var placeholderMap = new Map();   // path -> unloaded placeholder node (attachment or file)
     files.forEach(function (f) {
       var node = fileMapLocal.get(f.path);
       if (!node || node.kind === "file" || node.kind === "attachment") return; // plaintext/attachment nodes have no links
       var targets = new Set();      // resolved (already-loaded) reference paths
       var pending = [];             // candidate paths for references not loaded yet
-      // Show an unresolved attachment as a visible, unloaded node (nothing is
-      // fetched for it), deduplicated across every file that references it.
-      function addPlaceholder(cands) {
+      // Show an unresolved attachment or non-Markdown file as a visible,
+      // unloaded node (nothing is fetched for it), deduplicated across files.
+      function addPlaceholder(cands, kind) {
         var path = cands[0];
         var ph = placeholderMap.get(path);
         if (!ph) {
           ph = {
-            id: path, path: path, kind: "attachment", loaded: false, candidates: cands.slice(),
+            id: path, path: path, kind: kind, loaded: false, candidates: cands.slice(),
             type: "", title: "", description: "", tags: [], status: "",
             fm: {}, body: "", src: null, pdfMeta: null, metaPromise: null,
             children: [], depth: 0, angle: 0, targetR: 0,
@@ -1421,9 +1431,11 @@
         if (hit) { targets.add(hit); return; }
         // Embedded images render inline in the preview, so they get no node.
         if (embed && imageKind(cands[0])) return;
-        // Unresolved: attachments become visible placeholders; other references
-        // stay in `missing` for the existing click-to-load behaviour.
-        if (attachKind(cands[0])) { addPlaceholder(cands); return; }
+        // Unresolved: attachments and non-Markdown files become visible
+        // placeholders, fetched on demand; page references stay in `missing` for
+        // the existing click-to-load behaviour.
+        if (attachKind(cands[0])) { addPlaceholder(cands, "attachment"); return; }
+        if (fileKind(cands[0]) && !isMarkdownPath(cands[0])) { addPlaceholder(cands, "file"); return; }
         cands.forEach(function (c) { if (pending.indexOf(c) < 0) pending.push(c); });
       }
       extractLinks(node.body).forEach(function (l) { consider(linkCandidates(f.path, l), isEmbedRef(l)); });
@@ -2105,9 +2117,9 @@
         ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 1; ctx.stroke();
       }
 
-      // Unloaded indicator, shared by attachment placeholders, pages whose
-      // references are not loaded yet, and namespace-ancestor tag hubs (click to
-      // load/expand): a dashed blue ring.
+      // Unloaded indicator, shared by attachment and file placeholders, pages
+      // whose references are not loaded yet, and namespace-ancestor tag hubs
+      // (click to load/expand): a dashed blue ring.
       if (unloaded || missing || ancestorTag) {
         ctx.beginPath();
         ctx.arc(px, py, r + Math.max(1.5, 1.5 * view.k), 0, Math.PI * 2);
@@ -2342,6 +2354,8 @@
           toggleTag(node.label);
         } else if (node.kind === "attachment" && node.loaded === false) {
           loadAttachmentNode(node);
+        } else if (node.kind === "file" && node.loaded === false) {
+          loadFileNode(node).catch(function (err) { if (window.console && console.error) console.error(err); });
         } else if (hasLoadableMissing(node)) {
           // First click loads this node's next level; once there is nothing more to
           // load, a later click opens the preview instead.
@@ -4343,17 +4357,18 @@
     var depth = urlDepth();
     var known = new Map();
     files.forEach(function (f) { known.set(f.path, f); });
-    // Attachments are kept out of the loaded set: they appear as visible
-    // placeholders and load from `known` when clicked.
+    // Attachments and non-Markdown files are kept out of the loaded set: they
+    // appear as visible placeholders and load from `known` when clicked.
     var visible = (depth !== Infinity ? filterByDepth(files, depth) : files)
-      .filter(function (f) { return !f.binary; });
+      .filter(function (f) { return !f.binary && !f.lazy; });
     load(visible, null, known);
   }
 
   // A non-directory node can be expanded on demand when a depth-limited crawl
   // left it with unresolved references that resolve against the network
-  // (bundleRootUrl) or the local read set (bundleKnown). Attachments are handled
-  // separately as visible placeholders, so they are not part of `missing`.
+  // (bundleRootUrl) or the local read set (bundleKnown). Attachments and
+  // non-Markdown files are handled separately as visible placeholders, so they
+  // are not part of `missing`.
   function hasLoadableMissing(n) {
     if (!prefetchLimited || !n || !n.missing || !n.missing.length) return false;
     return !!(bundleRootUrl || bundleKnown);
@@ -4388,6 +4403,53 @@
       return false;
     }
     if (fileMap && fileMap.has(path)) openPreview(fileMap.get(path));
+    return true;
+  }
+
+  // Materialize a visible-but-unloaded non-Markdown file. Local files are read
+  // from their Blob now; server bundles fetch the text on demand. Then preview.
+  async function loadFileNode(node) {
+    if (!node || node.kind !== "file" || node.loaded !== false) return false;
+    var generation = bundleGeneration;
+    var cands = (node.candidates && node.candidates.length) ? node.candidates : [node.path];
+    var path = null, file = null;
+    if (bundleKnown) {
+      for (var i = 0; i < cands.length; i++) {
+        if (bundleKnown.has(cands[i])) { path = cands[i]; file = bundleKnown.get(cands[i]); break; }
+      }
+    }
+    if (!file && bundleRootUrl) {
+      for (var j = 0; j < cands.length && generation === bundleGeneration; j++) {
+        var url = bundleUrl(cands[j], bundleRootUrl);
+        if (!url) continue;
+        try { var fetched = await fetchBundleText(cands[j], url, bundleBudget, bundleRootUrl); }
+        catch (e) { continue; }
+        if (fetched) { path = cands[j]; file = fetched; break; }
+      }
+    }
+    if (!file || generation !== bundleGeneration) return false;
+    if (!file.binary && file.lazy) {
+      var data = null;
+      try { if (file.src && typeof file.src.stream === "function") data = await readBoundedStream(file.src.stream(), MAX_FILE_BYTES); }
+      catch (e) { return false; }
+      try { file.text = data ? new TextDecoder().decode(data) : (file.src && file.src.text ? await file.src.text() : ""); }
+      catch (e) { return false; }
+      if (data) file.bytes = data.byteLength;
+      file.lazy = false;
+    }
+    if (generation !== bundleGeneration) return false;
+    var inFiles = bundleFiles.some(function (f) { return f.path === file.path; });
+    var candidate = bundleFiles;
+    if (!inFiles) {
+      try { accountBundleFile(bundleBudget, file); }
+      catch (e) { overlayMsg.textContent = e.message; overlay.classList.add("show"); return false; }
+      candidate = bundleFiles.concat([file]);
+    }
+    if (!load(candidate, bundleRootUrl, bundleKnown, true)) {
+      if (!inFiles) releaseBundleFile(bundleBudget, file);
+      return false;
+    }
+    if (fileMap && fileMap.has(file.path)) openPreview(fileMap.get(file.path));
     return true;
   }
 
