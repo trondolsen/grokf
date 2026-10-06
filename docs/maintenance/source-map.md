@@ -9,16 +9,16 @@ okfx:
 sources:
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – the tool's source
+    resource: ../../grokf.html
+    title: grokf.html – the tool's source
   - id: review
     resource: ../reviews/2026-10-05.md
-    title: Security review of OKF Graph Explorer (2026-10-05)
+    title: Security review of grokf (2026-10-05)
   - id: tests
     resource: ../../test/README.md
-    title: Test documentation for OKF Graph Explorer
+    title: Test documentation for grokf
 ---
 
 # Sources
@@ -26,7 +26,7 @@ sources:
 | Source | Used for |
 | --- | --- |
 | [`README.md`](../../README.md) | Usage, URL parameters, publishing and local browsing |
-| [`okf-graph-explorer.html`](../../okf-graph-explorer.html) | The implementation: config, crawling, graph, layout, rendering and security |
+| [`grokf.html`](../../grokf.html) | The implementation: config, crawling, graph, layout, rendering and security |
 | [`2026-10-05.md`](../reviews/2026-10-05.md) | Security findings, limits and behavior changes |
 | [`test/README.md`](../../test/README.md) | The test suite and how to run it |
 | [`attachments/favicon.svg`](../design/attachments/favicon.svg) | The project's mascot and favicon, shown in the interface design concept |

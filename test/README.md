@@ -1,6 +1,6 @@
-# Tests for OKF Graph Explorer
+# Tests for grokf
 
-The tests use the unchanged `okf-graph-explorer.html` at the repository root. The Node tests
+The tests use the unchanged `grokf.html` at the repository root. The Node tests
 run with `tools/node-cli/run.sh`; the browser tests and screenshots use
 `tools/playwright-cli/run.sh` with Playwright 1.63.0 and Chromium.
 
@@ -125,7 +125,7 @@ it sequentially with the browser tests and the screenshot script.
 Generated results are outside the test code and the test bundle:
 
 ```text
-tmp/test/okf-graph-explorer/
+tmp/test/grokf/
 ├── report/index.html
 ├── test-results/
 └── screenshots/screenshot.png
@@ -133,7 +133,7 @@ tmp/test/okf-graph-explorer/
 
 The Playwright start script mounts `tmp/test/` as `/artifacts` and sets
 `PLAYWRIGHT_OUTPUT_DIR=/artifacts`. `support/paths.cjs` appends
-`okf-graph-explorer/` for this test suite. Local runs use the same
+`grokf/` for this test suite. Local runs use the same
 repository-relative result folder. `tmp/` is already excluded from Git.
 
 Older results in `playwright-output/` have not been moved or deleted; new runs

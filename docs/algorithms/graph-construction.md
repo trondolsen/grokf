@@ -8,8 +8,8 @@ okfx:
   version: praxis/1
 sources:
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – buildGraph
+    resource: ../../grokf.html
+    title: grokf.html – buildGraph
 ---
 
 # Steps

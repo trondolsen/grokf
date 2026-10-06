@@ -9,10 +9,10 @@ okfx:
 sources:
   - id: tests
     resource: ../../test/README.md
-    title: Test documentation for OKF Graph Explorer
+    title: Test documentation for grokf
   - id: review
     resource: ../reviews/2026-10-05.md
-    title: Security review of OKF Graph Explorer (2026-10-05)
+    title: Security review of grokf (2026-10-05)
 ---
 
 # Goal

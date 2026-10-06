@@ -66,7 +66,7 @@ async function fixture(t, files = {}) {
 test('serverer den faktiske utforskerfilen og Markdown fra repositoriet', { timeout: 10000 }, async t => {
   const port = await startServer(t, repositoryRoot);
   for (const [path, type] of [
-    ['okf-graph-explorer.html', 'text/html; charset=utf-8'],
+    ['grokf.html', 'text/html; charset=utf-8'],
     ['index.md', 'text/markdown; charset=utf-8'],
   ]) {
     const expected = await readFile(join(repositoryRoot, path));

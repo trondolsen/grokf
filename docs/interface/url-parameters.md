@@ -9,10 +9,10 @@ okfx:
 sources:
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – urlParam, resolveBundleLoc, autoLoad
+    resource: ../../grokf.html
+    title: grokf.html – urlParam, resolveBundleLoc, autoLoad
 ---
 
 # Parameters

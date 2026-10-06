@@ -9,10 +9,10 @@ okfx:
 sources:
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – pickFolder, fromDataTransfer
+    resource: ../../grokf.html
+    title: grokf.html – pickFolder, fromDataTransfer
 ---
 
 # Goal
@@ -21,7 +21,7 @@ Browse a bundle stored on your own machine, without a web server.[^readme]
 
 # Steps
 
-1. Copy `okf-graph-explorer.html` into the folder you want to browse, or open the HTML file directly.
+1. Copy `grokf.html` into the folder you want to browse, or open the HTML file directly.
 2. Open the HTML file in a browser.
 3. Choose **Open folder…** and select the bundle directory, **or** drag the folder onto the window.
 

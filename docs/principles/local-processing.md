@@ -9,10 +9,10 @@ okfx:
 sources:
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
   - id: overlay
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – overlay text and about panel
+    resource: ../../grokf.html
+    title: grokf.html – overlay text and about panel
 ---
 
 # Principle

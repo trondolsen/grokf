@@ -8,11 +8,11 @@ okfx:
   version: praxis/1
 sources:
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – inline CSS and UI
+    resource: ../../grokf.html
+    title: grokf.html – inline CSS and UI
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
 ---
 
 # Overview
@@ -46,7 +46,7 @@ The page declares an SVG favicon as an inline `data:` URI, keeping the single-fi
 
 In those two panels the figure starts in a fixed pose and alternates on a 10-second timer: it holds the pose, then releases it and lets physics run — the same velocity-Verlet force layout the graph uses (softened repulsion, link springs, a decaying temperature), so the joints relax into a laid-out arrangement at the graph's rapid pace — and then forcibly drags the joints back into the fixed pose. The cycle restarts when a panel becomes visible. Joint rest positions come from the markup; the link topology and the physics weights live in the script. A hidden panel is skipped, and `prefers-reduced-motion` leaves the figure static.
 
-![OKF Graph Explorer mascot](attachments/favicon.svg)
+![grokf mascot](attachments/favicon.svg)
 
 # Accessibility
 
@@ -62,5 +62,5 @@ Keep the single-file, dependency-free approach and reuse the CSS custom properti
 - [Local processing](../principles/local-processing.md)
 - [About this bundle](../about-this-bundle.md)
 
-[^source]: The tool's inline CSS and UI in `okf-graph-explorer.html`.
+[^source]: The tool's inline CSS and UI in `grokf.html`.
 [^readme]: Project README.

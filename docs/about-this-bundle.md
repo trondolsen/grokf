@@ -12,18 +12,18 @@ sources:
     title: Open Knowledge Format v0.2 specification
   - id: readme
     resource: ../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
   - id: source
-    resource: ../okf-graph-explorer.html
-    title: okf-graph-explorer.html – the tool's source
+    resource: ../grokf.html
+    title: grokf.html – the tool's source
   - id: review
     resource: reviews/2026-10-05.md
-    title: Security review of OKF Graph Explorer (2026-10-05)
+    title: Security review of grokf (2026-10-05)
 ---
 
 # What this bundle describes
 
-This bundle documents the **OKF Graph Explorer**, a single-file browser tool for exploring Open Knowledge Format (OKF) bundles.[^readme] The bundle is itself OKF v0.2, so the tool can open and navigate it.
+This bundle documents the **grokf**, a single-file browser tool for exploring Open Knowledge Format (OKF) bundles.[^readme] The bundle is itself OKF v0.2, so the tool can open and navigate it.
 
 # Format and extension
 

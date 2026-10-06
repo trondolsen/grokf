@@ -4,7 +4,7 @@ These instructions apply to everything in this repository.
 
 ## Project
 
-- `okf-graph-explorer.html` is the entire tool: one dependency-free HTML file with inline CSS and JavaScript that renders an OKF bundle as an interactive graph in the browser. All processing is local; there is no server, build step or runtime dependency.
+- `grokf.html` is the entire tool: one dependency-free HTML file with inline CSS and JavaScript that renders an OKF bundle as an interactive graph in the browser. All processing is local; there is no server, build step or runtime dependency.
 - `README.md` – usage, URL parameters and publishing.
 - `index.md` and `docs/` – the project's OKF v0.2 knowledge bundle (English), written with the project extension OKF Praxis.
 - `test/` – the test suite (Node unit tests and Playwright browser tests); `test/index.md` is its reserved OKF index.
@@ -14,7 +14,7 @@ These instructions apply to everything in this repository.
 
 - Write documentation and code comments in English.
 - Keep the OKF documentation in sync with the code. After changing the tool — its behaviour, UI, configuration, limits or structure — update the matching `docs/` concept(s) in the same change, and keep their `sources` and links accurate. If no concept matches, add one or state in your summary why none applies.
-- Keep the tool a single HTML file with no dependencies and no build step. Do not add a bundler, framework or runtime dependency unless asked, and match the existing style in `okf-graph-explorer.html`.
+- Keep the tool a single HTML file with no dependencies and no build step. Do not add a bundler, framework or runtime dependency unless asked, and match the existing style in `grokf.html`.
 - Treat bundles as untrusted. Do not weaken the URL containment, CSP, size limits or bounded-streaming controls, for example to make a bundle behind credentials or redirects load. Those bundles are intentionally unsupported.
 - Do not commit or create branches unless asked.
 

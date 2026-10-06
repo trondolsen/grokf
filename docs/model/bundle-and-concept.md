@@ -11,8 +11,8 @@ sources:
     resource: https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md
     title: Open Knowledge Format v0.2 specification
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – parseFrontmatter, buildGraph
+    resource: ../../grokf.html
+    title: grokf.html – parseFrontmatter, buildGraph
 ---
 
 # Bundle and concept

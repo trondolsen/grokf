@@ -8,8 +8,8 @@ okfx:
   version: praxis/1
 sources:
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – renderPreviewEntry, renderImagePreview
+    resource: ../../grokf.html
+    title: grokf.html – renderPreviewEntry, renderImagePreview
 ---
 
 # Preview content by kind

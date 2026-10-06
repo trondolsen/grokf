@@ -44,7 +44,7 @@ const helperSource = [
   between(anchor('  function urlParam('), anchor('  async function loadBundleFromFolder('))
 ].join('\n');
 const helperScript = new vm.Script(`"use strict";\n${helperSource}`, {
-  filename: 'okf-graph-explorer.html:actual-helpers'
+  filename: 'grokf.html:actual-helpers'
 });
 
 function element() {
@@ -74,7 +74,7 @@ function harness(t, overrides = {}) {
   const context = vm.createContext({
     URL: MockURL, URLSearchParams, TextEncoder, TextDecoder, AbortController, AbortSignal,
     Blob, Response, DecompressionStream, Uint8Array,
-    location: { href: 'https://explorer.test/knowledge/okf-graph-explorer.html',
+    location: { href: 'https://explorer.test/knowledge/grokf.html',
       origin: 'https://explorer.test', search: '' },
     history: { replaceState: noop },
     window: { console: { error: (...args) => errors.push(args) } },
@@ -227,7 +227,7 @@ function pdfObjectStream(text) {
 }
 
 test('the complete actual HTML script compiles without test exports', () => {
-  assert.doesNotThrow(() => new vm.Script(source, { filename: 'okf-graph-explorer.html:complete-script' }));
+  assert.doesNotThrow(() => new vm.Script(source, { filename: 'grokf.html:complete-script' }));
 });
 
 test('attribute detector distinguishes quoted harmless text from real event attributes', () => {

@@ -29,7 +29,7 @@ try {
     timeout: 30_000,
   });
 
-  if (new URL(url).pathname.endsWith('/okf-graph-explorer.html')) {
+  if (new URL(url).pathname.endsWith('/grokf.html')) {
     await page.waitForFunction(
       () => !document.querySelector('#overlay').classList.contains('show'),
       undefined,

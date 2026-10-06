@@ -2,9 +2,9 @@
 okf_version: "0.2"
 ---
 
-# OKF Graph Explorer – knowledge bundle
+# grokf – knowledge bundle
 
-This directory tree is the project's **OKF v0.2 bundle**. It explains what the OKF Graph Explorer is, how it works and how to use it, as a set of linked concept files under `docs/`. The tool reads this same format, so the bundle doubles as a browsable example.
+This directory tree is the project's **OKF v0.2 bundle**. It explains what the grokf is, how it works and how to use it, as a set of linked concept files under `docs/`. The tool reads this same format, so the bundle doubles as a browsable example.
 
 ## Start here
 

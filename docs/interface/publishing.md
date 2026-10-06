@@ -9,7 +9,7 @@ okfx:
 sources:
   - id: readme
     resource: ../../README.md
-    title: OKF Graph Explorer – README
+    title: grokf – README
 ---
 
 # Goal
@@ -18,8 +18,8 @@ Serve the explorer and one or more bundles from a static site, for example GitHu
 
 # Steps
 
-1. Include `okf-graph-explorer.html` in the website.
-2. Add a link to `okf-graph-explorer.html?bundle={relative-path-to-bundle}/`.
+1. Include `grokf.html` in the website.
+2. Add a link to `grokf.html?bundle={relative-path-to-bundle}/`.
 3. Publish the site. The page and the bundle must be served from the same origin.
 
 # Trade-off

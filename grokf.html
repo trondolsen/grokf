@@ -9,7 +9,7 @@
      the page's own favicon is an inline data: image. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ik9LRiBHcmFwaCBFeHBsb3JlciI+PHRpdGxlPk9LRiBHcmFwaCBFeHBsb3JlcjwvdGl0bGU+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzEyMTQxYSIvPjxwYXRoIGQ9Ik0xNS41IDE1IEwyMSAyMS41IE0xNS41IDE1IEw5LjUgMjIgTTkuNSAyMiBMNi41IDI5IE0yMSAyMS41IEwyNyAyOSBNMy41IDEzIEw4IDExIE0yMCA2IEwyNyAzIE0xNS41IDE1IEwxMC41IDguNSBNMTAuNSA4LjUgTDggNSBNMy41IDEzIEwxMC41IDguNSBNMTAuNSA4LjUgTDIwIDYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzZhNzQ4OCIgc3Ryb2tlLXdpZHRoPSIxLjgiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjgiIGN5PSI1IiByPSIyLjQiIGZpbGw9IiM1YjhkZWYiLz48Y2lyY2xlIGN4PSIxMC41IiBjeT0iOC41IiByPSIxLjQiIGZpbGw9IiM1YjhkZWYiLz48Y2lyY2xlIGN4PSI4IiBjeT0iMTEiIHI9IjEuMyIgZmlsbD0iIzViOGRlZiIvPjxjaXJjbGUgY3g9IjMuNSIgY3k9IjEzIiByPSIxLjUiIGZpbGw9IiM1YjhkZWYiLz48Y2lyY2xlIGN4PSIyMCIgY3k9IjYiIHI9IjEuNSIgZmlsbD0iIzViOGRlZiIvPjxjaXJjbGUgY3g9IjI3IiBjeT0iMyIgcj0iMS44IiBmaWxsPSIjNWI4ZGVmIi8+PGNpcmNsZSBjeD0iOS41IiBjeT0iMjIiIHI9IjEuNSIgZmlsbD0iI2M5YTI0ZCIvPjxjaXJjbGUgY3g9IjYuNSIgY3k9IjI5IiByPSIxLjgiIGZpbGw9IiNjOWEyNGQiLz48Y2lyY2xlIGN4PSIyMSIgY3k9IjIxLjUiIHI9IjEuNSIgZmlsbD0iI2M5YTI0ZCIvPjxjaXJjbGUgY3g9IjI3IiBjeT0iMjkiIHI9IjEuOCIgZmlsbD0iI2M5YTI0ZCIvPjxlbGxpcHNlIGN4PSIxNS41IiBjeT0iMTUiIHJ4PSIzLjIiIHJ5PSIyLjUiIGZpbGw9IiM4YjkzYTciLz48L3N2Zz4=">
-<title>OKF Graph Explorer</title>
+<title>grokf</title>
 <style>
   :root {
     --bg: #12141a;
@@ -475,7 +475,7 @@
   <div class="bar-head">
     <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar">☰</button>
     <div class="group">
-      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About">OKF Graph Explorer<span class="caret">▾</span></button>
+      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About">grokf<span class="caret">▾</span></button>
       <span id="stats" class="meta" style="color:var(--muted)"></span>
     </div>
   </div>
@@ -606,7 +606,7 @@
 
 <div id="aboutPop" class="pop" hidden>
   <div class="about-body">
-    <svg class="about-logo" data-mascot width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="OKF Graph Explorer">
+    <svg class="about-logo" data-mascot width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="grokf">
       <path data-links d="M15.5 15 L21 21.5 M15.5 15 L9.5 22 M9.5 22 L6.5 29 M21 21.5 L27 29 M3.5 13 L8 11 M20 6 L27 3 M15.5 15 L10.5 8.5 M10.5 8.5 L8 5 M3.5 13 L10.5 8.5 M10.5 8.5 L20 6" fill="none" stroke="#6a7488" stroke-width="1.8" stroke-linecap="round"/>
       <circle data-joint="head" cx="8" cy="5" r="2.4" fill="#5b8def"/>
       <circle data-joint="shoulder" cx="10.5" cy="8.5" r="1.4" fill="#5b8def"/>
@@ -620,7 +620,7 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <p><b>OKF Graph Explorer</b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
+    <p><b>grokf</b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
     <p class="about-rev">Revision <span id="aboutRev"></span></p>
     <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
     <ul>
@@ -632,14 +632,14 @@
     </ul>
     <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
     <p class="about-links">
-      <a href="https://github.com/trondolsen/okf-graph-explorer" target="_blank" rel="noopener">Source on GitHub</a>
+      <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener">Source on GitHub</a>
     </p>
   </div>
 </div>
 
 <div id="overlay" class="show">
   <div id="card">
-    <svg class="card-logo" data-mascot width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="OKF Graph Explorer">
+    <svg class="card-logo" data-mascot width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="grokf">
       <path data-links d="M15.5 15 L21 21.5 M15.5 15 L9.5 22 M9.5 22 L6.5 29 M21 21.5 L27 29 M3.5 13 L8 11 M20 6 L27 3 M15.5 15 L10.5 8.5 M10.5 8.5 L8 5 M3.5 13 L10.5 8.5 M10.5 8.5 L20 6" fill="none" stroke="#6a7488" stroke-width="1.8" stroke-linecap="round"/>
       <circle data-joint="head" cx="8" cy="5" r="2.4" fill="#5b8def"/>
       <circle data-joint="shoulder" cx="10.5" cy="8.5" r="1.4" fill="#5b8def"/>
@@ -653,7 +653,7 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <h1>OKF Graph Explorer</h1>
+    <h1>grokf</h1>
     <p>Single-file, dependency-free viewer for this knowledge bundle.</p>
     <ul>
       <li>Served: on a static server (including GitHub Pages) it loads <code>bundles/</code> automatically from <code>bundles/index.md</code>.</li>

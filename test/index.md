@@ -1,4 +1,4 @@
-# Tests for OKF Graph Explorer
+# Tests for grokf
 
 This directory holds the test suite for the explorer. It is a nested index in the project's OKF v0.2 bundle, so it carries no frontmatter of its own.
 

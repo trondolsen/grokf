@@ -8,8 +8,8 @@ okfx:
   version: praxis/1
 sources:
   - id: source
-    resource: ../../okf-graph-explorer.html
-    title: okf-graph-explorer.html – the physics, layout step and draw sections
+    resource: ../../grokf.html
+    title: grokf.html – the physics, layout step and draw sections
 ---
 
 # Context
