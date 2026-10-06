@@ -8,7 +8,7 @@ Tool for exploring [Open Knowledge Format (OKF)](https://github.com/GoogleCloudP
 
 Visit https://grokf.org/ to try it out.
 
-![Screenshot](README.png "Screenshot")
+![grokf](grokf.png "grokf")
 
 ## Usage
 
