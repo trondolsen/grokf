@@ -2389,7 +2389,9 @@
     }
     var n = nodeAt(e.clientX, e.clientY);
     if (n) {
-      dragNode = n; moved = false; alpha = Math.max(alpha, 0.6);
+      // Press only arms a potential drag; alpha is raised once a drag actually
+      // moves the node (see pointermove), so a plain click cannot stir the graph.
+      dragNode = n; moved = false;
     } else {
       panning = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
       canvas.classList.add("dragging");

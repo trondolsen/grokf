@@ -28,7 +28,7 @@ The simulation accumulates acceleration from several forces:[^source]
 
 # Integration
 
-Velocities are updated with a velocity-Verlet step and clamped to a maximum speed and acceleration. A cooling factor `alpha` decays each tick and never drops below a floor, so the layout keeps a slow, continuous motion instead of freezing.[^source]
+Velocities are updated with a velocity-Verlet step and clamped to a maximum speed and acceleration. A cooling factor `alpha` decays each tick and never drops below a floor, so the layout keeps a slow, continuous motion instead of freezing. Interaction that changes the layout — entering a directory, resetting, or dragging a node — raises `alpha` and re-energizes it, while a plain single click leaves the graph undisturbed.[^source]
 
 # Shared physics
 
