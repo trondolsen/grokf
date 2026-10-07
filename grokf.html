@@ -4,11 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="referrer" content="no-referrer">
-<!-- Inline application code preserves the single-file format; inline event
-     handlers are forbidden. Bundle images use validated, bounded blob URLs;
-     the page's own favicons are inline data: SVG and ICO (the ICO serves iOS,
-     which does not use SVG icons), with an apple-touch-icon and a web
-     manifest. -->
+<!-- Single-file app: inline script, no inline event handlers; bundle images
+     are bounded blob URLs; favicons are inline. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; script-src-attr 'none'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#12141a">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png">
@@ -68,6 +65,12 @@
   .title:hover { background: var(--panel-2); }
   .title .caret { font-size: 10px; line-height: 1; transition: transform .15s ease; }
   .title[aria-expanded="true"] .caret { transform: rotate(180deg); }
+  .wordmark .gr {
+    background-image: linear-gradient(90deg, var(--accent) 50%, var(--text) 50%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .wordmark .f { color: var(--accent); }
 
   /* In-flight load indicator, floated at the toolbar's top-right (left of the
      filter menu). z-index is above the loading overlay so it stays visible
@@ -481,7 +484,7 @@
   <div class="bar-head">
     <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar">☰</button>
     <div class="group">
-      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About">grokf<span class="caret">▾</span></button>
+      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About"><span class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></span><span class="caret">▾</span></button>
       <span id="stats" class="meta" style="color:var(--muted)"></span>
     </div>
   </div>
@@ -626,7 +629,7 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <p><b>grokf</b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
+    <p><b class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
     <p class="about-rev">Revision <span id="aboutRev"></span></p>
     <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
     <ul>
@@ -659,7 +662,7 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <h1>grokf</h1>
+    <h1 class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></h1>
     <p>Single-file, dependency-free viewer for this knowledge bundle.</p>
     <ul>
       <li>Served: on a static server (including GitHub Pages) it loads <code>bundles/</code> automatically from <code>bundles/index.md</code>.</li>
