@@ -30,10 +30,11 @@ sources:
 | [`2026-10-05.md`](../reviews/2026-10-05.md) | Security findings, limits and behavior changes |
 | [`test/README.md`](../../test/README.md) | The test suite and how to run it |
 | [`attachments/favicon.svg`](../design/attachments/favicon.svg) | The project's mascot and favicon, shown in the interface design concept |
+| [`favicons/`](../../favicons/) | The favicon assets the tool references: the SVG and ICO sources (embedded in the page), `apple-touch-icon`, and the web manifest with its icons |
 
 # Notes
 
-The tool's source is a single HTML file, so the concepts name the functions they rely on rather than line numbers, and they survive edits. Where a claim comes from the implementation rather than from documentation, the concept cites the relevant function. All concepts are currently **unverified**, since no `verified` field is set.
+The tool's source is a single HTML file, so the concepts name the functions they rely on rather than line numbers, and they survive edits. Where a claim comes from the implementation rather than from documentation, the concept cites the relevant function. The [Favicon](../design/favicon.md) concept is the exception: it records external web specifications and vendor documentation, cited in its `sources`, rather than project files. All concepts are currently **unverified**, since no `verified` field is set.
 
 # Connections
 
