@@ -20,6 +20,8 @@ Clicking a node opens the preview panel. What it shows depends on the node kind:
 - A **file** node (non-Markdown text) shows its source text. When the file is an image — in practice an SVG — the preview shows the image instead, with a **Show source** toggle (and **Show image** to switch back).
 - An **attachment** node shows its file details. An image attachment is displayed inline, and a PDF shows its metadata.
 
+The panel is one reused element: opening an entry replaces its content and scrolls it back to the top, so a new entry never opens where the previous one was left.[^source]
+
 # Images
 
 An image is shown only after the same URL checks as other images: the bytes are read within the bundle budget and displayed from a blob URL, never from a network or `data:` URL in the content. It is stretched to fill the preview area — scaled up or down as needed — while keeping its aspect ratio and showing the whole image, so it neither crops nor scrolls. A text-based image (kind `file`, such as an SVG) can switch between the rendered image and the source text, because its bytes are text. A binary image attachment has no text representation and so has no toggle.[^source]

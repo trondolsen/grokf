@@ -3496,8 +3496,10 @@
         renderMarkdown(node.body || "");
     }
     hydratePreviewImages();
-    pvBody.scrollTop = 0;
     preview.classList.add("show");
+    // The preview reuses one scroll container across entries; reset it once the
+    // panel is visible, because setting scrollTop while display:none is ignored.
+    pvBody.scrollTop = 0;
     updatePvNav();
   }
 
