@@ -19,6 +19,7 @@ okfx:
       pages:
         - docs/model/bundle-and-concept.md
         - docs/model/graph-model.md
+        - docs/model/okf-tutorial.md
         - docs/model/chapters.md
 sources:
   - id: source
