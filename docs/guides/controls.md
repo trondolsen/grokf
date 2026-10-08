@@ -24,7 +24,7 @@ sources:
 | Drag empty canvas | Pan. |
 | Drag a node | Move it and pin it there. |
 | Scroll wheel | Zoom around the pointer. |
-| Press and hold a node, then drag | Start a deck card and drop it on the deck. |
+| Press and hold a concept, then drag | Start a deck card and drop it on the deck. |
 | Side buttons (back / forward) | Step the preview back or forward. |
 
 # Touch
@@ -36,7 +36,7 @@ sources:
 | Tap a tag hub | Toggle that tag in the filter. |
 | Drag | Pan. |
 | Pinch | Zoom. |
-| Press and hold a node, then drag | Start a deck card. |
+| Press and hold a concept, then drag | Start a deck card. |
 
 # Keyboard
 

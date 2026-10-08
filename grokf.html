@@ -132,7 +132,8 @@
   body:not(.hide-side) .bar { right: 324px; }
 
   #sidebar {
-    position: fixed; top: 0; right: 0; bottom: 0; width: 312px; z-index: 15;
+    /* Above the docked deck (z-index 20) so the filter panel is never covered. */
+    position: fixed; top: 0; right: 0; bottom: 0; width: 312px; z-index: 21;
     display: flex; flex-direction: column;
     background: var(--panel); border-left: 1px solid var(--line);
     transform: translateX(0); transition: transform .18s ease;
@@ -473,9 +474,10 @@
     body.side-open #sidebar { transform: translateX(0); }
 
     /* Legend: left-docked panel (mirrors filters); tab attached to its right
-       edge, near the bottom. */
+       edge, near the bottom. Like the filter sidebar it sits above the docked
+       deck (z-index 20), so the deck never covers it. */
     #legend {
-      top: 0; left: 0; bottom: 0; right: auto; z-index: 15;
+      top: 0; left: 0; bottom: 0; right: auto; z-index: 21;
       width: min(280px, 80vw); max-width: none;
       display: flex; flex-direction: column;
       border: 0; border-right: 1px solid var(--line); border-radius: 0;
@@ -495,19 +497,20 @@
      fill. Cards are small, paper-like slips that overlap to a header strip and
      repel each other on hover. Built by press-holding a node (or "Add to deck"
      in the preview). */
-  :root { --deck-w: 100px; --dc-w: 74px; --dc-h: 105px; --dc-step: 28px; }
+  :root { --deck-w: 100px; --dc-w: 74px; --dc-h: 105px; --dc-step: 28px; --deck-inset: 4px; }
   #deck {
-    position: fixed; top: 64px; right: 12px; width: var(--deck-w);
+    position: fixed; top: 64px; right: var(--deck-inset); width: var(--deck-w);
     z-index: 20; display: none; flex-direction: column;
     max-height: calc(100vh - 76px); transition: right .18s ease;
   }
   /* The drop site is a separate, fixed-size rectangle, not tied to the deck's own
      size: it spans the column from near the top of the window down near its bottom,
-     marks where a dragged card lands, and is shown for the whole drag. It matches the
-     deck panel, whose content is inset so its pages still start below the filter tab. */
+     marks where a dragged card lands, and is shown for the whole drag. It hugs the
+     right side, covering the deck column and reaching the window's right edge (the
+     deck's own inset), rather than overhanging the graph to its left. */
   #deck::after {
-    content: ""; position: absolute; left: -8px; top: var(--deck-aura-top, 16px);
-    width: calc(var(--deck-w) + 16px); height: var(--deck-aura-h, 50vh);
+    content: ""; position: absolute; left: 0; right: calc(-1 * var(--deck-inset)); top: var(--deck-aura-top, 16px);
+    height: var(--deck-aura-h, 50vh);
     z-index: -1; pointer-events: none; display: none;
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     filter: blur(4px);
@@ -520,8 +523,8 @@
      fresh one, dashed, rather than the deck's own column. */
   #deck.newdeck::after { border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); }
   body.deck-open #deck, body.card-dragging #deck { display: flex; }
-  /* While a card is out for dragging, the window shows the grab cursor. */
-  body.card-dragging, body.card-dragging #c { cursor: grab; }
+  /* While a card is out for dragging, the window shows the grabbing cursor. */
+  body.card-dragging, body.card-dragging #c { cursor: grabbing; }
   /* The deck's empty space is dragged to scroll the docked decks, rather than reaching
      the graph behind it; the cursor shows the space is draggable. */
   #deckBody { cursor: grab; }
@@ -602,6 +605,10 @@
     transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
   }
   #deckBody > .deck-card:not(#deckGhost), .deck-stack > .deck-card:not(#deckGhost) { position: absolute; left: 13px; }
+  /* A touch press on a card parts the stack (there is no hover on a touch screen)
+     rather than scrolling the panel, so the card face does not take the scroll gesture;
+     the sub-deck list keeps its own scroll. */
+  .deck-stack > .deck-card:not(.open) { touch-action: none; }
   .deck-card.hovered {
     border-color: var(--accent);
     box-shadow: 0 12px 24px rgba(0,0,0,.6), inset 0 0 12px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -628,6 +635,11 @@
   .dc-x { right: 4px; }
   .dc-chev { left: 4px; font-size: 9px; }
   .deck-card:hover .dc-x, .deck-card:hover .dc-chev, .deck-card.open .dc-chev { opacity: 1; transform: scale(1); }
+  /* A touch press-drag over the deck moves a hover-like pointer: the card under the
+     finger shows its actions, the way :hover does for the mouse, and its × reddens
+     when the finger is over it. */
+  .deck-card.hovered .dc-x, .deck-card.hovered .dc-chev { opacity: 1; transform: scale(1); }
+  .dc-x.armed { color: #e0575b; }
   .dc-x:hover { color: #e0575b; }
   .dc-chev:hover { background: var(--accent); text-shadow: none; }
   .dc-x:focus-visible, .dc-chev:focus-visible {
@@ -669,7 +681,8 @@
   body.deck-fullscreen #pvFwd,
   body.deck-fullscreen #pvDeck,
   body.deck-fullscreen #pvClose { display: none; }
-  body.deck-fullscreen #deck { z-index: 55; }
+  /* A page opened from the deck fills the window: the deck itself is hidden. */
+  body.deck-fullscreen #deck { display: none; }
   /* The streamed pages: a centred reading column with no visible scrollbar. */
   #pvBody.ds-stream { padding: 0; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
   #pvBody.ds-stream::-webkit-scrollbar { display: none; }
@@ -704,11 +717,10 @@
   }
 
   @media (max-width: 760px) {
-    /* Bottom-right on small screens, clear of the stacked toolbar. */
-    #deck { top: auto; bottom: 12px; max-height: 56vh; width: min(var(--deck-w), 74vw); }
-    /* The docked deck's drop site grows upward from the deck's foot, so it stays
-       inside the window instead of running off the bottom. */
-    #deck::after { top: auto; bottom: 0; height: 50vh; }
+    /* The panel spans the window column like desktop (layoutDeck sets its top and
+       height), so the docked decks can scroll all the way up to the top; only its
+       width is narrower, clear of the stacked toolbar. */
+    #deck { width: min(var(--deck-w), 74vw); }
   }
 </style>
 </head>
@@ -2714,7 +2726,16 @@
     pinchPrev = null;
 
     if (pressTimer) cancelNodePress();
-    if (cardDrag) { finishCardDrag(); return; }
+    if (cardDrag) {
+      finishCardDrag();
+      // The card drag owned the pointer: restore the graph cursor it left stale and
+      // drop the capture, so the graph is not left in a pan/drag state.
+      panning = null;
+      canvas.classList.remove("dragging");
+      canvas.style.cursor = (e && e.clientX != null && nodeAt(e.clientX, e.clientY)) ? "pointer" : "grab";
+      if (e && e.pointerId != null && canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      return;
+    }
 
     if (dragNode) {
       var node = dragNode;
@@ -5521,7 +5542,7 @@
       var l = allLinks[i];
       if (l.kind !== "ref" || l.source !== node) continue;
       var t = l.target;
-      if (!t || t === node || (t.kind !== "concept" && t.kind !== "index")) continue;
+      if (!t || t === node || t.kind !== "concept") continue;
       if (seen[t.path]) continue;
       seen[t.path] = 1;
       out.push(t.path);
@@ -5591,8 +5612,11 @@
     return kind || (tag ? "#" + tag : "");
   }
 
+  // Only a concept can be carded into a deck; a directory, index file, plaintext file,
+  // attachment or tag is not a concept.
+  function cardable(n) { return !!n && n.kind === "concept"; }
   function addCard(node, atTop) {
-    if (!node || node.kind === "tag") return;
+    if (!cardable(node)) return;
     if (deckHas(node.path)) { flashDeckCard(node.path); return; }
     var entry = { path: node.path, sub: null, open: false };
     if (atTop) deck.unshift(entry); else deck.push(entry);
@@ -5600,6 +5624,7 @@
     flashDeckCard(node.path);
   }
   function addGuideAsSubDeck(node, atTop) {
+    if (!cardable(node)) return;
     if (deckHas(node.path)) { flashDeckCard(node.path); return; }
     var entry = { path: node.path, sub: guidePagesOf(node), open: true };
     if (atTop) deck.unshift(entry); else deck.push(entry);
@@ -5613,7 +5638,7 @@
   }
   // Add the preview's page to a given deck (a new one when index is negative).
   function addPageToDeck(node, index) {
-    if (!node) return;
+    if (!cardable(node)) return;
     if (index < 0) { if (decks.length >= MAX_DECKS) return; createDeck(); }
     else useDeck(index);
     addToDeckFromPreview(node);
@@ -5626,7 +5651,7 @@
     else addPageToDeck(node, index);
   }
   function addToDeckFromPreview(node) {
-    if (!node) return;
+    if (!cardable(node)) return;
     if (isMultiPageGuide(node)) {
       if (deck.length) addGuideAsSubDeck(node, false); else openGuideInDeck(node);
     } else addCard(node, false);
@@ -5840,6 +5865,34 @@
       }
     });
   }
+  // ---- touch over the deck acts like the mouse: a press-drag moves a pointer over the
+  // cards, parting the stack under it and revealing that card's actions, and the release
+  // acts on the card under the finger — open its page, remove it on its ×, or toggle a
+  // sub-deck on its chevron. Drag off the deck and nothing is selected. ----
+  var deckTouch = null, deckTouchGuard = false, deckTouchSelf = false;
+  // The card under a window point and the action a release there means.
+  function deckHitAt(x, y) {
+    if (!deckEl || !document.elementFromPoint) return null;
+    var el = document.elementFromPoint(x, y);
+    if (!el || !deckEl.contains(el)) return null;
+    var card = el.closest ? el.closest(".deck-card") : null;
+    if (!card) return null;
+    var x2 = el.closest(".dc-x"), chev = el.closest(".dc-chev");
+    var top = card.closest(".deck-stack > .deck-card");
+    return { card: card, top: top, x: x2, chev: chev, act: x2 ? "remove" : (chev ? "toggle" : "open") };
+  }
+  // Part the stack around the hovered card and reveal its actions; clear on no hit.
+  function deckSetHighlight(hit) {
+    var prev = deckEl ? deckEl.querySelectorAll(".deck-card.hovered") : [];
+    for (var i = 0; i < prev.length; i++) prev[i].classList.remove("hovered");
+    var top = hit && hit.top;
+    if (top && top.parentNode && top.parentNode.classList.contains("deck-stack")) setDeckHover(top.parentNode, top);
+    else setDeckHover(null, null);
+    if (hit && hit.card && hit.card !== top) hit.card.classList.add("hovered");
+    var armed = deckEl ? deckEl.querySelectorAll(".dc-x.armed") : [];
+    for (var j = 0; j < armed.length; j++) armed[j].classList.remove("armed");
+    if (hit && hit.x) hit.x.classList.add("armed");
+  }
   // Generate every card's screenshot when the deck is (re)built.
   function renderDeckShots() {
     var cards = deckEl.querySelectorAll(".deck-card");
@@ -5938,15 +5991,14 @@
 
   function syncDeckButton() {
     if (!pvDeckBtn) return;
-    var node = pvCurrent;
-    var usable = !!node && node.kind !== "dir" && node.kind !== "tag";
+    var usable = cardable(pvCurrent);
     pvDeckBtn.hidden = !usable;
     if (usable) pvDeckBtn.textContent = "Add to deck \u25be";
   }
 
   // ---- press-hold a node to start a card drag ----
   function startNodePress(n, x, y) {
-    if (!n || n.kind === "tag") return;
+    if (!cardable(n)) return;
     cancelNodePress();
     pressNode = n; pressStart = { x: x, y: y };
     pressTimer = setTimeout(function () {
@@ -5966,7 +6018,7 @@
   }
 
   function beginCardDrag(node, x, y) {
-    if (!node || cardDrag) return;
+    if (!cardable(node) || cardDrag) return;
     dragNode = null;                        // the node itself is not being moved
     hover = null; hideTip();                // drop the node tooltip for the card
     // The ghost is a real card, so it matches a docked card exactly.
@@ -5981,6 +6033,8 @@
     // Mark the drop site for the whole drag, so the drop effect is always visible.
     deckEl.classList.add("dropzone");
     document.body.classList.add("card-dragging");
+    canvas.style.cursor = "";                 // drop the stale graph cursor; the drag CSS owns it now
+    layoutDeck();                           // the panel is visible now, so its column is measurable
     renderCardShot(card);                   // give the ghost its page bitmap too
     moveCardDrag(x, y);
   }
@@ -5998,10 +6052,10 @@
   // null to drop it back. DECK_TOL is how far off a stack still counts as on it.
   var DECK_TOL = 4;
   // The drop site (aura) spans the column from near the window top to near its bottom
-  // on desktop; on small screens it grows upward from the deck's foot over half the
-  // window. `overDropSite` mirrors those bounds so the aura's dim/light state matches
-  // where a card can land.
-  var AURA_TOP = 8, AURA_BOTTOM = 12, AURA_H_MOBILE = 0.5, AURA_SIDE = 8;
+  // on every screen, so there is room to drop above the decks and they can be
+  // drag-scrolled from the top. `overDropSite` mirrors those bounds so the aura's
+  // dim/light state matches where a card can land.
+  var AURA_TOP = 8, AURA_BOTTOM = 12, AURA_SIDE = 8;
   // Drag-scrolling of the deck panel: how close to a panel edge the pointer must be
   // before the docked decks scroll, and how many pixels they move per frame.
   var DECK_SCROLL_EDGE = 48, DECK_SCROLL_STEP = 7;
@@ -6010,8 +6064,6 @@
     if (!deckEl) return false;
     var r = deckEl.getBoundingClientRect();
     if (x < r.left - AURA_SIDE || x > r.right + AURA_SIDE) return false;
-    var mobile = !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
-    if (mobile) return y >= r.bottom - window.innerHeight * AURA_H_MOBILE && y <= r.bottom;
     return y >= AURA_TOP && y <= window.innerHeight - AURA_BOTTOM;
   }
   function cardDropTarget(x, y, h) {
@@ -6057,24 +6109,29 @@
     if (!deckEl) return;
     deckStackEls().forEach(layoutStack);
     var mobile = !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+    // The panel is anchored to the bottom of the drop site, so the docked decks sit at the
+    // bottom and a new deck flows in from the bottom as the column grows upward. Its
+    // content is inset so that, when the decks overflow and scroll, the top one still
+    // clears the top controls — the Filters tab on desktop, the stacked toolbar on small
+    // screens.
+    var firstTop;
     if (mobile) {
-      // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
-      deckEl.style.top = "";
-      deckEl.style.maxHeight = "";
-      deckBodyEl.style.paddingTop = "";
+      var bar = document.querySelector(".bar");
+      firstTop = (bar ? bar.getBoundingClientRect().bottom : 0) + DECK_TOP_GAP;
     } else {
       var info = deckTabInfo();
-      // The panel spans from near the top of the window down near its bottom, so the
-      // docked decks can scroll all the way up to the top. Its content is inset so the
-      // first deck still starts below the filter tab, which is where it populates from,
-      // and the drop site (aura) covers the same full span.
-      var firstTop = info ? info.bottom + DECK_TOP_GAP : 64;
-      deckEl.style.top = AURA_TOP + "px";
-      deckEl.style.maxHeight = "calc(100vh - " + (AURA_TOP + AURA_BOTTOM) + "px)";
-      deckBodyEl.style.paddingTop = Math.round(firstTop) + "px";
-      deckEl.style.setProperty("--deck-aura-top", "0px");
-      deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - AURA_TOP - AURA_BOTTOM)) + "px");
+      firstTop = info ? info.bottom + DECK_TOP_GAP : 64;
     }
+    deckEl.style.top = "auto";
+    deckEl.style.bottom = AURA_BOTTOM + "px";
+    deckEl.style.maxHeight = "calc(100vh - " + (AURA_TOP + AURA_BOTTOM) + "px)";
+    deckBodyEl.style.paddingTop = Math.round(firstTop) + "px";
+    // The drop site (aura) covers the column from near the window top to near its
+    // bottom on every screen. Its offset is measured from the panel's own top, so the
+    // panel always anchors the aura to the window top.
+    var auraTop = AURA_TOP - deckEl.getBoundingClientRect().top;
+    deckEl.style.setProperty("--deck-aura-top", Math.round(auraTop) + "px");
+    deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - AURA_TOP - AURA_BOTTOM)) + "px");
   }
   // While the dragged card is over a stack the cards shift down one step to open the
   // slot it would land in, so the shuffle still reads even though the card keeps
@@ -6192,17 +6249,11 @@
     var shown = !document.body.classList.contains("hide-side");
     return { right: shown ? sidebarW + w + 10 : null, bottom: tab.offsetTop + tab.offsetHeight };
   }
-  // Dock clear of the filter tab. When there are cards, layoutDeck owns top/height.
+  // Dock clear of the filter tab. layoutDeck owns the panel's top, height and inset.
   function positionDeck() {
     if (!deckEl) return;
     var info = deckTabInfo();
     deckEl.style.right = info && info.right != null ? info.right + "px" : "";
-    if (!info) {
-      // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
-      deckEl.style.top = "";
-      deckEl.style.maxHeight = "";
-      deckBodyEl.style.paddingTop = "";
-    }
   }
 
   // ---- reading the deck as a continuous stream ----
@@ -6394,12 +6445,62 @@
     }
     deckBodyEl.addEventListener("pointerdown", function (e) {
       if (e.button && e.button !== 0) return;
-      if (e.target.closest && e.target.closest(".deck-card, .deck-stack")) return;
+      deckTouchGuard = false;
+      var el = e.target;
+      var nearCard = el.closest ? el.closest(".deck-card") : null;
+      var topCard = el.closest ? el.closest(".deck-stack > .deck-card") : null;
+      var onButton = el.closest && (el.closest(".dc-x") || el.closest(".dc-chev"));
+      if (el.closest && el.closest(".deck-card, .deck-stack")) {
+        // Touch: a press on a top-level card's own face starts a hover-style drag (the
+        // release acts on the card under the finger — see endDeckTouch). The card's
+        // buttons keep their native tap, and the sub-deck list keeps its own scroll.
+        if (e.pointerType === "touch" && nearCard === topCard && !onButton) {
+          e.preventDefault();
+          deckTouchGuard = true;
+          deckTouch = { id: e.pointerId };
+          try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+          deckSetHighlight(deckHitAt(e.clientX, e.clientY));
+        } else if (topCard && e.pointerType !== "touch" && !cardDrag) {
+          // A mouse press parts the stack there too; hover already does as it moves.
+          setDeckHover(topCard.parentNode, topCard);
+        }
+        return;
+      }
       deckScroll = { id: e.pointerId, y: e.clientY, top: deckBodyEl.scrollTop };
       try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
       deckEl.classList.add("scrolling");
       e.preventDefault();
     });
+    deckBodyEl.addEventListener("pointermove", function (e) {
+      if (!deckTouch || e.pointerId !== deckTouch.id) return;
+      deckSetHighlight(deckHitAt(e.clientX, e.clientY));
+    });
+    function endDeckTouch(e) {
+      if (!deckTouch || (e && e.pointerId != null && e.pointerId !== deckTouch.id)) return;
+      var id = deckTouch.id;
+      deckTouch = null;
+      if (deckBodyEl.hasPointerCapture && deckBodyEl.hasPointerCapture(id)) {
+        try { deckBodyEl.releasePointerCapture(id); } catch (err) {}
+      }
+      var canceled = !!e && e.type === "pointercancel";
+      var hit = canceled ? null : deckHitAt(e.clientX, e.clientY);
+      deckSetHighlight(null);
+      if (!hit) return;
+      var target = hit.act === "remove" ? hit.x : (hit.act === "toggle" ? hit.chev : hit.card);
+      if (!target) return;
+      // Reuse the card's own click handlers for the action (open, remove, toggle).
+      deckTouchSelf = true;
+      try { target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); }
+      finally { deckTouchSelf = false; }
+    }
+    deckBodyEl.addEventListener("pointerup", endDeckTouch);
+    deckBodyEl.addEventListener("pointercancel", endDeckTouch);
+    // Swallow the browser's own click for a press we handled, but let the click we
+    // dispatch ourselves through.
+    deckEl.addEventListener("click", function (e) {
+      if (deckTouchSelf) { deckTouchSelf = false; return; }
+      if (deckTouchGuard) { deckTouchGuard = false; e.stopPropagation(); e.preventDefault(); }
+    }, true);
     deckBodyEl.addEventListener("pointermove", function (e) {
       if (!deckScroll || e.pointerId !== deckScroll.id) return;
       deckBodyEl.scrollTop = deckScroll.top - (e.clientY - deckScroll.y);
