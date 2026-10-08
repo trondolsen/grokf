@@ -37,7 +37,8 @@
        this with touch-action:none for its own zoom. */
     touch-action: pan-x pan-y;
   }
-  #c { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none; }
+  #c { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none;
+       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #c.dragging { cursor: grabbing; }
 
   .bar {
@@ -345,8 +346,15 @@
   }
   #pvHead button { padding: 4px 9px; }
   #pvHead #pvBack, #pvHead #pvFwd { padding: 3px 10px; font-size: 15px; line-height: 1; }
-  #pvHead #pvBack, #pvHead #pvFwd, #pvHead #pvClose { flex: none; }
-  #pvHead #pvClose { margin-left: auto; }
+  #pvHead #pvBack, #pvHead #pvFwd, #pvHead #pvClose, #pvHead #pvDeck { flex: none; }
+  /* The add-to-deck control sits just left of Close, the pair pushed to the right edge. */
+  #pvHead #pvDeck {
+    margin-left: auto; padding: 3px 8px; font-size: 12px;
+    background: transparent; border-color: transparent; color: var(--muted);
+  }
+  #pvHead #pvDeck:hover {
+    background: var(--panel-2); border-color: var(--line); color: var(--text);
+  }
   #pvHead button:disabled { opacity: .4; cursor: default; }
   #pvBody { padding: 18px 22px 30px; overflow: auto; line-height: 1.55; }
   .md-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
@@ -473,6 +481,220 @@
       position: absolute; left: 100%; bottom: 84px; transform: none;
       border-left: 0; border-radius: 0 10px 10px 0;
     }
+  }
+
+  /* Deck of cards: cards float on the right edge without a panel, so the deck
+     itself is invisible and only the card shadows and a faint glow mark its
+     fill. Cards are small, paper-like slips that overlap to a header strip and
+     repel each other on hover. Built by press-holding a node (or "Add to deck"
+     in the preview). */
+  :root { --deck-w: 100px; --dc-w: 74px; --dc-h: 105px; --dc-step: 28px; }
+  #deck {
+    position: fixed; top: 64px; right: 12px; width: var(--deck-w);
+    z-index: 20; display: none; flex-direction: column;
+    max-height: calc(100vh - 76px); transition: right .18s ease;
+  }
+  /* The drop site is a separate, fixed-size rectangle, not tied to the deck's own
+     size: it sits a little below the deck's top, marks where a dragged card lands,
+     and is shown for the whole drag. */
+  #deck::after {
+    content: ""; position: absolute; left: -8px; top: 16px; width: calc(var(--deck-w) + 16px);
+    height: var(--deck-aura-h, 50vh); z-index: -1; pointer-events: none; display: none;
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    filter: blur(4px);
+  }
+  #deck.dropzone::after { display: block; }
+  /* Over the column the aura brightens, so the drop site reads as active. */
+  #deck.receiving::after { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+  /* Clear of the stack a release starts a new deck, not a new slot: the site reads as a
+     fresh one, dashed, rather than the deck's own column. */
+  #deck.newdeck::after {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  body.deck-open #deck, body.card-dragging #deck { display: flex; }
+  /* The deck's tabs: tiny panel-tab chips. The kind chip sits on top of the top page
+     and the tag chip hangs under the bottom page; each is a child of its card, so it
+     rides that card. A long kind is abbreviated, with the full kind in the <abbr>
+     title. */
+  #deckLabel, #deckTag, .deck-stack-chip, .deck-stack-tag {
+    position: absolute; left: 4px; z-index: 3;
+    padding: 0 4px; line-height: 7px; max-width: calc(var(--dc-w) - 8px);
+    font-size: 4px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border: 1px solid var(--line);
+    background: var(--panel); color: var(--muted);
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  #deckLabel, .deck-stack-chip { bottom: 100%; border-bottom: 0; border-radius: 3px 3px 0 0; }
+  /* The tag chip hangs under the bottom page, on the right. */
+  #deckTag, .deck-stack-tag { top: 100%; right: 4px; left: auto; border-top: 0; border-radius: 0 0 3px 3px; }
+  /* The title chip is a plain label, not a control. */
+  #deckLabel { cursor: default; }
+  #deckLabel[hidden], #deckTag[hidden] { display: none; }
+  /* Highlighted while the page it belongs to is pointed at. */
+  .deck-card:hover #deckLabel, .deck-card:hover #deckTag,
+  .deck-card:hover .deck-stack-chip, .deck-card:hover .deck-stack-tag,
+  #deckLabel:hover, #deckTag:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #deckLabel abbr, #deckTag abbr { text-decoration: none; cursor: help; }
+  /* The deck menu, opened from the preview's add button and from the deck switcher. */
+  .deck-menu {
+    position: fixed; z-index: 62; min-width: 170px; max-width: min(280px, calc(100vw - 16px));
+    max-height: 60vh; overflow: auto; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  .deck-menu[hidden] { display: none; }
+  .deck-menu button {
+    display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+    padding: 6px 8px; border: 0; border-radius: 7px; background: transparent;
+    color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .deck-menu button:hover { background: var(--panel-2); }
+  .deck-menu button > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .deck-menu button .cur { color: var(--accent); }
+  /* Decks that already hold the page being added are highlighted; the others are dimmed. */
+  .deck-menu button.in > span:first-child { color: #fff; font-weight: 600; }
+  .deck-menu button.out { opacity: .42; }
+  .deck-menu button .n { margin-left: auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  /* The add-to-deck menu is compact: smaller names and counts than the switcher. */
+  .deck-menu.add button:not(.new) { font-size: 11px; }
+  .deck-menu.add button .n { font-size: 10px; }
+  /* "New deck" is an action, shown as a plus symbol rather than text: a full-width,
+     accent-tinted button at the foot of the menu, with no separator above it. */
+  .deck-menu button.new {
+    align-items: center; justify-content: center; margin-top: 4px; padding: 3px 8px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent);
+  }
+  .deck-menu button.new:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+  .deck-menu button.new:disabled { opacity: .4; cursor: default; background: transparent; }
+  .deck-menu button.new .plus { font-size: 17px; line-height: 1; font-weight: 400; }
+  /* Cards sit where they were dropped, aligned to the deck's column. Every deck is its
+     own stack; the stacks are set apart by a gap. The active deck is live while the
+     others are dimmed and activate on click. */
+  #deckBody { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 8px 0; scrollbar-width: none; }
+  #deckBody::-webkit-scrollbar { display: none; }
+  .deck-stack { position: relative; }
+  .deck-stack + .deck-stack { margin-top: 28px; }
+  .deck-stack:not(.active) { cursor: pointer; }
+
+  .deck-card {
+    position: relative; display: flex; flex-direction: column; width: var(--dc-w); height: var(--dc-h);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+    overflow: visible; cursor: pointer; will-change: transform;
+    box-shadow: 0 6px 14px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.06) inset;
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  }
+  #deckBody > .deck-card:not(#deckGhost), .deck-stack > .deck-card:not(#deckGhost) { position: absolute; left: 13px; }
+  .deck-card.hovered {
+    border-color: var(--accent);
+    box-shadow: 0 12px 24px rgba(0,0,0,.6), inset 0 0 12px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  .deck-card.flash { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+  /* The card for the page currently open in the preview (deck reading tracks it). */
+  .deck-card.current { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent), 0 6px 14px rgba(0,0,0,.45); }
+  .dc-mini { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--panel); border-radius: inherit; }
+  .dc-mini canvas { display: block; width: 100%; height: 100%; }
+  .dc-fallback { color: var(--muted); font-size: 11px; padding: 8px; }
+  /* Card actions float over the page image and appear on card hover. They are bare
+     glyphs (no chrome): the remove button just reddens its glyph on hover, with no
+     highlight, while the chevron takes a round accent highlight. */
+  .dc-x, .dc-chev {
+    position: absolute; top: 4px; z-index: 2;
+    width: 15px; height: 15px; padding: 0; border: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font: inherit; font-size: 11px; line-height: 1;
+    background: transparent; color: #fff; cursor: pointer;
+    opacity: 0; transform: scale(.7);
+    text-shadow: 0 1px 3px rgba(0,0,0,.85);
+    transition: opacity .12s ease, transform .12s ease, background .12s ease;
+  }
+  .dc-x { right: 4px; }
+  .dc-chev { left: 4px; font-size: 9px; }
+  .deck-card:hover .dc-x, .deck-card:hover .dc-chev, .deck-card.open .dc-chev { opacity: 1; transform: scale(1); }
+  .dc-x:hover { color: #e0575b; }
+  .dc-chev:hover { background: var(--accent); text-shadow: none; }
+  .dc-x:focus-visible, .dc-chev:focus-visible {
+    opacity: 1; transform: scale(1);
+    outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px;
+  }
+  .deck-card.has-sub.open { height: auto; max-height: 260px; }
+  .deck-card.has-sub.open .dc-mini { flex: 0 0 auto; height: 44px; }
+  .dc-sub { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px; }
+  .deck-card.has-sub.open .dc-sub { display: block; }
+  .dc-sub .deck-card { width: auto; height: 64px; box-shadow: none; }
+  .dc-sub .deck-card + .deck-card { margin-top: 6px; }
+
+  /* The dragged card is a real card, so it looks identical to a docked one. It is a
+     child of the deck (so its z-index interleaves with the pages) but is position:
+     fixed, so it follows the pointer and floats above the stack until it is over the
+     column, where the pages below its slot cover it. */
+  #deckGhost {
+    position: fixed; z-index: 60; pointer-events: none; transition: none;
+    transform: translate(-50%, -50%); opacity: .96;
+    box-shadow: 0 14px 34px rgba(0,0,0,.65);
+  }
+
+  /* Reading the deck as a continuous stream, fullscreen within the browser window: only
+     the page and the deck remain, the top bar is shared across the pages, and the pages
+     follow each other as sections. */
+  body.deck-fullscreen .bar,
+  body.deck-fullscreen #sidebar,
+  body.deck-fullscreen .panel-handle,
+  body.deck-fullscreen #legend,
+  body.deck-fullscreen #spinner,
+  body.deck-fullscreen #c,
+  body.deck-fullscreen #tip { display: none; }
+  /* While reading is pulled down, the graph shows through behind it. */
+  body.deck-fullscreen.reading-pull #c { display: block; }
+  /* The shared top bar keeps only the current page; reading is left from the top
+     handle (tap or pull). */
+  body.deck-fullscreen #pvBack,
+  body.deck-fullscreen #pvFwd,
+  body.deck-fullscreen #pvDeck,
+  body.deck-fullscreen #pvClose { display: none; }
+  body.deck-fullscreen #deck { z-index: 55; }
+  /* The streamed pages: a centred reading column with no visible scrollbar. */
+  #pvBody.ds-stream { padding: 0; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
+  #pvBody.ds-stream::-webkit-scrollbar { display: none; }
+  .ds-page { padding: 18px 0 34px; }
+  .ds-page + .ds-page { border-top: 1px solid var(--line); }
+  .ds-inner { max-width: 720px; margin: 0 auto; padding: 0 28px; }
+  .ds-page .dc-title { font-size: 1.5em; font-weight: 700; line-height: 1.2; margin: 0 0 .5em; }
+  /* The reading chrome lines up with the column; the extra top padding clears the close
+     grabber that floats above the top bar. */
+  body.deck-fullscreen #pvHead { max-width: 720px; margin: 0 auto; padding: 24px 28px 12px; touch-action: none; }
+  /* Reading's close grabber: a small pill at the top edge. Tap it to leave reading, or
+     drag it (or the top bar) down. It stays off the text, so a tap never becomes a
+     text selection. */
+  #dsHandle { display: none; }
+  body.deck-fullscreen #dsHandle {
+    display: flex; position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
+    z-index: 56; align-items: center; justify-content: center;
+    width: 52px; height: 22px; padding: 0; background: transparent; border: 0;
+    cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none;
+  }
+  body.deck-fullscreen #dsHandle span {
+    width: 38px; height: 4px; border-radius: 999px; background: var(--muted); opacity: .65;
+    transition: opacity .12s ease, background .12s ease;
+  }
+  body.deck-fullscreen #dsHandle:hover span,
+  body.deck-fullscreen #dsHandle:active span { opacity: 1; background: var(--accent); }
+  /* The page fills the window on any screen; the deck floats over it. */
+  body.deck-fullscreen #preview { align-items: stretch; justify-content: flex-start; }
+  body.deck-fullscreen #pvCard {
+    width: 100vw; height: 100vh;
+    border: 0; border-radius: 0;
+  }
+
+  @media (max-width: 760px) {
+    /* Bottom-right on small screens, clear of the stacked toolbar. */
+    #deck { top: auto; bottom: 12px; max-height: 56vh; width: min(var(--deck-w), 74vw); }
+    /* The docked deck's drop site grows upward from the deck's foot, so it stays
+       inside the window instead of running off the bottom. */
+    #deck::after { top: auto; bottom: 0; height: 50vh; }
   }
 </style>
 </head>
@@ -636,6 +858,7 @@
       <li>Choose a bundle with <code>?bundle=&lt;name|path&gt;</code> (or <code>?start=</code>).</li>
       <li>Prefetch fewer levels with <code>?depth=N</code> (default: all). A node with a dashed ring (page, file or attachment) has unloaded content — click it to load, then click again to preview.</li>
       <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
+      <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
       <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
     </ul>
     <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
@@ -668,6 +891,7 @@
       <li>Pick a bundle with a URL parameter, for example <code>?bundle=acme_retail</code> (a name, a folder path, or a start <code>.md</code> file).</li>
       <li>Limit prefetch depth with <code>?depth=N</code> (default: all levels); click a dotted node to load its next level, click again to preview.</li>
       <li>Local file: click Open folder and choose a bundle directory, or drag it onto this window.</li>
+      <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
     </ul>
     <div class="row">
       <button id="pick">Open folder…</button>
@@ -685,11 +909,20 @@
       <button id="pvFwd" type="button" title="Forward" disabled>›</button>
       <span class="t" id="pvTitle"></span>
       <span class="p" id="pvPath"></span>
+      <button id="pvDeck" type="button" title="Add this page to the deck">Add to deck</button>
       <button id="pvClose" type="button">Close</button>
     </div>
     <div id="pvBody"></div>
+    <button id="dsHandle" type="button" aria-label="Close reading" title="Close reading"><span></span></button>
   </div>
 </div>
+
+<div id="deck" aria-label="Deck of cards">
+  <div id="deckLabel" hidden></div>
+  <div id="deckTag" hidden></div>
+  <div id="deckBody"></div>
+</div>
+<div id="deckMenu" class="deck-menu" hidden></div>
 
 <script>
 "use strict";
@@ -722,6 +955,9 @@
   var pvTitle = document.getElementById("pvTitle");
   var pvPath = document.getElementById("pvPath");
   var pvBody = document.getElementById("pvBody");
+  var dsHandle = document.getElementById("dsHandle");
+  var pvCardEl = document.getElementById("pvCard");
+  var pvHeadEl = document.getElementById("pvHead");
   var pvBackBtn = document.getElementById("pvBack");
   var pvFwdBtn = document.getElementById("pvFwd");
   var graphPathEl = document.getElementById("graphPath");
@@ -2382,6 +2618,7 @@
     if (activePointers.size >= 2) {
       // A second finger starts a pinch: cancel any pan/drag and zoom from here.
       dragNode = null; panning = null; moved = true;
+      cancelNodePress(); cancelCardDrag();
       canvas.classList.remove("dragging");
       hover = null; hideTip();
       pinchPrev = pinchState();
@@ -2392,6 +2629,7 @@
       // Press only arms a potential drag; alpha is raised once a drag actually
       // moves the node (see pointermove), so a plain click cannot stir the graph.
       dragNode = n; moved = false;
+      startNodePress(n, e.clientX, e.clientY);
     } else {
       panning = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
       canvas.classList.add("dragging");
@@ -2417,6 +2655,8 @@
       return;
     }
 
+    if (pressTimer) pressMoved(e.clientX, e.clientY);
+    if (cardDrag) { moveCardDrag(e.clientX, e.clientY); return; }
     if (dragNode) {
       moved = true;
       autoFit = false;
@@ -2443,6 +2683,9 @@
     // Still pinching with two or more fingers left.
     if (activePointers.size >= 2) { pinchPrev = pinchState(); return; }
     pinchPrev = null;
+
+    if (pressTimer) cancelNodePress();
+    if (cardDrag) { finishCardDrag(); return; }
 
     if (dragNode) {
       var node = dragNode;
@@ -2488,6 +2731,9 @@
   }
   canvas.addEventListener("pointerup", endPointer);
   canvas.addEventListener("pointercancel", endPointer);
+  // A long press starts a card grab; suppress the browser's context menu so it does
+  // not interrupt the drag (and it is never useful on the graph canvas).
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
   canvas.addEventListener("dblclick", function (e) {
     if (lastPointerType === "touch") return; // handled on tap for touch devices
@@ -2569,6 +2815,8 @@
     previewRenderId++;
     pvStack = []; pvIndex = -1; pvPushed = false; pvSuppress = false;
     previewPath = null;
+    pvCurrent = null;
+    decks = [{ name: "Deck 1", items: [] }]; useDeck(0); closeDeckMenu(); cancelCardDrag(); renderDeck();
     pvBody.textContent = "";
     hidePreview();
     try { history.replaceState(null, "", location.href); } catch (e) {}
@@ -2645,7 +2893,7 @@
     async function worker() {
       while (next < images.length && renderId === previewRenderId && generation === bundleGeneration) {
         var image = images[next++];
-        var src = await resolveEmbedSrc(image.getAttribute("data-embed"), from, generation);
+        var src = await resolveEmbedSrc(image.getAttribute("data-embed"), image.getAttribute("data-from") || from, generation);
         if (renderId !== previewRenderId || generation !== bundleGeneration) return;
         if (src) image.src = src;
         else unavailable(image);
@@ -3472,10 +3720,16 @@
   var pvStack = [], pvIndex = -1, pvSuppress = false, pvPushed = false;
 
   function renderPreviewEntry(node) {
+    // In reading mode a decked page stays in the stream; anything else leaves it.
+    if (deckReading()) {
+      if (node && deckHas(node.path)) { renderDeckStream(node); return; }
+      exitDeckReading();
+    }
     previewRenderId++;
     pvHideTagPop();
     pvBody.classList.remove("pv-imgmode");
     previewPath = node.path;
+    pvCurrent = node;
     pvTitle.textContent = displayLabel(node);
     pvPath.textContent = node.path || "";
     if (node.kind === "attachment") {
@@ -3501,6 +3755,8 @@
     // panel is visible, because setting scrollTop while display:none is ignored.
     pvBody.scrollTop = 0;
     updatePvNav();
+    syncDeckButton();
+    markDeckCurrent();
   }
 
   function renderAttachmentPreview(node) {
@@ -3614,8 +3870,10 @@
   // in-app stack and the browser history. This lets the browser's own
   // back/forward controls — including mouse side buttons, which browsers
   // reserve for history navigation — drive the preview.
-  function openPreview(node) {
+  function openPreview(node, fromDeck) {
     if (!node || node.kind === "dir" || node.kind === "tag") return;
+    // A deck card, or a link to a decked page while reading, keeps the deck stream.
+    if (fromDeck || (deckReading() && deckHas(node.path))) { enterDeckReading(node); return; }
     var showing = preview.classList.contains("show");
     if (showing && pvIndex >= 0 && pvStack[pvIndex] === node) { renderPreviewEntry(node); return; }
     if (pvIndex < pvStack.length - 1) pvStack = pvStack.slice(0, pvIndex + 1);
@@ -3646,7 +3904,7 @@
     if (pvFwdBtn) pvFwdBtn.disabled = pvIndex >= pvStack.length - 1;
   }
 
-  function hidePreview() { previewRenderId++; preview.classList.remove("show"); pvHideTagPop(); }
+  function hidePreview() { previewRenderId++; preview.classList.remove("show"); pvHideTagPop(); closeDeckMenu(); readingPullReset(); exitDeckReading(); }
   function closePreview() {
     if (!preview.classList.contains("show")) return;
     hidePreview();
@@ -4129,6 +4387,7 @@
   });
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
+    if (deckMenuOpen()) { closeDeckMenu(); return; }
     if (preview.classList.contains("show")) { closePreview(); return; }
     popovers.forEach(function (p) { if (p.isOpen()) p.close(); });
   });
@@ -4136,7 +4395,9 @@
   document.getElementById("pvClose").addEventListener("click", closePreview);
   pvBackBtn.addEventListener("click", pvBack);
   pvFwdBtn.addEventListener("click", pvForward);
-  preview.addEventListener("mousedown", function (e) { if (e.target === preview) closePreview(); });
+  // Clicking outside the page leaves the normal (non-reading) preview. In reading there
+  // is no outside-click close: the top handle is the close control.
+  preview.addEventListener("mousedown", function (e) { if (!deckReading() && e.target === preview) closePreview(); });
   pvBody.addEventListener("click", handlePreviewClick);
   document.addEventListener("keydown", function (e) {
     if (!preview.classList.contains("show") || !e.altKey) return;
@@ -4254,6 +4515,8 @@
     else document.body.classList.toggle("hide-side", !open);
     var h = document.getElementById("sideHandle");
     if (h) h.setAttribute("aria-expanded", open ? "true" : "false");
+    positionDeck();
+    layoutDeck();
   }
   function setLegendOpen(open) {
     document.body.classList.toggle("m-open-legend", open);
@@ -4792,6 +5055,8 @@
     view.y += (H - oldH) / 2;
     recomputeRadii();
     alpha = Math.max(alpha, 0.6);
+    positionDeck();
+    layoutDeck();
   });
 
   // ---------------------------------------------------------------- mascot
@@ -5016,10 +5281,990 @@
     }
   }
 
+  // ---------------------------------------------------------------- deck
+  // A deck is an ordered list of cards on the right edge. Each entry stores a
+  // concept path, so it survives a graph rebuild, plus the page paths of a
+  // guide added as a sub-deck. Cards show a lazy, scaled mini-view of their
+  // page. Build a deck by press-holding a graph node and dropping the card on
+  // the right edge, or with "Add to deck" in the preview.
+  var PRESS_HOLD_MS = 400, PRESS_MOVE_TOL = 6, HOVER_REPEL = 6;
+  // Several decks can exist; the panel shows the active one. `deck` always aliases the
+  // active deck's items, so the card code below works on it directly. At most MAX_DECKS
+  // decks can be created.
+  var MAX_DECKS = 8;
+  var decks = [{ name: "Deck 1", items: [] }]; // [{ name, items: [{ path, sub, open }] }]
+  var activeDeck = 0;
+  var deck = decks[0].items;
+  var cardDrag = null;                         // { node, ghost, target } while dragging a card
+  var pressTimer = null, pressNode = null, pressStart = null;
+  var pvCurrent = null;                        // node shown in the preview right now
+  var deckEl = document.getElementById("deck");
+  var deckBodyEl = document.getElementById("deckBody");
+  var deckLabelEl = document.getElementById("deckLabel");
+  var deckTagEl = document.getElementById("deckTag");
+  var deckMenuEl = document.getElementById("deckMenu");
+  var pvDeckBtn = document.getElementById("pvDeck");
+
+  function useDeck(i) {
+    if (i < 0 || i >= decks.length) return;
+    activeDeck = i;
+    deck = decks[i].items;
+  }
+  function setDeckItems(items) { deck = decks[activeDeck].items = items; }
+  function createDeck() { decks.push({ name: "Deck " + (decks.length + 1), items: [] }); useDeck(decks.length - 1); }
+  // A deck holds no cards only when it is the last one left. Emptying any deck by
+  // removing its last card removes the deck; if it was the active one the next deck
+  // becomes active, and when no deck is left a single empty deck stands ready.
+  function pruneEmptyDecks() {
+    var kept = decks.filter(function (d) { return d.items.length > 0; });
+    if (kept.length === decks.length) { deck = decks[activeDeck].items; return; }
+    if (!kept.length) {
+      decks = [{ name: "Deck 1", items: [] }];
+      activeDeck = 0;
+    } else {
+      var active = decks[activeDeck];
+      var idx = kept.indexOf(active);
+      decks = kept;
+      activeDeck = idx >= 0 ? idx : Math.min(activeDeck, decks.length - 1);
+    }
+    deck = decks[activeDeck].items;
+  }
+
+  // The deck menu, opened from the preview's add button and from the deck switcher.
+  // Opened for a page (the add-to-deck menu) it stays open while the page is toggled
+  // in and out of decks, closing only when the pointer goes outside it; the deck
+  // switcher, opened without a page, closes as soon as a deck is picked.
+  var deckMenuAnchor = null;
+  var deckMenuNode = null;      // the page whose membership is shown (null: switcher)
+  var deckMenuOnPick = null;
+  function deckMenuOpen() { return !!(deckMenuEl && !deckMenuEl.hidden); }
+  function closeDeckMenu() {
+    if (deckMenuEl) { deckMenuEl.hidden = true; deckMenuEl.textContent = ""; }
+    deckMenuAnchor = null; deckMenuNode = null; deckMenuOnPick = null;
+  }
+  function positionDeckMenu() {
+    if (!deckMenuAnchor) return;
+    var r = deckMenuAnchor.getBoundingClientRect();
+    var mw = deckMenuEl.offsetWidth, mh = deckMenuEl.offsetHeight;
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    var top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    deckMenuEl.style.left = left + "px";
+    deckMenuEl.style.top = top + "px";
+  }
+  function renderDeckMenu() {
+    deckMenuEl.textContent = "";
+    decks.forEach(function (d, i) {
+      // The add-to-deck menu lists only decks that already hold pages: an empty deck
+      // has nothing to add to, so it is left out (the deck chip can still show one
+      // while it is being filled). The switcher lists every deck.
+      if (deckMenuNode && d.items.length === 0) return;
+      var b = document.createElement("button"); b.type = "button";
+      var nm = document.createElement("span"); nm.textContent = deckLabelFor(d.items, !!deckMenuNode) || d.name;
+      if (i === activeDeck) nm.className = "cur";
+      // In the add-to-deck menu the decks that already hold the page are highlighted
+      // and the rest are dimmed, so its current place is clear.
+      if (deckMenuNode) b.className = deckHasIn(d.items, deckMenuNode.path) ? "in" : "out";
+      var n = document.createElement("span"); n.className = "n"; n.textContent = String(d.items.length);
+      b.appendChild(nm); b.appendChild(n);
+      b.addEventListener("click", function () {
+        // Adding: toggle the page and refresh the marks without closing, so the page
+        // can be moved between decks in one go.
+        if (deckMenuNode) { togglePageInDeck(deckMenuNode, i); renderDeckMenu(); positionDeckMenu(); return; }
+        var pick = deckMenuOnPick; closeDeckMenu(); if (pick) pick(i);
+      });
+      deckMenuEl.appendChild(b);
+    });
+    var nb = document.createElement("button"); nb.type = "button"; nb.className = "new";
+    nb.title = "New deck"; nb.setAttribute("aria-label", "New deck");
+    // Creating a deck is capped, and needs room in the panel.
+    if (deckMenuNode && decks.length >= MAX_DECKS) {
+      nb.disabled = true;
+      nb.title = "Maximum of " + MAX_DECKS + " decks";
+      nb.setAttribute("aria-label", "Maximum of " + MAX_DECKS + " decks");
+    }
+    var plus = document.createElement("span"); plus.className = "plus"; plus.textContent = "+";
+    nb.appendChild(plus);
+    nb.addEventListener("click", function () {
+      if (deckMenuNode) { addPageToDeck(deckMenuNode, -1); renderDeckMenu(); positionDeckMenu(); return; }
+      var pick = deckMenuOnPick; closeDeckMenu(); if (pick) pick(-1);
+    });
+    deckMenuEl.appendChild(nb);
+  }
+  function openDeckMenu(anchor, node, onPick) {
+    if (!deckMenuEl || !anchor) return;
+    // Pressing the same trigger again closes it.
+    if (!deckMenuEl.hidden && deckMenuAnchor === anchor) { closeDeckMenu(); return; }
+    deckMenuAnchor = anchor;
+    deckMenuNode = node || null;
+    deckMenuOnPick = onPick || null;
+    deckMenuEl.classList.toggle("add", !!deckMenuNode);
+    renderDeckMenu();
+    deckMenuEl.hidden = false;
+    positionDeckMenu();
+  }
+  document.addEventListener("pointerdown", function (e) {
+    if (!deckMenuOpen()) return;
+    var t = e.target;
+    if (t && t.closest && (t.closest("#deckMenu") || t.closest("#pvDeck"))) return;
+    closeDeckMenu();
+  }, true);
+
+  // Space between the Filters tab and the deck, leaving room for its title above.
+  var DECK_TOP_GAP = 34;
+  // Space above the first card, so the title chip (which sits on top of the top page)
+  // has headroom above it and is not clipped when the card lifts on hover.
+  var DECK_PAD = 16;
+
+  function deckHasIn(items, path) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].path === path) return true;
+      if (items[i].sub && items[i].sub.indexOf(path) >= 0) return true;
+    }
+    return false;
+  }
+  function deckHas(path) { return deckHasIn(deck, path); }
+
+  // Resolve stored paths against the current graph (nodes are rebuilt on load).
+  function deckNodesByPath() {
+    var m = new Map();
+    for (var i = 0; i < allNodes.length; i++) {
+      if (!m.has(allNodes[i].path)) m.set(allNodes[i].path, allNodes[i]);
+    }
+    return m;
+  }
+
+  // A multi-page guide is a Guide-typed concept that links to at least two
+  // other concepts; its pages are those outgoing reference targets.
+  function guidePagesOf(node) {
+    var out = [], seen = Object.create(null);
+    for (var i = 0; i < allLinks.length; i++) {
+      var l = allLinks[i];
+      if (l.kind !== "ref" || l.source !== node) continue;
+      var t = l.target;
+      if (!t || t === node || (t.kind !== "concept" && t.kind !== "index")) continue;
+      if (seen[t.path]) continue;
+      seen[t.path] = 1;
+      out.push(t.path);
+    }
+    return out;
+  }
+  function isMultiPageGuide(node) {
+    return !!node && node.type === "Guide" && guidePagesOf(node).length >= 2;
+  }
+
+  function deckTypeLabel(node) {
+    if (!node) return "";
+    if (node.kind === "dir") return "Dir";
+    if (node.kind === "index") return "Index";
+    if (node.kind === "tag") return "Tag";
+    if (node.kind === "file" || node.kind === "attachment") return "File";
+    return node.type || "Concept";
+  }
+
+  // The deck's title is the most prominent kind among the pages it holds: the kind
+  // that appears on the most cards wins.
+  function deckTitle(items) {
+    var byPath = deckNodesByPath();
+    var counts = Object.create(null), best = "", bestN = 0;
+    (items || deck).forEach(function (e) {
+      var node = byPath.get(e.path);
+      var k = node ? deckTypeLabel(node) : "";
+      if (!k) return;
+      counts[k] = (counts[k] || 0) + 1;
+      if (counts[k] > bestN) { bestN = counts[k]; best = k; }
+    });
+    return best;
+  }
+
+  // A short form of a kind, used for the deck's title chip when the full kind does
+  // not fit: initials for a multi-word kind, the first letters for a single word.
+  function deckKindSnippet(kind) {
+    var words = kind.split(/\s+/).filter(Boolean);
+    if (words.length > 1) return words.map(function (w) { return w.charAt(0); }).join("");
+    return kind.slice(0, 3);
+  }
+
+  // The tag chip names the most prominent tag among the decked pages: the tag that
+  // appears on the most cards wins.
+  function deckTag(items) {
+    var byPath = deckNodesByPath();
+    var counts = Object.create(null), best = "", bestN = 0;
+    (items || deck).forEach(function (e) {
+      var node = byPath.get(e.path);
+      var tags = node && Array.isArray(node.tags) ? node.tags : [];
+      for (var i = 0; i < tags.length; i++) {
+        var t = tags[i];
+        counts[t] = (counts[t] || 0) + 1;
+        if (counts[t] > bestN) { bestN = counts[t]; best = t; }
+      }
+    });
+    return best;
+  }
+
+  // A deck's name in the deck menu. In the add-to-deck menu it carries the deck's
+  // most prominent kind and tag; the deck switcher call passes no page and shows the
+  // kind alone. Falls back to the deck's ordinal name via the caller when empty.
+  function deckLabelFor(items, withTag) {
+    var kind = deckTitle(items);
+    var tag = withTag ? deckTag(items) : "";
+    if (kind && tag) return kind + " #" + tag;
+    return kind || (tag ? "#" + tag : "");
+  }
+
+  function addCard(node, atTop) {
+    if (!node || node.kind === "tag") return;
+    if (deckHas(node.path)) { flashDeckCard(node.path); return; }
+    var entry = { path: node.path, sub: null, open: false };
+    if (atTop) deck.unshift(entry); else deck.push(entry);
+    renderDeck();
+    flashDeckCard(node.path);
+  }
+  function addGuideAsSubDeck(node, atTop) {
+    if (deckHas(node.path)) { flashDeckCard(node.path); return; }
+    var entry = { path: node.path, sub: guidePagesOf(node), open: true };
+    if (atTop) deck.unshift(entry); else deck.push(entry);
+    renderDeck();
+    flashDeckCard(node.path);
+  }
+  function openGuideInDeck(node) {
+    setDeckItems([{ path: node.path, sub: guidePagesOf(node), open: true }]);
+    renderDeck();
+    flashDeckCard(node.path);
+  }
+  // Add the preview's page to a given deck (a new one when index is negative).
+  function addPageToDeck(node, index) {
+    if (!node) return;
+    if (index < 0) { if (decks.length >= MAX_DECKS) return; createDeck(); }
+    else useDeck(index);
+    addToDeckFromPreview(node);
+  }
+  // Toggle the page in or out of a deck. In the add-to-deck menu, clicking a deck that
+  // already holds the page removes it (unselect); otherwise the page is added.
+  function togglePageInDeck(node, index) {
+    if (!node || index < 0 || index >= decks.length) return;
+    if (deckHasIn(decks[index].items, node.path)) { useDeck(index); removeDeckCard(node.path); }
+    else addPageToDeck(node, index);
+  }
+  function addToDeckFromPreview(node) {
+    if (!node) return;
+    if (isMultiPageGuide(node)) {
+      if (deck.length) addGuideAsSubDeck(node, false); else openGuideInDeck(node);
+    } else addCard(node, false);
+  }
+  function removeDeckCard(path) {
+    setDeckItems(deck.filter(function (e) { return e.path !== path; }));
+    deck.forEach(function (e) { if (e.sub) e.sub = e.sub.filter(function (p) { return p !== path; }); });
+    renderDeck();
+  }
+  function flashDeckCard(path) {
+    var cards = deckEl.querySelectorAll(".deck-card");
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute("data-path") !== path) continue;
+      (function (el) {
+        el.classList.add("flash");
+        setTimeout(function () { el.classList.remove("flash"); }, 700);
+      })(cards[i]);
+    }
+  }
+
+  // The card's content mirrors what the preview panel shows for the same node:
+  // the page title as a heading, the frontmatter chips, then the rendered Markdown.
+  function cardContent(node) {
+    if (!node) return "";
+    var title = '<div class="dc-title">' + esc(node.title || displayLabel(node)) + "</div>";
+    if (node.kind === "dir" || node.kind === "tag") {
+      return title + '<p class="pv-note">' + esc(node.description || (node.kind === "dir" ? "Directory" : "Tag")) + "</p>";
+    }
+    if (node.kind === "file" || node.kind === "attachment") {
+      if (node.body && node.body.trim()) return title + '<pre class="md-pre plain">' + esc(node.body) + "</pre>";
+      return title + '<p class="pv-note">' + esc(node.description || deckTypeLabel(node)) + "</p>";
+    }
+    var meta = [];
+    if (node.type) meta.push('<span class="chip2">' + esc(node.type) + "</span>");
+    if (node.status) meta.push('<span class="chip2">' + esc(node.status) + "</span>");
+    (Array.isArray(node.tags) ? node.tags : []).forEach(function (t) { meta.push('<span class="chip2">#' + esc(t) + "</span>"); });
+    var metaHtml = meta.join("");
+    var body = "";
+    try { body = renderMarkdown(node.body || ""); } catch (e) { body = ""; }
+    return title + (metaHtml ? '<div class="md-meta">' + metaHtml + "</div>" : "") + body;
+  }
+
+  function buildDeckCard(entry, byPath, isSub, active) {
+    var node = byPath.get(entry.path);
+    if (!node) return null;
+    var el = document.createElement("article");
+    el.className = "deck-card" + (isSub ? " sub" : "") +
+      (entry.sub && entry.sub.length ? " has-sub" : "") + (entry.open ? " open" : "") +
+      (active === false ? " inert" : "");
+    el.setAttribute("data-path", entry.path);
+
+    // No header: the card is just the page image, with its actions floating over it.
+    var mini = document.createElement("div"); mini.className = "dc-mini";
+    el.appendChild(mini);
+
+    if (active !== false && entry.sub && entry.sub.length) {
+      var chev = document.createElement("button"); chev.type = "button"; chev.className = "dc-chev";
+      chev.setAttribute("aria-expanded", entry.open ? "true" : "false");
+      chev.title = entry.open ? "Collapse pages" : "Expand pages";
+      chev.textContent = entry.open ? "\u25be" : "\u25b8";
+      chev.addEventListener("click", function (e) { e.stopPropagation(); entry.open = !entry.open; renderDeck(); });
+      el.appendChild(chev);
+
+      var sub = document.createElement("div"); sub.className = "dc-sub";
+      entry.sub.forEach(function (p) {
+        var child = buildDeckCard({ path: p, sub: null, open: false }, byPath, true, true);
+        if (child) sub.appendChild(child);
+      });
+      el.appendChild(sub);
+    }
+
+    if (active !== false) {
+      var x = document.createElement("button"); x.type = "button"; x.className = "dc-x";
+      x.title = "Remove card"; x.setAttribute("aria-label", "Remove card"); x.textContent = "\u00d7";
+      x.addEventListener("click", function (e) { e.stopPropagation(); removeDeckCard(entry.path); });
+      el.appendChild(x);
+    }
+
+    el._deckNode = node; el._deckMini = mini; el._deckMiniDone = false;
+    if (active !== false) el.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("button")) return;
+      e.stopPropagation();
+      openPreview(node, true);
+    });
+    return el;
+  }
+
+  var pageCssRaw = null, pageCssEscaped = null;
+
+  // The size a page has when the preview opens it: the preview card is
+  // min(840px, 92vw) by min(82vh, 940px), and a card renders the page in that
+  // viewport so it wraps and reads the same as when opened.
+  function previewPageWidth() {
+    return Math.max(280, Math.min(840, Math.round(window.innerWidth * 0.92)));
+  }
+  function previewPageHeight() {
+    return Math.max(320, Math.min(940, Math.round(window.innerHeight * 0.82)));
+  }
+  // The page's own stylesheet, reused so the offscreen page renders the same way
+  // as the preview.
+  function pageStylesRaw() {
+    if (pageCssRaw == null) {
+      var el = document.querySelector("style");
+      pageCssRaw = el ? el.textContent || "" : "";
+    }
+    return pageCssRaw;
+  }
+  function pageStylesEscaped() {
+    if (pageCssEscaped == null) pageCssEscaped = pageStylesRaw().replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    return pageCssEscaped;
+  }
+
+  // Theme colours for the offscreen page, read live so the shot matches the UI.
+  function miniPalette() {
+    var cs = getComputedStyle(document.documentElement);
+    function v(name, fallback) { var x = cs.getPropertyValue(name).trim(); return x || fallback; }
+    return {
+      bg: v("--panel", "#1b1e27"), text: v("--text", "#e7e9ee"), line: v("--line", "#2e3341"),
+      panel2: v("--panel-2", "#232734"), muted: v("--muted", "#9aa2b3"), accent: v("--accent", "#5b8def")
+    };
+  }
+  // The renderer emits HTML void elements; they must be self-closed to be valid
+  // XML inside the SVG.
+  function voidToXhtml(html) {
+    return String(html)
+      .replace(/<(br|hr)(\s[^>]*)?>/gi, "<$1$2/>")
+      .replace(/<img((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi, "<img$1/>");
+  }
+  // Render the page into an SVG foreignObject and expose it as a data: image.
+  // The page fills a viewport of the normal preview size, anchored top-left, so
+  // it wraps and reads the same as when it is opened. Styling comes from the
+  // tool's own stylesheet.
+  function previewShotDataUrl(html, w, h) {
+    var p = miniPalette();
+    var style = pageStylesEscaped() +
+      "#pvBody img:not([src]){display:none}" +
+      "#pvBody .dc-title{font-size:3em;font-weight:700;line-height:1.15;margin:0 0 .3em}";
+    var wrap =
+      "width:100%;height:100%;overflow:hidden;" +
+      "background-color:" + p.bg + ";color:" + p.text + ";" +
+      "font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:13px;" +
+      "--bg:" + p.bg + ";--panel:" + p.bg + ";--panel-2:" + p.panel2 + ";--line:" + p.line + ";" +
+      "--text:" + p.text + ";--muted:" + p.muted + ";--accent:" + p.accent;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+      '<foreignObject x="0" y="0" width="100%" height="100%">' +
+      '<div xmlns="http://www.w3.org/1999/xhtml">' +
+      "<style>" + style + "</style>" +
+      '<div style="' + wrap + '"><div id="pvBody">' + voidToXhtml(html) + "</div></div>" +
+      "</div></foreignObject></svg>";
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+
+  // Build the card's screenshot bitmap when the card is generated: render the page
+  // in a normal-size preview viewport and anchor its top-left into the card.
+  function renderCardShot(cardEl) {
+    if (cardEl._deckMiniDone || !cardEl._deckMini) return;
+    var rect = cardEl._deckMini.getBoundingClientRect();
+    var cw = Math.round(rect.width), ch = Math.round(rect.height);
+    if (cw < 8 || ch < 6) return;               // not laid out yet; try again on the next reveal
+    cardEl._deckMiniDone = true;
+    var node = cardEl._deckNode;
+    var pageW = previewPageWidth(), pageH = previewPageHeight();
+    var dpr = window.devicePixelRatio || 1;
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+    cardEl._deckMini.appendChild(canvas);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = miniPalette().bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Anchor the viewport's top-left into the card; it is wider than the card,
+        // so the overflow is cropped on the right.
+        var s = Math.max(canvas.width / pageW, canvas.height / pageH);
+        ctx.drawImage(img, 0, 0, pageW * s, pageH * s);
+      } catch (e) { miniFallback(cardEl._deckMini, node); }
+    };
+    img.onerror = function () { miniFallback(cardEl._deckMini, node); };
+    img.src = previewShotDataUrl(cardContent(node), pageW, pageH);
+  }
+  function miniFallback(miniEl, node) {
+    if (!miniEl) return;
+    miniEl.textContent = "";
+    var d = document.createElement("div");
+    d.className = "dc-fallback";
+    d.textContent = (node && (node.description || displayLabel(node))) || "";
+    miniEl.appendChild(d);
+  }
+  // Hovering a card shuffles the deck vertically: the cards above it nudge up and the
+  // cards below it nudge down, parting around it. The hovered card keeps its place in
+  // the stack (z-index by position), so it is not raised over the pages below it.
+  function setDeckHover(stack, card) {
+    deckStackEls().forEach(function (s) {
+      var cards = Array.prototype.slice.call(s.querySelectorAll(":scope > .deck-card:not(#deckGhost)"));
+      var idx = (s === stack && card) ? cards.indexOf(card) : -1;
+      for (var i = 0; i < cards.length; i++) {
+        var off = idx < 0 ? 0 : (i < idx ? -HOVER_REPEL : (i > idx ? HOVER_REPEL : 0));
+        cards[i].style.transform = off ? "translateY(" + off + "px)" : "";
+        cards[i].style.zIndex = String(i + 1);
+        cards[i].classList.toggle("hovered", i === idx);
+      }
+    });
+  }
+  // Generate every card's screenshot when the deck is (re)built.
+  function renderDeckShots() {
+    var cards = deckEl.querySelectorAll(".deck-card");
+    for (var i = 0; i < cards.length; i++) renderCardShot(cards[i]);
+  }
+
+  function deckStackEls() {
+    return Array.prototype.slice.call(deckBodyEl.querySelectorAll(":scope > .deck-stack"));
+  }
+  function stackForDeck(i) { return deckBodyEl.querySelector(':scope > .deck-stack[data-deck="' + i + '"]'); }
+  function activeStack() { return deckBodyEl.querySelector(":scope > .deck-stack.active"); }
+
+  function renderDeck() {
+    if (!deckEl) return;
+    pruneEmptyDecks();
+    var byPath = deckNodesByPath();
+    // Drop entries whose page is gone, in every deck.
+    decks.forEach(function (d) {
+      d.items = d.items.filter(function (e) { return byPath.has(e.path); });
+      d.items.forEach(function (e) { if (e.sub) e.sub = e.sub.filter(function (p) { return byPath.has(p); }); });
+    });
+    deck = decks[activeDeck].items;
+    var anyCards = decks.some(function (d) { return d.items.length > 0; });
+    document.body.classList.toggle("deck-open", anyCards || decks.length > 1);
+    // Every deck becomes its own stack, set apart by a gap. The active stack is live;
+    // the others are dimmed and activate on click.
+    deckBodyEl.textContent = "";
+    var activeStackEl = null;
+    decks.forEach(function (d, i) {
+      var isActive = i === activeDeck;
+      var stack = document.createElement("div");
+      stack.className = "deck-stack" + (isActive ? " active" : "");
+      stack.setAttribute("data-deck", String(i));
+      var cards = [];
+      d.items.forEach(function (entry) {
+        var el = buildDeckCard(entry, byPath, false, isActive);
+        if (el) { stack.appendChild(el); cards.push(el); }
+      });
+      if (isActive) {
+        activeStackEl = stack;
+      } else {
+        // Name and tag chips stick to the top and bottom cards, so every deck reads the
+        // same way as the active one; a click on the stack makes it active.
+        if (cards[0]) {
+          var chip = document.createElement("div");
+          chip.className = "deck-stack-chip";
+          chip.textContent = (deckLabelFor(d.items) || d.name) +
+            (d.items.length ? " \u00b7 " + d.items.length : "");
+          cards[0].appendChild(chip);
+        }
+        var tagOf = deckTag(d.items);
+        if (cards.length && tagOf) {
+          var tchip = document.createElement("div");
+          tchip.className = "deck-stack-tag";
+          tchip.textContent = "#" + tagOf;
+          cards[cards.length - 1].appendChild(tchip);
+        }
+        stack.addEventListener("click", function () { useDeck(i); renderDeck(); });
+      }
+      deckBodyEl.appendChild(stack);
+    });
+    // The chips ride the active stack's top and bottom cards.
+    var aCards = activeStackEl ? activeStackEl.querySelectorAll(":scope > .deck-card") : [];
+    var topCard = aCards[0] || null, bottomCard = aCards[aCards.length - 1] || null;
+    if (deckLabelEl) {
+      (topCard || activeStackEl || deckBodyEl).appendChild(deckLabelEl);
+      // The chip names the deck's most prominent kind, and is a plain label — not a
+      // control. With more than one deck it stays visible, falling back to the name.
+      var kind = deck.length ? deckTitle() : "";
+      var multi = decks.length > 1;
+      var label = kind || (multi ? decks[activeDeck].name : "");
+      deckLabelEl.hidden = !label;
+      deckLabelEl.textContent = label;
+      // If the full kind does not fit the small chip, abbreviate it, with the full
+      // kind in the <abbr> title.
+      if (kind && deckLabelEl.scrollWidth > deckLabelEl.clientWidth + 1) {
+        deckLabelEl.textContent = "";
+        var abbr = document.createElement("abbr");
+        abbr.title = kind;
+        abbr.textContent = deckKindSnippet(kind);
+        deckLabelEl.appendChild(abbr);
+      }
+    }
+    if (deckTagEl) {
+      (bottomCard || activeStackEl || deckBodyEl).appendChild(deckTagEl);
+      var tag = deck.length ? deckTag() : "";
+      deckTagEl.hidden = !tag;
+      deckTagEl.textContent = tag ? "#" + tag : "";
+    }
+    positionDeck();
+    layoutDeck();
+    renderDeckShots();
+    syncDeckButton();
+    // While reading, the stream is the active deck, so rebuild it when the deck changes.
+    if (deckReading()) renderDeckStream(null); else markDeckCurrent();
+  }
+
+  function syncDeckButton() {
+    if (!pvDeckBtn) return;
+    var node = pvCurrent;
+    var usable = !!node && node.kind !== "dir" && node.kind !== "tag";
+    pvDeckBtn.hidden = !usable;
+    if (usable) pvDeckBtn.textContent = "Add to deck \u25be";
+  }
+
+  // ---- press-hold a node to start a card drag ----
+  function startNodePress(n, x, y) {
+    if (!n || n.kind === "tag") return;
+    cancelNodePress();
+    pressNode = n; pressStart = { x: x, y: y };
+    pressTimer = setTimeout(function () {
+      pressTimer = null;
+      var node = pressNode; pressNode = null;
+      if (node) beginCardDrag(node, pressStart.x, pressStart.y);
+    }, PRESS_HOLD_MS);
+  }
+  function cancelNodePress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    pressNode = null;
+  }
+  function pressMoved(x, y) {
+    if (!pressTimer || !pressStart) return;
+    var dx = x - pressStart.x, dy = y - pressStart.y;
+    if (dx * dx + dy * dy > PRESS_MOVE_TOL * PRESS_MOVE_TOL) cancelNodePress();
+  }
+
+  function beginCardDrag(node, x, y) {
+    if (!node || cardDrag) return;
+    dragNode = null;                        // the node itself is not being moved
+    hover = null; hideTip();                // drop the node tooltip for the card
+    // The ghost is a real card, so it matches a docked card exactly.
+    var card = buildDeckCard({ path: node.path, sub: null, open: false }, deckNodesByPath(), false);
+    if (!card) return;
+    card.id = "deckGhost";
+    // The ghost lives inside the deck so its z-index can interleave with the pages
+    // as it passes over them; it stays position: fixed, so it still follows the
+    // pointer and is not clipped by the deck's overflow.
+    deckBodyEl.appendChild(card);
+    cardDrag = { node: node, ghost: card, target: null, slot: 0 };
+    // Mark the drop site for the whole drag, so the drop effect is always visible.
+    deckEl.classList.add("dropzone");
+    document.body.classList.add("card-dragging");
+    renderCardShot(card);                   // give the ghost its page bitmap too
+    moveCardDrag(x, y);
+  }
+
+  function deckCardHeight() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dc-h"));
+    return v > 0 ? v : 105;
+  }
+  function deckStep() {
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dc-step"));
+    return v > 0 ? v : 40;
+  }
+  // Where a dragged card released here would go: onto the deck whose stack the pointer
+  // is over, a new deck (in the column but clear of every stack, e.g. in a gap), or
+  // null to drop it back. DECK_TOL is how far off a stack still counts as on it.
+  var DECK_TOL = 4;
+  function cardDropTarget(x, y, h) {
+    var r = deckEl.getBoundingClientRect();
+    if (x < r.left - 24 || x > r.right + 24) return null;
+    var stacks = deckStackEls();
+    for (var i = 0; i < stacks.length; i++) {
+      var sr = stacks[i].getBoundingClientRect();
+      if (sr.height > 0 && y >= sr.top - DECK_TOL && y <= sr.bottom + DECK_TOL) {
+        return { kind: "deck", deck: parseInt(stacks[i].getAttribute("data-deck"), 10), slot: deckSlotAt(stacks[i], y, h) };
+      }
+    }
+    // Nothing under the pointer: fill the active deck while it is still empty, else start
+    // a fresh one — unless the panel is already full and a deck would not fit.
+    if (!deck.length) return { kind: "deck", deck: activeDeck, slot: 0 };
+    if (deckPanelFull() || decks.length >= MAX_DECKS) return null;
+    return { kind: "new" };
+  }
+  // The panel is full when the decks already fill its scroll area, so a new deck has no
+  // room and a card dropped clear of the decks will not start one.
+  function deckPanelFull() {
+    return deckBodyEl.scrollHeight > deckBodyEl.clientHeight + 1;
+  }
+  // Slot at which a page released at this y belongs in the given stack (0 = top).
+  function deckSlotAt(stack, y, h) {
+    var r = stack.getBoundingClientRect();
+    var n = stack.querySelectorAll(":scope > .deck-card:not(#deckGhost)").length;
+    return Math.max(0, Math.min(n, Math.round((y - h / 2 - r.top - DECK_PAD) / deckStep())));
+  }
+  // Place one stack's cards in evenly spaced slots and size the stack to them, so a
+  // dropped page snaps into position and the stacks stay separated.
+  function layoutStack(stack) {
+    var cards = stack.querySelectorAll(":scope > .deck-card:not(#deckGhost)");
+    var step = deckStep(), pad = DECK_PAD, n = cards.length, i;
+    for (i = 0; i < n; i++) {
+      cards[i].style.top = (pad + i * step) + "px";
+      cards[i].style.zIndex = String(i + 1);
+      cards[i].style.transform = "";
+    }
+    stack.style.height = n ? Math.round(pad + (n - 1) * step + (cards[n - 1].offsetHeight || deckCardHeight()) + pad) + "px" : "";
+  }
+  function layoutDeck() {
+    if (!deckEl) return;
+    deckStackEls().forEach(layoutStack);
+    var mobile = !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+    if (mobile) {
+      // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
+      deckEl.style.top = "";
+      deckEl.style.maxHeight = "";
+    } else {
+      var info = deckTabInfo();
+      var top = info ? info.bottom + DECK_TOP_GAP : 64;
+      deckEl.style.top = top + "px";
+      deckEl.style.maxHeight = "calc(100vh - " + (top + 12) + "px)";
+      // The drop site reaches down near the bottom of the window, so a card can be
+      // dropped well clear of the decks to start a new one.
+      deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - (top + 16) - 12)) + "px");
+    }
+  }
+  // While the dragged card is over a stack the cards shift down one step to open the
+  // slot it would land in, so the shuffle still reads even though the card keeps
+  // following the pointer above the stack.
+  function applyDeckGap(stack, slot) {
+    var cards = stack.querySelectorAll(":scope > .deck-card:not(#deckGhost)");
+    var step = deckStep(), i;
+    for (i = 0; i < cards.length; i++) {
+      var below = i >= slot;
+      cards[i].style.transform = below ? "translateY(" + step + "px)" : "";
+      // The ghost holds z-index slot+1, so the pages it displaced ride above it
+      // (they cover the dragged card) and the pages above it stay behind it.
+      cards[i].style.zIndex = String(below ? i + 2 : i + 1);
+    }
+    var n = cards.length;
+    if (n) stack.style.height = Math.round(2 * DECK_PAD + n * step + (cards[n - 1].offsetHeight || deckCardHeight())) + "px";
+  }
+  function clearDeckGap() { deckStackEls().forEach(layoutStack); }
+  function moveCardDrag(x, y) {
+    if (!cardDrag || !cardDrag.ghost) return;
+    // The card sticks to the pointer for the whole drag; which deck's stack it would
+    // land in (and the resulting shuffle) changes as it passes over them.
+    var g = cardDrag.ghost;
+    g.style.left = x + "px";
+    g.style.top = y + "px";
+    var h = g.getBoundingClientRect().height || deckCardHeight();
+    var target = cardDropTarget(x, y, h);
+    cardDrag.target = target;
+    var targetStack = target && target.kind === "deck" ? stackForDeck(target.deck) : null;
+    // Move the gap only when the target stack changes.
+    if (cardDrag.stack && cardDrag.stack !== targetStack) { clearDeckGap(); cardDrag.stack = null; }
+    if (targetStack) {
+      if (g.parentNode !== targetStack) targetStack.appendChild(g);
+      g.style.zIndex = String(target.slot + 1);
+      applyDeckGap(targetStack, target.slot);
+      cardDrag.stack = targetStack;
+      deckEl.classList.add("receiving");
+      deckEl.classList.remove("newdeck");
+    } else {
+      // Off every stack the card floats above them; clear of them it starts a new deck.
+      if (g.parentNode !== deckBodyEl) deckBodyEl.appendChild(g);
+      g.style.zIndex = "";
+      deckEl.classList.remove("receiving");
+      deckEl.classList.toggle("newdeck", !!(target && target.kind === "new"));
+    }
+  }
+  function cancelCardDrag() {
+    if (cardDrag && cardDrag.ghost && cardDrag.ghost.parentNode) cardDrag.ghost.parentNode.removeChild(cardDrag.ghost);
+    cardDrag = null;
+    document.body.classList.remove("card-dragging");
+    if (deckEl) deckEl.classList.remove("dropzone", "receiving", "newdeck");
+    clearDeckGap();
+  }
+  function finishCardDrag() {
+    var node = cardDrag ? cardDrag.node : null;
+    var target = cardDrag ? cardDrag.target : null;
+    cancelCardDrag();
+    if (!node || !target) { renderDeck(); return; }
+    if (target.kind === "new") {
+      // Released clear of every deck: start a new deck holding just this page.
+      createDeck();
+      if (!deckHas(node.path)) deck.push({ path: node.path, sub: null, open: false });
+    } else {
+      // Join the deck whose stack the card was dropped on, at the tracked slot.
+      var items = decks[target.deck] ? decks[target.deck].items : null;
+      if (!items || deckHasIn(items, node.path)) { renderDeck(); flashDeckCard(node.path); return; }
+      items.splice(target.slot, 0, { path: node.path, sub: null, open: false });
+      useDeck(target.deck);
+    }
+    renderDeck();
+    flashDeckCard(node.path);
+  }
+
+  // Where the filter tab sits, so the deck can dock clear of it. Uses layout
+  // metrics (offset*), not getBoundingClientRect, so the sidebar's slide
+  // transition does not make the deck read a mid-animation position. The tab's
+  // bottom stays valid while the sidebar is hidden (its handle stays visible), so
+  // the deck's vertical position is stable; only `right` follows the sidebar.
+  function deckTabInfo() {
+    var desktop = !(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+    if (!desktop) return null;
+    var tab = document.getElementById("sideHandle");
+    if (!tab) return null;
+    var w = tab.offsetWidth;
+    if (w <= 0) return null;
+    var sidebar = tab.offsetParent, sidebarW = sidebar ? sidebar.offsetWidth : 312;
+    var shown = !document.body.classList.contains("hide-side");
+    return { right: shown ? sidebarW + w + 10 : null, bottom: tab.offsetTop + tab.offsetHeight };
+  }
+  // Dock clear of the filter tab. When there are cards, layoutDeck owns top/height.
+  function positionDeck() {
+    if (!deckEl) return;
+    var info = deckTabInfo();
+    deckEl.style.right = info && info.right != null ? info.right + "px" : "";
+    if (!info) {
+      // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
+      deckEl.style.top = "";
+      deckEl.style.maxHeight = "";
+      return;
+    }
+    if (!deck.length) {
+      var top = Math.round(info.bottom + DECK_TOP_GAP);
+      deckEl.style.top = top + "px";
+      deckEl.style.maxHeight = "calc(100vh - " + (top + 12) + "px)";
+    }
+  }
+
+  // ---- reading the deck as a continuous stream ----
+  // Clicking a deck card reads the whole deck as one scroll, fullscreen within the
+  // browser window (no OS fullscreen): the pages follow each other in deck order under
+  // a shared top bar that follows the page in view, while the rest of the UI is hidden
+  // and the deck floats above, marking the page being read.
+
+  function deckReading() { return document.body.classList.contains("deck-fullscreen"); }
+
+  function enterDeckReading(node) {
+    if (deckReading()) { if (node) scrollToDeckPage(node.path); return; }
+    if (!preview.classList.contains("show")) {
+      if (pvIndex < pvStack.length - 1) pvStack = pvStack.slice(0, pvIndex + 1);
+      pvStack.push(node);
+      pvIndex = pvStack.length - 1;
+      try { history.pushState({ okfPv: pvIndex, okfGeneration: bundleGeneration }, "", location.href); pvPushed = true; }
+      catch (e) { pvPushed = false; /* e.g. file:// */ }
+    }
+    document.body.classList.add("deck-fullscreen");
+    renderDeckStream(node);
+    positionDeck(); layoutDeck();
+  }
+  function exitDeckReading() {
+    if (!deckReading()) return;
+    document.body.classList.remove("deck-fullscreen");
+    pvBody.classList.remove("ds-stream");
+    positionDeck(); layoutDeck();
+    markDeckCurrent();
+  }
+
+  // The pages in the deck, in reading order: each card, then its sub-deck's pages.
+  function deckPagePaths() {
+    var out = [];
+    deck.forEach(function (e) {
+      if (out.indexOf(e.path) < 0) out.push(e.path);
+      if (e.sub) e.sub.forEach(function (p) { if (out.indexOf(p) < 0) out.push(p); });
+    });
+    return out;
+  }
+
+  // Render every decked page as one section of a continuous scroll. The top bar stays
+  // shared: it shows the page scrolled into view, not one bar per page.
+  function renderDeckStream(startNode) {
+    previewRenderId++;
+    pvHideTagPop();
+    pvBody.classList.remove("pv-imgmode");
+    pvBody.classList.add("ds-stream");
+    var byPath = deckNodesByPath(), html = "";
+    deckPagePaths().forEach(function (p) {
+      var n = byPath.get(p);
+      if (!n) return;
+      html += '<section class="ds-page" data-path="' + esc(p) + '"><div class="ds-inner">' + cardContent(n) + "</div></section>";
+    });
+    pvBody.innerHTML = html;
+    // Each section's embedded images resolve relative to their own page.
+    Array.prototype.forEach.call(pvBody.querySelectorAll(".ds-page"), function (sec) {
+      var base = sec.getAttribute("data-path");
+      if (!base) return;
+      Array.prototype.forEach.call(sec.querySelectorAll("img[data-embed]"), function (img) { img.setAttribute("data-from", base); });
+    });
+    hydratePreviewImages();
+    preview.classList.add("show");
+    pvBody.scrollTop = 0;
+    previewPath = "";
+    if (startNode && startNode.path) scrollToDeckPage(startNode.path);
+    updateDeckStreamCurrent();
+    updatePvNav();
+    syncDeckButton();
+  }
+
+  function scrollToDeckPage(path) {
+    var secs = pvBody.querySelectorAll(".ds-page");
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i].getAttribute("data-path") !== path) continue;
+      pvBody.scrollTop += (secs[i].getBoundingClientRect().top - pvBody.getBoundingClientRect().top) - 10;
+      return;
+    }
+  }
+
+  // The page being read is the section at the top of the scroll view.
+  function updateDeckStreamCurrent() {
+    if (!deckReading()) return;
+    var secs = pvBody.querySelectorAll(".ds-page");
+    if (!secs.length) return;
+    var thr = pvBody.getBoundingClientRect().top + 24, current = secs[0];
+    for (var i = 0; i < secs.length; i++) if (secs[i].getBoundingClientRect().top <= thr) current = secs[i];
+    var path = current.getAttribute("data-path");
+    if (!path || path === previewPath) return;
+    var node = fileMap && fileMap.get(path);
+    previewPath = path;
+    pvCurrent = node || null;
+    pvTitle.textContent = node ? displayLabel(node) : path;
+    pvPath.textContent = path;
+    markDeckCurrent();
+  }
+
+  var deckStreamRAF = 0;
+  pvBody.addEventListener("scroll", function () {
+    if (!deckReading() || deckStreamRAF) return;
+    deckStreamRAF = requestAnimationFrame(function () { deckStreamRAF = 0; updateDeckStreamCurrent(); });
+  });
+
+  // Reading is left from the top handle: tap it, or pull it — or the top bar — down. The
+  // pull drags the reading view down (revealing the graph behind) and, past a distance,
+  // leaves reading; a short pull springs back.
+  var DS_PULL_CLOSE = 130;
+  var readingPullY = null;
+  function readingPullReset() {
+    readingPullY = null;
+    if (pvCardEl) { pvCardEl.style.transition = ""; pvCardEl.style.transform = ""; }
+    preview.style.background = "";
+    document.body.classList.remove("reading-pull");
+  }
+  function readingPullBack() {
+    if (pvCardEl) { pvCardEl.style.transition = "transform .18s ease"; pvCardEl.style.transform = ""; }
+    preview.style.background = "";
+    document.body.classList.remove("reading-pull");
+    setTimeout(function () { if (pvCardEl) pvCardEl.style.transition = ""; }, 220);
+  }
+  function readingPullStart(e) {
+    if (!deckReading()) return;
+    readingPullY = e.clientY;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+    if (pvCardEl) pvCardEl.style.transition = "none";
+    e.preventDefault();
+  }
+  function readingPullMove(e) {
+    if (readingPullY == null) return;
+    var d = Math.max(0, e.clientY - readingPullY);
+    if (pvCardEl) pvCardEl.style.transform = d > 0 ? "translateY(" + d + "px)" : "";
+    preview.style.background = d > 0 ? "rgba(0,0,0," + (0.55 * Math.max(0, 1 - d / DS_PULL_CLOSE)).toFixed(3) + ")" : "";
+    document.body.classList.toggle("reading-pull", d > 0);
+  }
+  function readingPullEnd(e) {
+    if (readingPullY == null) return;
+    var d = Math.max(0, e.clientY - readingPullY);
+    readingPullY = null;
+    // A tap, or a pull past the distance, leaves reading; anything between springs back.
+    if (d >= DS_PULL_CLOSE || d <= 8) { readingPullReset(); closePreview(); return; }
+    readingPullBack();
+  }
+  [dsHandle, pvHeadEl].forEach(function (el) {
+    if (!el) return;
+    el.addEventListener("pointerdown", readingPullStart);
+    el.addEventListener("pointermove", readingPullMove);
+    el.addEventListener("pointerup", readingPullEnd);
+    el.addEventListener("pointercancel", function () { if (readingPullY != null) readingPullBack(); });
+  });
+
+  // Mark the deck card for the page being read, so the deck tracks the reading.
+  function markDeckCurrent() {
+    if (!deckEl) return;
+    var active = deckReading() ? previewPath : null;
+    var cards = deckEl.querySelectorAll(".deck-card");
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].classList.toggle("current", active != null && cards[i].getAttribute("data-path") === active);
+    }
+    // A page inside a sub-deck also marks its parent card as current.
+    if (active == null) return;
+    var stack = activeStack();
+    var tops = stack ? stack.querySelectorAll(":scope > .deck-card:not(#deckGhost)") : [];
+    for (var t = 0; t < tops.length; t++) {
+      var path = tops[t].getAttribute("data-path"), entry = null;
+      for (var k = 0; k < deck.length; k++) { if (deck[k].path === path) { entry = deck[k]; break; } }
+      if (entry && entry.sub && entry.sub.indexOf(active) >= 0) tops[t].classList.add("current");
+    }
+  }
+
+  function initDeck() {
+    if (!deckEl) return;
+    // Hover a card to repel its neighbours; leaving the deck resets the stack. A
+    // drag owns the deck while it lasts, so hover does not steal its focus.
+    deckBodyEl.addEventListener("pointerover", function (e) {
+      if (cardDrag) return;
+      var card = e.target.closest ? e.target.closest(".deck-stack > .deck-card") : null;
+      // Only a card changes the highlight. The cards do not fill the stack, so
+      // pointing at the gaps between them must not drop the raised z-index.
+      if (card) setDeckHover(card.parentNode, card);
+    });
+    deckEl.addEventListener("pointerleave", function () { if (!cardDrag) setDeckHover(null, null); });
+    if (pvDeckBtn) pvDeckBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      openDeckMenu(pvDeckBtn, pvCurrent, null);
+    });
+    positionDeck();
+    renderDeck();
+  }
+
   // ---------------------------------------------------------------- init
   resize();
   view.x = W / 2; view.y = H / 2;
   initMascot();
+  initDeck();
   autoLoad(false);
 })();
 </script>

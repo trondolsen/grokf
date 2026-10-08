@@ -26,7 +26,7 @@ sources:
 | Source | Used for |
 | --- | --- |
 | [`README.md`](../../README.md) | Usage, URL parameters, publishing and local browsing |
-| [`grokf.html`](../../grokf.html) | The implementation: config, crawling, graph, layout, rendering and security |
+| [`grokf.html`](../../grokf.html) | The implementation: config, crawling, graph, layout, rendering, the deck and security |
 | [`2026-10-05.md`](../reviews/2026-10-05.md) | Security findings, limits and behavior changes |
 | [`test/README.md`](../../test/README.md) | The test suite and how to run it |
 | [`attachments/favicon.svg`](../design/attachments/favicon.svg) | The project's mascot and favicon, shown in the interface design concept |
