@@ -6,4 +6,5 @@ How a user points the tool at a bundle, and how a bundle is delivered.
 - [Local folders](local-folders.md) – opening a folder or dropping one on the window.
 - [File and image preview](file-preview.md) – how non-Markdown files are shown, including images.
 - [Build a deck of cards](deck.md) – collect pages into a right-edge deck and add guides as sub-decks.
+- [Declared decks](declared-decks.md) – decks a bundle declares in frontmatter, built when it loads.
 - [Publishing](publishing.md) – serving a bundle on a website.

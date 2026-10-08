@@ -24,10 +24,10 @@ A multi-page guide — a `Guide`-typed concept that links to two or more other c
 
 # Managing the deck
 
-- Every deck is shown as its own **stack** in the panel, separated by a gap, and every deck looks the same — none is dimmed, and every deck's cards shuffle on hover. Every deck shows the same chips — a kind chip on its top card (inactive decks add the card count) and a tag chip under its bottom card. When the stacks are taller than the panel, the panel scrolls.
+- Every deck is shown as its own **stack** in the panel, separated by a gap, and every deck looks the same — none is dimmed, and every deck's cards shuffle on hover. Every deck shows the same chips — a kind chip on its top card and a tag chip under its bottom card. When the stacks are taller than the panel, the panel scrolls.
 - The tiny panel-tab-like chip is stuck to the active deck's **current top page** (the first card, sitting on top of it just above its top edge), naming the **most prominent kind** among its pages — the kind on the most cards. A long kind is abbreviated, with its full name on hover. This chip is a plain label, not a control. A second chip hangs under the **bottom page**, right-aligned, with the **most prominent tag** among the pages. Each highlights while its page is pointed at.
 - Point into a deck to hover a card: its neighbours above and below repel so the card is partly revealed, and the card keeps its place in the stack while the pointer stays in the deck; only leaving the deck resets the stack.
-- Click a card to read its page fullscreen (see below).
+- Click a card to read its page fullscreen (see below); if its deck is not active yet, it becomes active first, so one click opens the page.
 - Use a sub-deck's chevron to expand or collapse its pages.
 - Use a card's `×` to remove it; removing a deck's last card removes the deck (the next deck becomes active), and the add-to-deck menu never lists an empty deck.
 - Click a deck's stack to make it the active deck. Start a new one by dragging a card clear of every stack, or with **Add to deck ▾ → +** in the preview (at most eight decks).
@@ -38,7 +38,7 @@ Clicking a card reads the whole deck as one **continuous stream**, fullscreen wi
 
 - The shared top bar follows what you read: it shows the page scrolled into view, with no controls.
 - The deck marks the page you are reading — its card takes the accent frame.
-- Leave reading from the top handle: **tap it**, or **pull it — or the top bar — down**. The reading view slides down to reveal the graph and closes once the pull passes a short distance; a shorter pull springs back. **Escape** also closes. There is no click-outside close in reading.
+- Leave reading by **pulling the top handle — or the top bar — down**. The reading view slides down to reveal the graph and closes once the pull passes a short distance; a shorter pull springs back. **Escape** also closes. There is no click-outside close in reading.
 
 # Notes
 
@@ -47,6 +47,7 @@ The deck lives in memory only. It is not stored in the URL, and it is cleared wh
 # Connections
 
 - [Deck of cards](../design/deck.md)
+- [Declared decks](declared-decks.md)
 - [File and image preview](file-preview.md)
 - [Local folders](local-folders.md)
 

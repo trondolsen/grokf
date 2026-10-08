@@ -10,6 +10,10 @@ This directory tree is the project's **OKF v0.2 bundle**. It explains what the g
 
 - [About this bundle](docs/about-this-bundle.md) – the OKF version, the OKF Praxis extension, scope and provenance.
 
+## Guides
+
+- [User guides](docs/guides/index.md) – task-oriented guides for getting started, exploring, searching, reading and troubleshooting.
+
 ## Principles
 
 - [Principles](docs/principles/index.md) – the durable properties the tool is built on: local processing, untrusted bundles and link-driven discovery.

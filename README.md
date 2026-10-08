@@ -41,3 +41,24 @@ Optional; append to the URL and combine as needed (e.g. `?bundle=acme/&depth=1`)
 - Bundles are discovered from `index.md` by following links (no manifest); with no parameters the tool loads `bundles/` next to the page. `bundle` and `start` must be same-origin (served from the same site).
 - The crawl loads only Markdown files. Other files (non-Markdown text and binary attachments) are shown as nodes and fetched on demand when clicked.
 - On `file://`, `bundle` does not auto-load — open a folder instead. `depth` also applies to locally opened folders (deeper files revealed one level at a time).
+
+### Declared decks
+
+A bundle can ship decks. A concept declares them in frontmatter, and the viewer
+builds them when the bundle loads:
+
+```yaml
+okfx:
+  decks:
+    - name: Tour
+      pages: [docs/guides/getting-started.md, docs/guides/explore-the-graph.md]
+    - name: Model
+      pages:
+        - docs/model/bundle-and-concept.md
+        - docs/model/graph-model.md
+```
+
+Any concept may declare `okfx.decks`; the viewer collects every declaration on
+load, resolves the page paths (a bare or `/`-prefixed path from the bundle root, a
+`./` or `../` path from the file, `.md` optional), and fills the deck panel. A
+page that is not a loaded concept is skipped, and at most eight decks are built.

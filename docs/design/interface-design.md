@@ -41,6 +41,7 @@ Shared styling keeps the controls consistent:[^source]
 - The title control and the mobile hamburger use the same vertical box model as the nav buttons, so every top-bar pill has the same height.
 - The brand *grokf* — in the toolbar title, the About panel and the bundle dialog — spells *okf* with colour: `o` and `k` are split abruptly at their midpoint, the left half in the Concept colour (the accent, matching how the mascot paints concepts) and the right half in the surrounding text colour, and `f` is that Concept colour at full strength.
 - Legend rows carry horizontal padding, so the hover and selected highlight boxes enclose the swatch, label and count with even space on both sides.
+- Text selection is off for the interface and on only where text is the content: input fields and the page display (the preview and the deck reading stream).
 
 # Favicon and mascot
 

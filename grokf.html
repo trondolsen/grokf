@@ -36,7 +36,14 @@
        tool. Panning stays allowed for scrollable panels; the canvas overrides
        this with touch-action:none for its own zoom. */
     touch-action: pan-x pan-y;
+    /* Selection is off for the interface; it is allowed only in input fields and the
+       page display (see the next rule). */
+    -webkit-user-select: none;
+    user-select: none;
   }
+  /* Text selection is allowed only where text is the content: form fields and the page
+     display (the preview and the deck reading stream). */
+  input, textarea, select, #pvBody { -webkit-user-select: text; user-select: text; }
   #c { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none;
        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #c.dragging { cursor: grabbing; }
@@ -495,24 +502,31 @@
     max-height: calc(100vh - 76px); transition: right .18s ease;
   }
   /* The drop site is a separate, fixed-size rectangle, not tied to the deck's own
-     size: it sits a little below the deck's top, marks where a dragged card lands,
-     and is shown for the whole drag. */
+     size: it spans the column from near the top of the window down near its bottom,
+     marks where a dragged card lands, and is shown for the whole drag. It matches the
+     deck panel, whose content is inset so its pages still start below the filter tab. */
   #deck::after {
-    content: ""; position: absolute; left: -8px; top: 16px; width: calc(var(--deck-w) + 16px);
-    height: var(--deck-aura-h, 50vh); z-index: -1; pointer-events: none; display: none;
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    content: ""; position: absolute; left: -8px; top: var(--deck-aura-top, 16px);
+    width: calc(var(--deck-w) + 16px); height: var(--deck-aura-h, 50vh);
+    z-index: -1; pointer-events: none; display: none;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
     filter: blur(4px);
   }
   #deck.dropzone::after { display: block; }
-  /* Over the column the aura brightens, so the drop site reads as active. */
-  #deck.receiving::after { background: color-mix(in srgb, var(--accent) 34%, transparent); }
+  /* The drop site is dim while the card is outside it, and lightens once the card is
+     inside it, so the target reads as active. */
+  #deck.dropzone.inside::after { background: color-mix(in srgb, var(--accent) 34%, transparent); }
   /* Clear of the stack a release starts a new deck, not a new slot: the site reads as a
      fresh one, dashed, rather than the deck's own column. */
-  #deck.newdeck::after {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
-  }
+  #deck.newdeck::after { border: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent); }
   body.deck-open #deck, body.card-dragging #deck { display: flex; }
+  /* While a card is out for dragging, the window shows the grab cursor. */
+  body.card-dragging, body.card-dragging #c { cursor: grab; }
+  /* The deck's empty space is dragged to scroll the docked decks, rather than reaching
+     the graph behind it; the cursor shows the space is draggable. */
+  #deckBody { cursor: grab; }
+  #deck .deck-card:not(#deckGhost) { cursor: pointer; }
+  #deck.scrolling, #deck.scrolling #deckBody, #deck.scrolling .deck-card { cursor: grabbing; }
   /* The deck's tabs: tiny panel-tab chips. The kind chip sits on top of the top page
      and the tag chip hangs under the bottom page; each is a child of its card, so it
      rides that card. A long kind is abbreviated, with the full kind in the <abbr>
@@ -649,8 +663,8 @@
   body.deck-fullscreen #tip { display: none; }
   /* While reading is pulled down, the graph shows through behind it. */
   body.deck-fullscreen.reading-pull #c { display: block; }
-  /* The shared top bar keeps only the current page; reading is left from the top
-     handle (tap or pull). */
+  /* The shared top bar keeps only the current page; reading is left by pulling the
+     top handle down. */
   body.deck-fullscreen #pvBack,
   body.deck-fullscreen #pvFwd,
   body.deck-fullscreen #pvDeck,
@@ -666,15 +680,15 @@
   /* The reading chrome lines up with the column; the extra top padding clears the close
      grabber that floats above the top bar. */
   body.deck-fullscreen #pvHead { max-width: 720px; margin: 0 auto; padding: 24px 28px 12px; touch-action: none; }
-  /* Reading's close grabber: a small pill at the top edge. Tap it to leave reading, or
-     drag it (or the top bar) down. It stays off the text, so a tap never becomes a
+  /* Reading's close grabber: a small pill at the top edge. Drag it (or the top bar)
+     down to leave reading. It stays off the text, so a drag never becomes a
      text selection. */
   #dsHandle { display: none; }
   body.deck-fullscreen #dsHandle {
     display: flex; position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
     z-index: 56; align-items: center; justify-content: center;
     width: 52px; height: 22px; padding: 0; background: transparent; border: 0;
-    cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none;
+    cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
   }
   body.deck-fullscreen #dsHandle span {
     width: 38px; height: 4px; border-radius: 999px; background: var(--muted); opacity: .65;
@@ -913,7 +927,7 @@
       <button id="pvClose" type="button">Close</button>
     </div>
     <div id="pvBody"></div>
-    <button id="dsHandle" type="button" aria-label="Close reading" title="Close reading"><span></span></button>
+    <button id="dsHandle" type="button" aria-label="Drag down to close reading" title="Drag down to close reading"><span></span></button>
   </div>
 </div>
 
@@ -1185,39 +1199,54 @@
       .filter(function (t) { return t !== "" && t.length <= 256 && t.split("/").length <= 16; });
   }
 
-  function addKeyVal(obj, text) {
-    var m = /^([A-Za-z0-9_.\-]+):(.*)$/.exec(text);
-    if (m) obj[m[1]] = parseScalar(m[2]);
-  }
-
+  // Parse an indented block as a YAML value: a list, a mapping, or a scalar.
+  // Blocks nest by indentation, so a key with an empty value starts a deeper
+  // block (a list of decks, a deck's pages, a source's fields, and so on).
   function parseBlockValue(block) {
     if (!block.length) return "";
-    var isList = /^\s*-\s*/.test(block[0]);
-    if (isList) {
-      var items = [], current = null;
-      for (var i = 0; i < block.length; i++) {
-        var lm = /^\s*-\s*(.*)$/.exec(block[i]);
-        if (lm) {
-          var val = lm[1].trim();
-          // A list item is either a mapping ("- id: x") or a plain scalar
-          // ("- meta/inbox"); only the former starts an object we add keys to.
-          if (/^[A-Za-z0-9_.\-]+:(\s|$)/.test(val)) {
-            current = Object.create(null);
-            items.push(current);
-            addKeyVal(current, val);
-          } else {
-            current = null;
-            items.push(parseScalar(val));
-          }
-        } else if (current) {
-          addKeyVal(current, block[i].trim());
-        }
-      }
-      return items;
+    return /^\s*-\s/.test(block[0]) ? parseListBlock(block) : parseMapBlock(block);
+  }
+  function lineIndent(line) { return (line.match(/^\s*/) || [""])[0].length; }
+  function indentOf(n) { var s = ""; while (n-- > 0) s += " "; return s; }
+  // The lines after `start` that are indented past `indent`, up to the next line
+  // at or above it.
+  function nestedBlock(block, start, indent) {
+    var lines = [], k = start;
+    for (; k < block.length; k++) {
+      var line = block[k];
+      if (!line.trim()) continue;
+      if (lineIndent(line) <= indent) break;
+      lines.push(line);
     }
+    return { lines: lines, next: k };
+  }
+  function parseMapBlock(block) {
     var obj = Object.create(null);
-    for (var j = 0; j < block.length; j++) addKeyVal(obj, block[j].trim());
+    for (var j = 0; j < block.length; j++) {
+      var m = /^(\s*)([A-Za-z0-9_.\-]+):(.*)$/.exec(block[j]);
+      if (!m) continue;
+      var rest = m[3].trim();
+      if (rest !== "") { obj[m[2]] = parseScalar(rest); continue; }
+      var nb = nestedBlock(block, j + 1, lineIndent(block[j]));
+      j = nb.next - 1;
+      obj[m[2]] = nb.lines.length ? parseBlockValue(nb.lines) : "";
+    }
     return obj;
+  }
+  function parseListBlock(block) {
+    var items = [], i = 0;
+    while (i < block.length) {
+      var lm = /^(\s*)-\s*(.*)$/.exec(block[i]);
+      if (!lm) { i++; continue; }
+      var dashIndent = lm[1].length, val = lm[2].trim();
+      var nb = nestedBlock(block, i + 1, dashIndent);
+      // A mapping item is "- key: value" (plus its deeper continuation lines);
+      // anything else is a plain scalar item.
+      if (/^[A-Za-z0-9_.\-]+:(\s|$)/.test(val)) items.push(parseMapBlock([indentOf(dashIndent) + val].concat(nb.lines)));
+      else items.push(parseScalar(val));
+      i = nb.next;
+    }
+    return items;
   }
 
   function parseYaml(src) {
@@ -4743,6 +4772,7 @@
     safe("kinds", function () { kindPop.render(); });
     safe("types", function () { typePop.render(); });
     safe("status", function () { statusPop.render(); });
+    if (!preserve) safe("decks", applyBundleDecks);
     return true;
   }
 
@@ -5330,6 +5360,55 @@
     deck = decks[activeDeck].items;
   }
 
+  // Decks a bundle declares in frontmatter. Any loaded concept may list decks
+  // under `okfx.decks`; each deck names its pages, which resolve like other
+  // frontmatter paths (a bare or "/"-prefixed path from the bundle root, a "./"
+  // or "../" path from the file, ".md" optional). The declarations are collected
+  // when a bundle loads and replace the default empty deck.
+  function resolveDeclaredPath(from, ref) {
+    if (typeof ref !== "string") return null;
+    var p = normalizeLinkPath(ref);
+    if (p && !extOf(p)) p += ".md";
+    if (!p || !fileMap) return null;
+    var cands = resourceCandidates(from, p);
+    for (var i = 0; i < cands.length; i++) if (fileMap.has(cands[i])) return cands[i];
+    return null;
+  }
+  function applyBundleDecks() {
+    if (!fileMap) return false;
+    var specs = [];
+    allNodes.forEach(function (node) {
+      var decl = node.fm && node.fm.okfx && node.fm.okfx.decks;
+      if (!decl) return;
+      var list = Array.isArray(decl) ? decl : [decl];
+      list.forEach(function (spec) {
+        var name = "", pages = [];
+        if (typeof spec === "string") { pages = [spec]; }
+        else if (spec && typeof spec === "object") {
+          if (typeof spec.name === "string") name = spec.name.trim();
+          var p = spec.pages;
+          pages = Array.isArray(p) ? p : (typeof p === "string" ? [p] : []);
+        } else return;
+        var items = [], seen = new Set();
+        pages.forEach(function (ref) {
+          var path = resolveDeclaredPath(node.path, ref);
+          if (!path || seen.has(path)) return;
+          seen.add(path);
+          items.push({ path: path, sub: null, open: false });
+        });
+        if (items.length) specs.push({ name: name, items: items });
+      });
+    });
+    if (!specs.length) return false;
+    decks = specs.slice(0, MAX_DECKS).map(function (s, i) {
+      return { name: s.name || ("Deck " + (i + 1)), items: s.items };
+    });
+    activeDeck = 0;
+    deck = decks[0].items;
+    renderDeck();
+    return true;
+  }
+
   // The deck menu, opened from the preview's add button and from the deck switcher.
   // Opened for a page (the add-to-deck menu) it stays open while the page is toggled
   // in and out of decks, closing only when the pointer goes outside it; the deck
@@ -5552,9 +5631,13 @@
       if (deck.length) addGuideAsSubDeck(node, false); else openGuideInDeck(node);
     } else addCard(node, false);
   }
-  function removeDeckCard(path) {
-    setDeckItems(deck.filter(function (e) { return e.path !== path; }));
-    deck.forEach(function (e) { if (e.sub) e.sub = e.sub.filter(function (p) { return p !== path; }); });
+  function removeDeckCard(path) { removeDeckCardFrom(activeDeck, path); }
+  function removeDeckCardFrom(index, path) {
+    var d = decks[index];
+    if (!d) return;
+    d.items = d.items.filter(function (e) { return e.path !== path; });
+    d.items.forEach(function (e) { if (e.sub) e.sub = e.sub.filter(function (p) { return p !== path; }); });
+    if (index === activeDeck) deck = d.items;
     renderDeck();
   }
   function flashDeckCard(path) {
@@ -5590,7 +5673,7 @@
     return title + (metaHtml ? '<div class="md-meta">' + metaHtml + "</div>" : "") + body;
   }
 
-  function buildDeckCard(entry, byPath, isSub, active) {
+  function buildDeckCard(entry, byPath, isSub, active, deckIndex) {
     var node = byPath.get(entry.path);
     if (!node) return null;
     var el = document.createElement("article");
@@ -5613,23 +5696,28 @@
 
       var sub = document.createElement("div"); sub.className = "dc-sub";
       entry.sub.forEach(function (p) {
-        var child = buildDeckCard({ path: p, sub: null, open: false }, byPath, true, true);
+        var child = buildDeckCard({ path: p, sub: null, open: false }, byPath, true, true, deckIndex);
         if (child) sub.appendChild(child);
       });
       el.appendChild(sub);
     }
 
-    if (active !== false) {
-      var x = document.createElement("button"); x.type = "button"; x.className = "dc-x";
-      x.title = "Remove card"; x.setAttribute("aria-label", "Remove card"); x.textContent = "\u00d7";
-      x.addEventListener("click", function (e) { e.stopPropagation(); removeDeckCard(entry.path); });
-      el.appendChild(x);
-    }
+    // The remove control rides every card, the active deck or not: hovering any
+    // deck's card reveals it, and it removes the page from that card's own deck.
+    var x = document.createElement("button"); x.type = "button"; x.className = "dc-x";
+    x.title = "Remove card"; x.setAttribute("aria-label", "Remove card"); x.textContent = "\u00d7";
+    x.addEventListener("click", function (e) { e.stopPropagation(); removeDeckCardFrom(deckIndex, entry.path); });
+    el.appendChild(x);
 
     el._deckNode = node; el._deckMini = mini; el._deckMiniDone = false;
-    if (active !== false) el.addEventListener("click", function (e) {
+    // A click opens the page at once. Clicking a card in a deck that is not active makes
+    // that deck active first (the reading stream follows the active deck), so the page
+    // opens on the first click instead of needing one click to activate and a second to
+    // open.
+    el.addEventListener("click", function (e) {
       if (e.target.closest && e.target.closest("button")) return;
       e.stopPropagation();
+      if (deckIndex != null && deckIndex !== activeDeck && decks[deckIndex]) { useDeck(deckIndex); renderDeck(); }
       openPreview(node, true);
     });
     return el;
@@ -5787,7 +5875,7 @@
       stack.setAttribute("data-deck", String(i));
       var cards = [];
       d.items.forEach(function (entry) {
-        var el = buildDeckCard(entry, byPath, false, isActive);
+        var el = buildDeckCard(entry, byPath, false, isActive, i);
         if (el) { stack.appendChild(el); cards.push(el); }
       });
       if (isActive) {
@@ -5798,8 +5886,7 @@
         if (cards[0]) {
           var chip = document.createElement("div");
           chip.className = "deck-stack-chip";
-          chip.textContent = (deckLabelFor(d.items) || d.name) +
-            (d.items.length ? " \u00b7 " + d.items.length : "");
+          chip.textContent = deckLabelFor(d.items) || d.name;
           cards[0].appendChild(chip);
         }
         var tagOf = deckTag(d.items);
@@ -5910,6 +5997,23 @@
   // is over, a new deck (in the column but clear of every stack, e.g. in a gap), or
   // null to drop it back. DECK_TOL is how far off a stack still counts as on it.
   var DECK_TOL = 4;
+  // The drop site (aura) spans the column from near the window top to near its bottom
+  // on desktop; on small screens it grows upward from the deck's foot over half the
+  // window. `overDropSite` mirrors those bounds so the aura's dim/light state matches
+  // where a card can land.
+  var AURA_TOP = 8, AURA_BOTTOM = 12, AURA_H_MOBILE = 0.5, AURA_SIDE = 8;
+  // Drag-scrolling of the deck panel: how close to a panel edge the pointer must be
+  // before the docked decks scroll, and how many pixels they move per frame.
+  var DECK_SCROLL_EDGE = 48, DECK_SCROLL_STEP = 7;
+  var dragX = 0, dragY = 0, deckScrollRAF = 0;
+  function overDropSite(x, y) {
+    if (!deckEl) return false;
+    var r = deckEl.getBoundingClientRect();
+    if (x < r.left - AURA_SIDE || x > r.right + AURA_SIDE) return false;
+    var mobile = !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
+    if (mobile) return y >= r.bottom - window.innerHeight * AURA_H_MOBILE && y <= r.bottom;
+    return y >= AURA_TOP && y <= window.innerHeight - AURA_BOTTOM;
+  }
   function cardDropTarget(x, y, h) {
     var r = deckEl.getBoundingClientRect();
     if (x < r.left - 24 || x > r.right + 24) return null;
@@ -5957,14 +6061,19 @@
       // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
       deckEl.style.top = "";
       deckEl.style.maxHeight = "";
+      deckBodyEl.style.paddingTop = "";
     } else {
       var info = deckTabInfo();
-      var top = info ? info.bottom + DECK_TOP_GAP : 64;
-      deckEl.style.top = top + "px";
-      deckEl.style.maxHeight = "calc(100vh - " + (top + 12) + "px)";
-      // The drop site reaches down near the bottom of the window, so a card can be
-      // dropped well clear of the decks to start a new one.
-      deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - (top + 16) - 12)) + "px");
+      // The panel spans from near the top of the window down near its bottom, so the
+      // docked decks can scroll all the way up to the top. Its content is inset so the
+      // first deck still starts below the filter tab, which is where it populates from,
+      // and the drop site (aura) covers the same full span.
+      var firstTop = info ? info.bottom + DECK_TOP_GAP : 64;
+      deckEl.style.top = AURA_TOP + "px";
+      deckEl.style.maxHeight = "calc(100vh - " + (AURA_TOP + AURA_BOTTOM) + "px)";
+      deckBodyEl.style.paddingTop = Math.round(firstTop) + "px";
+      deckEl.style.setProperty("--deck-aura-top", "0px");
+      deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - AURA_TOP - AURA_BOTTOM)) + "px");
     }
   }
   // While the dragged card is over a stack the cards shift down one step to open the
@@ -5984,7 +6093,7 @@
     if (n) stack.style.height = Math.round(2 * DECK_PAD + n * step + (cards[n - 1].offsetHeight || deckCardHeight())) + "px";
   }
   function clearDeckGap() { deckStackEls().forEach(layoutStack); }
-  function moveCardDrag(x, y) {
+  function applyCardDrag(x, y) {
     if (!cardDrag || !cardDrag.ghost) return;
     // The card sticks to the pointer for the whole drag; which deck's stack it would
     // land in (and the resulting shuffle) changes as it passes over them.
@@ -5995,6 +6104,9 @@
     var target = cardDropTarget(x, y, h);
     cardDrag.target = target;
     var targetStack = target && target.kind === "deck" ? stackForDeck(target.deck) : null;
+    // The drop site dims while the card is outside it and lightens while it is inside.
+    cardDrag.inside = overDropSite(x, y) || !!target;
+    deckEl.classList.toggle("inside", cardDrag.inside);
     // Move the gap only when the target stack changes.
     if (cardDrag.stack && cardDrag.stack !== targetStack) { clearDeckGap(); cardDrag.stack = null; }
     if (targetStack) {
@@ -6002,21 +6114,46 @@
       g.style.zIndex = String(target.slot + 1);
       applyDeckGap(targetStack, target.slot);
       cardDrag.stack = targetStack;
-      deckEl.classList.add("receiving");
       deckEl.classList.remove("newdeck");
     } else {
       // Off every stack the card floats above them; clear of them it starts a new deck.
       if (g.parentNode !== deckBodyEl) deckBodyEl.appendChild(g);
       g.style.zIndex = "";
-      deckEl.classList.remove("receiving");
       deckEl.classList.toggle("newdeck", !!(target && target.kind === "new"));
     }
+  }
+  // The card follows the pointer and the canvas holds the pointer capture, so the panel
+  // cannot be scrolled by hand while a card is out. While the card is inside the drop
+  // site, drag-scroll the docked decks when the pointer nears the panel's top or bottom,
+  // so every deck can be reached and dropped on.
+  function moveCardDrag(x, y) {
+    dragX = x; dragY = y;
+    applyCardDrag(x, y);
+    if (!deckScrollRAF && cardDrag) deckScrollRAF = requestAnimationFrame(deckAutoScrollTick);
+  }
+  function deckAutoScrollTick() {
+    deckScrollRAF = 0;
+    if (!cardDrag || !deckBodyEl) return;
+    var r = deckBodyEl.getBoundingClientRect();
+    var dy = 0;
+    if (cardDrag.inside) {
+      if (dragY < r.top + DECK_SCROLL_EDGE) dy = -DECK_SCROLL_STEP * Math.min(1, (r.top + DECK_SCROLL_EDGE - dragY) / DECK_SCROLL_EDGE);
+      else if (dragY > r.bottom - DECK_SCROLL_EDGE) dy = DECK_SCROLL_STEP * Math.min(1, (dragY - (r.bottom - DECK_SCROLL_EDGE)) / DECK_SCROLL_EDGE);
+    }
+    dy = Math.round(dy);
+    if (!dy) return;
+    var before = deckBodyEl.scrollTop;
+    deckBodyEl.scrollTop = before + dy;
+    if (deckBodyEl.scrollTop === before) return;   // an end was reached
+    applyCardDrag(dragX, dragY);                    // the stacks moved under the pointer
+    deckScrollRAF = requestAnimationFrame(deckAutoScrollTick);
   }
   function cancelCardDrag() {
     if (cardDrag && cardDrag.ghost && cardDrag.ghost.parentNode) cardDrag.ghost.parentNode.removeChild(cardDrag.ghost);
     cardDrag = null;
+    if (deckScrollRAF) { cancelAnimationFrame(deckScrollRAF); deckScrollRAF = 0; }
     document.body.classList.remove("card-dragging");
-    if (deckEl) deckEl.classList.remove("dropzone", "receiving", "newdeck");
+    if (deckEl) deckEl.classList.remove("dropzone", "inside", "newdeck");
     clearDeckGap();
   }
   function finishCardDrag() {
@@ -6064,12 +6201,7 @@
       // Small screens dock the deck to the bottom via CSS; drop the desktop offsets.
       deckEl.style.top = "";
       deckEl.style.maxHeight = "";
-      return;
-    }
-    if (!deck.length) {
-      var top = Math.round(info.bottom + DECK_TOP_GAP);
-      deckEl.style.top = top + "px";
-      deckEl.style.maxHeight = "calc(100vh - " + (top + 12) + "px)";
+      deckBodyEl.style.paddingTop = "";
     }
   }
 
@@ -6174,9 +6306,9 @@
     deckStreamRAF = requestAnimationFrame(function () { deckStreamRAF = 0; updateDeckStreamCurrent(); });
   });
 
-  // Reading is left from the top handle: tap it, or pull it — or the top bar — down. The
-  // pull drags the reading view down (revealing the graph behind) and, past a distance,
-  // leaves reading; a short pull springs back.
+  // Reading is left by dragging the top handle — or the top bar — down. The pull drags
+  // the reading view down (revealing the graph behind) and, past a distance, leaves
+  // reading; a short pull springs back.
   var DS_PULL_CLOSE = 130;
   var readingPullY = null;
   function readingPullReset() {
@@ -6209,8 +6341,8 @@
     if (readingPullY == null) return;
     var d = Math.max(0, e.clientY - readingPullY);
     readingPullY = null;
-    // A tap, or a pull past the distance, leaves reading; anything between springs back.
-    if (d >= DS_PULL_CLOSE || d <= 8) { readingPullReset(); closePreview(); return; }
+    // Only a pull past the distance leaves reading; anything shorter springs back.
+    if (d >= DS_PULL_CLOSE) { readingPullReset(); closePreview(); return; }
     readingPullBack();
   }
   [dsHandle, pvHeadEl].forEach(function (el) {
@@ -6252,6 +6384,37 @@
       if (card) setDeckHover(card.parentNode, card);
     });
     deckEl.addEventListener("pointerleave", function () { if (!cardDrag) setDeckHover(null, null); });
+    // Dragging the deck's empty space (not a card or a stack) scrolls the docked decks,
+    // instead of reaching the graph behind them.
+    var deckScroll = null;
+    function endDeckScroll(e) {
+      if (!deckScroll || (e && e.pointerId != null && e.pointerId !== deckScroll.id)) return;
+      deckScroll = null;
+      if (deckEl) deckEl.classList.remove("scrolling");
+    }
+    deckBodyEl.addEventListener("pointerdown", function (e) {
+      if (e.button && e.button !== 0) return;
+      if (e.target.closest && e.target.closest(".deck-card, .deck-stack")) return;
+      deckScroll = { id: e.pointerId, y: e.clientY, top: deckBodyEl.scrollTop };
+      try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+      deckEl.classList.add("scrolling");
+      e.preventDefault();
+    });
+    deckBodyEl.addEventListener("pointermove", function (e) {
+      if (!deckScroll || e.pointerId !== deckScroll.id) return;
+      deckBodyEl.scrollTop = deckScroll.top - (e.clientY - deckScroll.y);
+    });
+    deckBodyEl.addEventListener("pointerup", endDeckScroll);
+    deckBodyEl.addEventListener("pointercancel", endDeckScroll);
+    // While a card drag is out, the canvas holds the pointer capture, so wheel over the
+    // drop site would not otherwise reach the deck. Route it to the panel, so the docked
+    // decks can be scrolled by hand while grabbing inside the drop site.
+    window.addEventListener("wheel", function (e) {
+      if (!cardDrag || !overDropSite(e.clientX, e.clientY)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      deckBodyEl.scrollTop += e.deltaY;
+    }, { passive: false, capture: true });
     if (pvDeckBtn) pvDeckBtn.addEventListener("click", function (e) {
       e.stopPropagation();
       openDeckMenu(pvDeckBtn, pvCurrent, null);
