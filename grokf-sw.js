@@ -10,7 +10,7 @@
 "use strict";
 
 // Bump the version to force a refresh of the cached shell.
-var CACHE = "grokf-shell-v11";
+var CACHE = "grokf-shell-v13";
 
 // The shell is everything the page itself needs to start. Bundle files are not
 // part of it and are never added.
