@@ -132,7 +132,7 @@
   body:not(.hide-side) .bar { right: 324px; }
 
   #sidebar {
-    /* Above the docked deck (z-index 20) so the filter panel is never covered. */
+    /* Above the docked deck (z-index 19) so the filter panel is never covered. */
     position: fixed; top: 0; right: 0; bottom: 0; width: 312px; z-index: 21;
     display: flex; flex-direction: column;
     background: var(--panel); border-left: 1px solid var(--line);
@@ -248,6 +248,8 @@
     text-decoration: line-through;
   }
 
+  /* Node hover tooltip. Sits above the deck (z-index 19) but below the docked
+     panels (z-index 21), so a panel is never covered by it. */
   #tip {
     position: fixed; z-index: 20; max-width: 340px; pointer-events: none;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -475,7 +477,7 @@
 
     /* Legend: left-docked panel (mirrors filters); tab attached to its right
        edge, near the bottom. Like the filter sidebar it sits above the docked
-       deck (z-index 20), so the deck never covers it. */
+       deck (z-index 19), so the deck never covers it. */
     #legend {
       top: 0; left: 0; bottom: 0; right: auto; z-index: 21;
       width: min(280px, 80vw); max-width: none;
@@ -500,7 +502,7 @@
   :root { --deck-w: 100px; --dc-w: 74px; --dc-h: 105px; --dc-step: 28px; --deck-inset: 4px; }
   #deck {
     position: fixed; top: 64px; right: var(--deck-inset); width: var(--deck-w);
-    z-index: 20; display: none; flex-direction: column;
+    z-index: 19; display: none; flex-direction: column;
     max-height: calc(100vh - 76px); transition: right .18s ease;
   }
   /* The drop site is a separate, fixed-size rectangle, not tied to the deck's own
@@ -1789,6 +1791,20 @@
       });
     });
 
+    // A pair of concepts that link to each other reads as one edge: mark one of the two
+    // reference links as a duplicate to skip when drawing, and the kept one as
+    // bidirectional (an arrowhead at each end). The model keeps both, so direction
+    // counts and neighbour lookups stay accurate.
+    var refByPair = new Map();
+    links.forEach(function (l) { if (l.kind === "ref") refByPair.set(l.source.id + "\u2192" + l.target.id, l); });
+    links.forEach(function (l) {
+      if (l.kind !== "ref") return;
+      var rev = refByPair.get(l.target.id + "\u2192" + l.source.id);
+      if (!rev || rev === l) return;
+      if (l.source.id < l.target.id) { l.bi = true; rev.dup = true; }
+      else { rev.bi = true; l.dup = true; }
+    });
+
     // Tag hubs, with namespaced tags (a/b) nested as a hierarchy. Built while the
     // "Tags" toggle is on or a tag filter is active; otherwise the graph is
     // unchanged.
@@ -2001,7 +2017,7 @@
   function updateStats() {
     if (!statsEl) return;
     statsEl.textContent = nodes.filter(function (n) { return n.kind !== "dir"; }).length + " files · " +
-      links.filter(function (l) { return l.kind === "ref"; }).length + " links";
+      links.filter(function (l) { return l.kind === "ref" && !l.dup; }).length + " links";
   }
 
   // ---------------------------------------------------------------- forces
@@ -2456,7 +2472,7 @@
     }
     for (i = 0; i < links.length; i++) {
       l = links[i];
-      if (l.kind === "ref") drawEdge(l, "ref", active);
+      if (l.kind === "ref" && !l.dup) drawEdge(l, "ref", active);
     }
 
     // Nodes
@@ -2524,6 +2540,16 @@
     ctx.globalAlpha = 1;
   }
 
+  function arrowHead(x, y, ang, a, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(ang - 0.4) * a, y - Math.sin(ang - 0.4) * a);
+    ctx.lineTo(x - Math.cos(ang + 0.4) * a, y - Math.sin(ang + 0.4) * a);
+    ctx.closePath();
+    ctx.fill();
+  }
+
   function drawEdge(l, style, active) {
     var s = l.source, t = l.target;
     var x1 = sx(s.x), y1 = sy(s.y), x2 = sx(t.x), y2 = sy(t.y);
@@ -2557,6 +2583,16 @@
       ctx.strokeStyle = "#5a6274";
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    } else if (l.bi) {
+      // A mutual reference is one straight edge, with an arrowhead at each end.
+      var bc = hot ? "#8fb4ff" : "#6f86b8";
+      ctx.strokeStyle = bc;
+      ctx.lineWidth = hot ? 1.8 : 1.1;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      var fwd = Math.atan2(y2 - y1, x2 - x1);
+      var ah = 6 + 2 * view.k;
+      arrowHead(x2 - Math.cos(fwd) * (radiusOf(t) * view.k), y2 - Math.sin(fwd) * (radiusOf(t) * view.k), fwd, ah, bc);
+      arrowHead(x1 + Math.cos(fwd) * (radiusOf(s) * view.k), y1 + Math.sin(fwd) * (radiusOf(s) * view.k), fwd + Math.PI, ah, bc);
     } else {
       // Curved reference edge with an arrowhead.
       var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;

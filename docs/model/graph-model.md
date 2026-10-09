@@ -32,6 +32,8 @@ Two link kinds connect nodes:[^source]
 - **tree** links express directory containment (directory to child directory or file), and the tag namespace hierarchy.
 - **ref** links express Markdown references between concepts, plus `sources[].resource` pointers in frontmatter (which may name any file, not only Markdown).
 
+When two concepts link to each other, the pair is drawn as a single **bidirectional** edge — one straight line with an arrowhead at each end — rather than two curves. The model keeps both directions, so each concept's incoming and outgoing counts stay accurate.
+
 An unresolved reference to an attachment or a non-Markdown file appears as a **placeholder** node with no content (drawn with a dashed ring); the tool loads it only when the user asks.
 
 # Node attributes

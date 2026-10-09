@@ -22,7 +22,7 @@ sources:
 
 # Invariants
 
-- Each pair of nodes has at most one ref link.
+- Each ordered pair of nodes has at most one ref link; a mutual pair (A links to B and B links to A) is kept as two links but drawn as one bidirectional edge.
 - A concept is never linked to itself.
 - Embedded images are rendered inline in the preview and get no node.
 - Non-Markdown files and attachments are never loaded by construction; whether named by a body link or a `sources[].resource` pointer, they become placeholder nodes.
