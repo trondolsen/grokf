@@ -34,7 +34,7 @@ A multi-page guide — a `Guide`-typed concept that links to two or more other c
 
 # Reading from the deck
 
-Clicking a card reads the whole deck as one **continuous stream**, fullscreen within the browser window: the pages follow each other in deck order, while the toolbar, legend, sidebar and the deck itself are hidden.
+Clicking a card reads the whole deck as one **continuous stream**, fullscreen within the browser window: the pages follow each other in deck order, and the reading page opens as its own layer above the untouched interface.
 
 - The shared top bar follows what you read: it shows the page scrolled into view, with no controls.
 

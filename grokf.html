@@ -733,16 +733,11 @@
     box-shadow: 0 14px 34px rgba(0,0,0,.65);
   }
 
-  /* Reading the deck as a continuous stream, fullscreen within the browser window: only
-     the page and the deck remain, the top bar is shared across the pages, and the pages
-     follow each other as sections. */
-  body.deck-fullscreen .bar,
-  body.deck-fullscreen #sidebar,
-  body.deck-fullscreen .panel-handle,
-  body.deck-fullscreen #legend,
-  body.deck-fullscreen #spinner,
-  body.deck-fullscreen #c,
-  body.deck-fullscreen #tip { display: none; }
+  /* Reading the deck as a continuous stream, fullscreen within the browser window: the
+     pages follow each other as sections under a shared top bar. Full-page reading is its
+     own top layer — the preview overlay, above the toolbar and the docked panels — and
+     the existing interface, including the docked deck, is left untouched beneath it
+     rather than being hidden or minimized. */
   /* While reading is pulled down, the graph shows through behind it. */
   body.deck-fullscreen.reading-pull #c { display: block; }
   /* The shared top bar keeps only the current page; reading is left by pulling the
@@ -751,8 +746,9 @@
   body.deck-fullscreen #pvFwd,
   body.deck-fullscreen #pvDeck,
   body.deck-fullscreen #pvClose { display: none; }
-  /* A page opened from the deck fills the window: the deck itself is hidden. */
-  body.deck-fullscreen #deck { display: none; }
+  /* The reading page fills the window and sits above the docked deck: the deck's
+     z-index (19) is below the preview's (50), so the deck keeps its dock but is
+     covered while the page is open. */
   /* The streamed pages: a centred reading column with no visible scrollbar. */
   #pvBody.ds-stream { padding: 0; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior: contain; }
   #pvBody.ds-stream::-webkit-scrollbar { display: none; }
