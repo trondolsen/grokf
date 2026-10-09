@@ -65,7 +65,12 @@
   /* Text selection is allowed only where text is the content: form fields and the page
      display (the preview and the deck reading stream). */
   input, textarea, select, #pvBody { -webkit-user-select: text; user-select: text; }
-  #c { position: fixed; inset: 0; display: block; cursor: grab; touch-action: none;
+  /* position: absolute, not fixed: a full-viewport `fixed` layer makes WebKit
+     (Safari) rasterize the canvas at 1x on Retina displays, so the graph looks
+     soft and aliased. An absolute canvas is painted at the device resolution.
+     The page does not scroll (body has overflow: hidden), so an absolute canvas
+     inset: 0 fills the viewport exactly as the fixed one did. */
+  #c { position: absolute; inset: 0; display: block; cursor: grab; touch-action: none;
        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #c.dragging { cursor: grabbing; }
 
@@ -2533,7 +2538,10 @@
   }
 
   function draw() {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Scale by the canvas's real backing-store ratio (not the raw
+    // devicePixelRatio): rounding can't blur the frame, and a devicePixelRatio
+    // that changed since the last resize still maps 1:1.
+    ctx.setTransform(W ? canvas.width / W : dpr, 0, 0, H ? canvas.height / H : dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
     var active = hover ? neighborSet(hover) : legendActiveSet();
@@ -2703,6 +2711,11 @@
   // ---------------------------------------------------------------- loop
   var raf = null;
   function loop() {
+    // Safari can report or change devicePixelRatio without firing a `resize`
+    // event (and a web app window may report it late), which leaves the canvas
+    // stuck at a lower resolution. Re-sync it here, cheaply, so the graph stays
+    // crisp. resize() only updates dpr and the canvas, so the view is kept.
+    if (window.devicePixelRatio && window.devicePixelRatio !== dpr) resize();
     tick();
     if (autoFit) {
       // Track the settling layout so the whole graph stays in view; stop once
