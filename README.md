@@ -6,11 +6,13 @@
 
 Tool for exploring [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/open-knowledge-format) bundles in your web-browser. All files are processed locally in your web-browser.
 
-Visit https://grokf.org/ to try it out.
-
 ![grokf](grokf.png "grokf")
 
 ## Usage
+
+### Hosted on grokf.org
+
+Visit https://grokf.org/ to try it now.
 
 ### In local web-browser
 

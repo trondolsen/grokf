@@ -367,6 +367,13 @@
     display: flex; align-items: baseline; gap: 10px;
     padding: 12px 14px; border-bottom: 1px solid var(--line);
   }
+  /* The title and path sit together on one line, sharing the space between the
+     controls. On small screens the path wraps onto its own line when the pair no
+     longer fits, instead of being squeezed out. */
+  #pvHead .head-text {
+    display: flex; align-items: baseline; gap: 10px;
+    flex: 1 1 auto; min-width: 0;
+  }
   #pvHead .t {
     font-weight: 600; font-size: 15px; white-space: nowrap;
     min-width: 0; overflow: hidden; text-overflow: ellipsis;
@@ -514,6 +521,10 @@
       position: absolute; left: 100%; bottom: 84px; transform: none;
       border-left: 0; border-radius: 0 10px 10px 0;
     }
+
+    /* The preview header wraps on small screens: the path drops onto its own line
+       below the title when the pair no longer fits side by side. */
+    #pvHead .head-text { flex-wrap: wrap; gap: 2px 10px; }
   }
 
   /* Deck of cards: cards float on the right edge without a panel, so the deck
@@ -1000,8 +1011,10 @@
     <div id="pvHead">
       <button id="pvBack" type="button" title="Back" disabled>‹</button>
       <button id="pvFwd" type="button" title="Forward" disabled>›</button>
-      <span class="t" id="pvTitle"></span>
-      <span class="p" id="pvPath"></span>
+      <span class="head-text">
+        <span class="t" id="pvTitle"></span>
+        <span class="p" id="pvPath"></span>
+      </span>
       <button id="pvDeck" type="button" title="Add this page to the deck" aria-label="Add this page to the deck">⋮</button>
       <button id="pvClose" type="button">Close</button>
     </div>
