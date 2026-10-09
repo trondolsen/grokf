@@ -357,9 +357,10 @@
   #pvHead button { padding: 4px 9px; }
   #pvHead #pvBack, #pvHead #pvFwd { padding: 3px 10px; font-size: 15px; line-height: 1; }
   #pvHead #pvBack, #pvHead #pvFwd, #pvHead #pvClose, #pvHead #pvDeck { flex: none; }
-  /* The add-to-deck control sits just left of Close, the pair pushed to the right edge. */
+  /* The add-to-deck handle sits just left of Close, the pair pushed to the right edge. It
+     is a small glyph that opens the deck menu, with the action named in its tooltip. */
   #pvHead #pvDeck {
-    margin-left: auto; padding: 3px 8px; font-size: 12px;
+    margin-left: auto; padding: 3px 9px; font-size: 15px; line-height: 1;
     background: transparent; border-color: transparent; color: var(--muted);
   }
   #pvHead #pvDeck:hover {
@@ -551,18 +552,35 @@
   /* The title chip is a plain label, not a control. */
   #deckLabel { cursor: default; }
   #deckLabel[hidden], #deckTag[hidden] { display: none; }
-  /* Highlighted while the page it belongs to is pointed at. */
-  .deck-card:hover #deckLabel, .deck-card:hover #deckTag,
-  .deck-card:hover .deck-stack-chip, .deck-card:hover .deck-stack-tag,
+  /* The deck's chips highlight while any of its cards is pointed at, so the deck's
+     kind and tag read together from whichever card the pointer is on. */
+  .deck-stack.hovering #deckLabel, .deck-stack.hovering #deckTag,
+  .deck-stack.hovering .deck-stack-chip, .deck-stack.hovering .deck-stack-tag,
   #deckLabel:hover, #deckTag:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
   #deckLabel abbr, #deckTag abbr { text-decoration: none; cursor: help; }
-  /* The deck menu, opened from the preview's add button and from the deck switcher. */
+  /* Edge cues for decks scrolled out of the panel's visible range: a small accent pill
+     on the top or bottom edge, pointing to the hidden decks and counting them. It is a
+     plain cue, not a control, so it never takes the pointer. */
+  .deck-more {
+    position: absolute; left: 50%; transform: translateX(-50%); z-index: 30;
+    padding: 1px 6px; border-radius: 999px; pointer-events: none;
+    font-size: 9px; font-weight: 600; line-height: 12px; letter-spacing: .04em;
+    white-space: nowrap; background: var(--accent); color: #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,.5);
+  }
+  #deckMoreTop { top: 2px; }
+  #deckMoreBottom { bottom: 2px; }
+  .deck-more[hidden] { display: none; }
+  /* The deck menu, opened from the preview's add button and from the deck switcher. It
+     scrolls when the decks outgrow it, but keeps that scrollbar hidden, like the deck
+     panel. */
   .deck-menu {
     position: fixed; z-index: 62; min-width: 170px; max-width: min(280px, calc(100vw - 16px));
-    max-height: 60vh; overflow: auto; padding: 4px;
+    max-height: 60vh; overflow: auto; padding: 4px; scrollbar-width: none;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     box-shadow: 0 18px 50px rgba(0,0,0,.55);
   }
+  .deck-menu::-webkit-scrollbar { display: none; }
   .deck-menu[hidden] { display: none; }
   .deck-menu button {
     display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
@@ -579,6 +597,27 @@
   /* The add-to-deck menu is compact: smaller names and counts than the switcher. */
   .deck-menu.add button:not(.new) { font-size: 11px; }
   .deck-menu.add button .n { font-size: 10px; }
+  /* In the add-to-deck menu each deck is shown the way its docked stack looks: all its
+     pages stacked so about a quarter of each stays visible, its kind chip on the top page
+     and its tag chip under the bottom one. The deck that already holds the page is ringed
+     in the accent; the others are dimmed. */
+  .deck-menu.add { min-width: 0; width: max-content; display: flex; flex-direction: column; gap: 4px; }
+  .deck-menu .dm {
+    display: flex; justify-content: center; align-items: center; width: 100%; padding: 11px 6px;
+    border: 0; border-radius: 9px; background: transparent; font: inherit; cursor: pointer;
+  }
+  .deck-menu .dm:hover { background: var(--panel-2); }
+  .deck-menu .dm.out { opacity: .5; }
+  .deck-menu .dm > .dm-stack { overflow: visible; }
+  .deck-menu .dm-stack { position: relative; width: var(--dc-w); }
+  .deck-menu .dm-stack .deck-card { position: absolute; left: 0; }
+  .deck-menu .dm.in .deck-card {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 14px rgba(0,0,0,.45);
+  }
+  .deck-menu .dm.in .deck-stack-chip, .deck-menu .dm.in .deck-stack-tag {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
   /* "New deck" is an action, shown as a plus symbol rather than text: a full-width,
      accent-tinted button at the foot of the menu, with no separator above it. */
   .deck-menu button.new {
@@ -593,9 +632,16 @@
   /* Cards sit where they were dropped, aligned to the deck's column. Every deck is its
      own stack; the stacks are set apart by a gap. The active deck is live while the
      others are dimmed and activate on click. */
-  #deckBody { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 8px 0; scrollbar-width: none; }
+  #deckBody { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; padding: 8px 0; scrollbar-width: none; }
   #deckBody::-webkit-scrollbar { display: none; }
-  .deck-stack { position: relative; }
+  /* Blocks of empty space above and below the decks give the column scroll room in both
+     directions, so the docked decks can be dragged or scrolled out of view either way
+     even when they are shorter than the column. Their height is set from JS
+     (--deck-room) to the column's own height; the decks rest at the top of the visible
+     area. */
+  #deckBody::before, #deckBody::after { content: ""; flex: 0 0 auto; height: var(--deck-room, 0px); }
+  /* The decks keep their own height inside the scrolling column rather than shrinking. */
+  .deck-stack { position: relative; flex: 0 0 auto; }
   .deck-stack + .deck-stack { margin-top: 28px; }
   .deck-stack:not(.active) { cursor: pointer; }
 
@@ -937,7 +983,7 @@
       <button id="pvFwd" type="button" title="Forward" disabled>›</button>
       <span class="t" id="pvTitle"></span>
       <span class="p" id="pvPath"></span>
-      <button id="pvDeck" type="button" title="Add this page to the deck">Add to deck</button>
+      <button id="pvDeck" type="button" title="Add this page to the deck" aria-label="Add this page to the deck">⋮</button>
       <button id="pvClose" type="button">Close</button>
     </div>
     <div id="pvBody"></div>
@@ -948,6 +994,8 @@
 <div id="deck" aria-label="Deck of cards">
   <div id="deckLabel" hidden></div>
   <div id="deckTag" hidden></div>
+  <div id="deckMoreTop" class="deck-more" hidden></div>
+  <div id="deckMoreBottom" class="deck-more" hidden></div>
   <div id="deckBody"></div>
 </div>
 <div id="deckMenu" class="deck-menu" hidden></div>
@@ -5389,6 +5437,10 @@
   var deckBodyEl = document.getElementById("deckBody");
   var deckLabelEl = document.getElementById("deckLabel");
   var deckTagEl = document.getElementById("deckTag");
+  var deckMoreTopEl = document.getElementById("deckMoreTop");
+  var deckMoreBottomEl = document.getElementById("deckMoreBottom");
+  var deckRoomPx = 0;                          // scroll room above and below the decks, in px
+  var deckScrollOffset = 0;                    // the column's scroll, measured from its home position
   var deckMenuEl = document.getElementById("deckMenu");
   var pvDeckBtn = document.getElementById("pvDeck");
 
@@ -5490,19 +5542,54 @@
   }
   function renderDeckMenu() {
     deckMenuEl.textContent = "";
+    var byPath = deckNodesByPath();
     decks.forEach(function (d, i) {
       // The add-to-deck menu lists only decks that already hold pages: an empty deck
       // has nothing to add to, so it is left out (the deck chip can still show one
       // while it is being filled). The switcher lists every deck.
       if (deckMenuNode && d.items.length === 0) return;
       var b = document.createElement("button"); b.type = "button";
-      var nm = document.createElement("span"); nm.textContent = deckLabelFor(d.items, !!deckMenuNode) || d.name;
-      if (i === activeDeck) nm.className = "cur";
-      // In the add-to-deck menu the decks that already hold the page are highlighted
-      // and the rest are dimmed, so its current place is clear.
-      if (deckMenuNode) b.className = deckHasIn(d.items, deckMenuNode.path) ? "in" : "out";
-      var n = document.createElement("span"); n.className = "n"; n.textContent = String(d.items.length);
-      b.appendChild(nm); b.appendChild(n);
+      if (deckMenuNode) {
+        // Each deck is shown the way its docked stack looks: every page stacked, the first
+        // page showing about a tenth of its height and each of the rest a thin sliver,
+        // its kind chip on the top page and its tag chip under the bottom one. The deck
+        // that already holds the page is ringed; the rest dimmed.
+        b.className = "dm " + (deckHasIn(d.items, deckMenuNode.path) ? "in" : "out");
+        var stack = document.createElement("span"); stack.className = "dm-stack";
+        var h = deckCardHeight();
+        var firstStep = Math.max(6, Math.round(h * 0.10));   // the first page shows a tenth
+        var restStep = Math.max(3, Math.round(h * 0.05));    // the rest show a thin sliver
+        var cards = [];
+        var top = 0;
+        d.items.forEach(function (entry) {
+          var node = byPath.get(entry.path);
+          if (!node) return;
+          var card = document.createElement("span"); card.className = "deck-card dm-card";
+          card.style.top = top + "px";
+          card.style.zIndex = String(cards.length + 1);
+          top += cards.length ? restStep : firstStep;
+          var mini = document.createElement("span"); mini.className = "dc-mini";
+          card.appendChild(mini);
+          card._deckNode = node; card._deckMini = mini; card._deckMiniDone = false;
+          stack.appendChild(card); cards.push(card);
+        });
+        var kind = deckTitle(d.items) || d.name;
+        var tag = deckTag(d.items);
+        if (cards.length) {
+          var tab = document.createElement("span"); tab.className = "deck-stack-chip"; tab.textContent = kind;
+          cards[0].appendChild(tab);
+          if (tag) { var tg = document.createElement("span"); tg.className = "deck-stack-tag"; tg.textContent = "#" + tag; cards[cards.length - 1].appendChild(tg); }
+          stack.style.height = (parseFloat(cards[cards.length - 1].style.top) + h) + "px";
+        }
+        b.appendChild(stack);
+        var name = kind + (tag ? " #" + tag : "");
+        b.title = name; b.setAttribute("aria-label", name);
+      } else {
+        var nm = document.createElement("span"); nm.textContent = deckLabelFor(d.items, false) || d.name;
+        if (i === activeDeck) nm.className = "cur";
+        var n = document.createElement("span"); n.className = "n"; n.textContent = String(d.items.length);
+        b.appendChild(nm); b.appendChild(n);
+      }
       b.addEventListener("click", function () {
         // Adding: toggle the page and refresh the marks without closing, so the page
         // can be moved between decks in one go.
@@ -5526,6 +5613,14 @@
       var pick = deckMenuOnPick; closeDeckMenu(); if (pick) pick(-1);
     });
     deckMenuEl.appendChild(nb);
+    renderDeckMenuShots();
+  }
+  // Paint each add-to-deck card's first-page screenshot. The menu is built while it is
+  // still hidden, so the cards have no size yet; this runs again once it is shown.
+  function renderDeckMenuShots() {
+    if (!deckMenuEl) return;
+    var cards = deckMenuEl.querySelectorAll(".dm-card");
+    for (var i = 0; i < cards.length; i++) renderCardShot(cards[i]);
   }
   function openDeckMenu(anchor, node, onPick) {
     if (!deckMenuEl || !anchor) return;
@@ -5538,6 +5633,7 @@
     renderDeckMenu();
     deckMenuEl.hidden = false;
     positionDeckMenu();
+    renderDeckMenuShots();
   }
   document.addEventListener("pointerdown", function (e) {
     if (!deckMenuOpen()) return;
@@ -5849,8 +5945,37 @@
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
   }
 
-  // Build the card's screenshot bitmap when the card is generated: render the page
-  // in a normal-size preview viewport and anchor its top-left into the card.
+  var pageShotCache = null;   // node -> { "WxH": dataURL }, so repeated shots reuse the SVG
+  function pageShotUrl(node, w, h) {
+    if (!pageShotCache) pageShotCache = new WeakMap();
+    var m = pageShotCache.get(node);
+    if (!m) { m = Object.create(null); pageShotCache.set(node, m); }
+    var key = w + "x" + h;
+    if (!m[key]) m[key] = previewShotDataUrl(cardContent(node), w, h);
+    return m[key];
+  }
+  // Draw a page's top-left into a canvas at the normal preview size, anchored top-left,
+  // so it reads the same as when the preview opens it. Shared by the deck cards and the
+  // add-to-deck menu images.
+  function drawPageShot(canvas, node, onFail) {
+    if (!node) { if (onFail) onFail(); return; }
+    var pageW = previewPageWidth(), pageH = previewPageHeight();
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var ctx = canvas.getContext("2d");
+        ctx.fillStyle = miniPalette().bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Anchor the viewport's top-left; it is wider than the target, so the right side
+        // is cropped.
+        var s = Math.max(canvas.width / pageW, canvas.height / pageH);
+        ctx.drawImage(img, 0, 0, pageW * s, pageH * s);
+      } catch (e) { if (onFail) onFail(); }
+    };
+    img.onerror = function () { if (onFail) onFail(); };
+    img.src = pageShotUrl(node, pageW, pageH);
+  }
+  // Build the card's screenshot bitmap when the card is generated.
   function renderCardShot(cardEl) {
     if (cardEl._deckMiniDone || !cardEl._deckMini) return;
     var rect = cardEl._deckMini.getBoundingClientRect();
@@ -5858,25 +5983,11 @@
     if (cw < 8 || ch < 6) return;               // not laid out yet; try again on the next reveal
     cardEl._deckMiniDone = true;
     var node = cardEl._deckNode;
-    var pageW = previewPageWidth(), pageH = previewPageHeight();
     var dpr = window.devicePixelRatio || 1;
     var canvas = document.createElement("canvas");
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     cardEl._deckMini.appendChild(canvas);
-    var img = new Image();
-    img.onload = function () {
-      try {
-        var ctx = canvas.getContext("2d");
-        ctx.fillStyle = miniPalette().bg;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Anchor the viewport's top-left into the card; it is wider than the card,
-        // so the overflow is cropped on the right.
-        var s = Math.max(canvas.width / pageW, canvas.height / pageH);
-        ctx.drawImage(img, 0, 0, pageW * s, pageH * s);
-      } catch (e) { miniFallback(cardEl._deckMini, node); }
-    };
-    img.onerror = function () { miniFallback(cardEl._deckMini, node); };
-    img.src = previewShotDataUrl(cardContent(node), pageW, pageH);
+    drawPageShot(canvas, node, function () { miniFallback(cardEl._deckMini, node); });
   }
   function miniFallback(miniEl, node) {
     if (!miniEl) return;
@@ -5893,6 +6004,9 @@
     deckStackEls().forEach(function (s) {
       var cards = Array.prototype.slice.call(s.querySelectorAll(":scope > .deck-card:not(#deckGhost)"));
       var idx = (s === stack && card) ? cards.indexOf(card) : -1;
+      // The deck's chips light up while any of its cards is pointed at, so the kind and
+      // tag read from whichever card the pointer is on.
+      s.classList.toggle("hovering", idx >= 0);
       for (var i = 0; i < cards.length; i++) {
         var off = idx < 0 ? 0 : (i < idx ? -HOVER_REPEL : (i > idx ? HOVER_REPEL : 0));
         cards[i].style.transform = off ? "translateY(" + off + "px)" : "";
@@ -5952,9 +6066,14 @@
     });
     deck = decks[activeDeck].items;
     var anyCards = decks.some(function (d) { return d.items.length > 0; });
-    document.body.classList.toggle("deck-open", anyCards || decks.length > 1);
+    var deckOpen = anyCards || decks.length > 1;
+    document.body.classList.toggle("deck-open", deckOpen);
+    if (!deckOpen) deckScrollOffset = 0;    // the column is hidden; start fresh next time
     // Every deck becomes its own stack, set apart by a gap. The active stack is live;
     // the others are dimmed and activate on click.
+    // Keep the column where the user scrolled it, measured from its home (the decks at
+    // the top of the visible area), so re-rendering does not snap it back.
+    if (deckRoomPx > 0) deckScrollOffset = deckBodyEl.scrollTop - deckRoomPx;
     deckBodyEl.textContent = "";
     var activeStackEl = null;
     decks.forEach(function (d, i) {
@@ -6020,6 +6139,8 @@
     positionDeck();
     layoutDeck();
     renderDeckShots();
+    deckBodyEl.scrollTop = deckRoomPx + deckScrollOffset;
+    updateDeckMore();
     syncDeckButton();
     // While reading, the stream is the active deck, so rebuild it when the deck changes.
     if (deckReading()) renderDeckStream(null); else markDeckCurrent();
@@ -6027,9 +6148,7 @@
 
   function syncDeckButton() {
     if (!pvDeckBtn) return;
-    var usable = cardable(pvCurrent);
-    pvDeckBtn.hidden = !usable;
-    if (usable) pvDeckBtn.textContent = "Add to deck \u25be";
+    pvDeckBtn.hidden = !cardable(pvCurrent);
   }
 
   // ---- press-hold a node to start a card drag ----
@@ -6119,9 +6238,10 @@
     return { kind: "new" };
   }
   // The panel is full when the decks already fill its scroll area, so a new deck has no
-  // room and a card dropped clear of the decks will not start one.
+  // room and a card dropped clear of the decks will not start one. The scroll room above
+  // and below (#deckBody::before/::after) is not part of the decks, so it is discounted.
   function deckPanelFull() {
-    return deckBodyEl.scrollHeight > deckBodyEl.clientHeight + 1;
+    return (deckBodyEl.scrollHeight - 2 * deckRoomPx) > deckBodyEl.clientHeight + 1;
   }
   // Slot at which a page released at this y belongs in the given stack (0 = top).
   function deckSlotAt(stack, y, h) {
@@ -6160,14 +6280,44 @@
     }
     deckEl.style.top = "auto";
     deckEl.style.bottom = AURA_BOTTOM + "px";
-    deckEl.style.maxHeight = "calc(100vh - " + (AURA_TOP + AURA_BOTTOM) + "px)";
+    // A definite height spanning the drop site, so the column is a fixed scroll area the
+    // decks can leave at either edge, rather than a panel that grows to fit them.
+    var band = "calc(100vh - " + (AURA_TOP + AURA_BOTTOM) + "px)";
+    deckEl.style.height = band;
+    deckEl.style.maxHeight = band;
     deckBodyEl.style.paddingTop = Math.round(firstTop) + "px";
+    // Give the column scroll room above and below equal to its own height, so the decks
+    // can be dragged or scrolled fully out of view either way even when they are short.
+    deckRoomPx = Math.round(deckBodyEl.clientHeight);
+    deckBodyEl.style.setProperty("--deck-room", deckRoomPx + "px");
     // The drop site (aura) covers the column from near the window top to near its
     // bottom on every screen. Its offset is measured from the panel's own top, so the
     // panel always anchors the aura to the window top.
     var auraTop = AURA_TOP - deckEl.getBoundingClientRect().top;
     deckEl.style.setProperty("--deck-aura-top", Math.round(auraTop) + "px");
     deckEl.style.setProperty("--deck-aura-h", Math.max(120, Math.round(window.innerHeight - AURA_TOP - AURA_BOTTOM)) + "px");
+    updateDeckMore();
+  }
+  // Edge cues for decks scrolled out of the panel's visible range. The top pill appears
+  // once the first deck's top passes the panel's upper edge, and the bottom pill once
+  // the last deck's bottom passes its lower edge; each counts the decks past that edge
+  // and points toward them. Scrolling within the padding above the first deck leaves
+  // both hidden, so a cue never appears before a deck is actually out of view.
+  function updateDeckMore() {
+    if (!deckBodyEl || !deckMoreTopEl || !deckMoreBottomEl) return;
+    var bodyTop = deckBodyEl.getBoundingClientRect().top;
+    var bodyBottom = bodyTop + deckBodyEl.clientHeight;
+    var above = 0, below = 0;
+    deckStackEls().forEach(function (s) {
+      var r = s.getBoundingClientRect();
+      if (r.height <= 0) return;
+      if (r.top < bodyTop - 1) above++;        // the deck's top has passed the upper edge
+      if (r.bottom > bodyBottom + 1) below++;  // the deck's bottom has passed the lower edge
+    });
+    deckMoreTopEl.hidden = above === 0;
+    deckMoreBottomEl.hidden = below === 0;
+    if (above) deckMoreTopEl.textContent = "\u25b2 " + above;
+    if (below) deckMoreBottomEl.textContent = "\u25bc " + below;
   }
   // While the dragged card is over a stack the cards shift down one step to open the
   // slot it would land in, so the shuffle still reads even though the card keeps
@@ -6471,6 +6621,8 @@
       if (card) setDeckHover(card.parentNode, card);
     });
     deckEl.addEventListener("pointerleave", function () { if (!cardDrag) setDeckHover(null, null); });
+    // Refresh the top and bottom edge cues whenever the docked decks scroll.
+    deckBodyEl.addEventListener("scroll", updateDeckMore);
     // Dragging the deck's empty space (not a card or a stack) scrolls the docked decks,
     // instead of reaching the graph behind them.
     var deckScroll = null;
@@ -6485,27 +6637,39 @@
       var el = e.target;
       var nearCard = el.closest ? el.closest(".deck-card") : null;
       var topCard = el.closest ? el.closest(".deck-stack > .deck-card") : null;
+      var onDeck = el.closest ? el.closest(".deck-card, .deck-stack") : null;
       var onButton = el.closest && (el.closest(".dc-x") || el.closest(".dc-chev"));
-      if (el.closest && el.closest(".deck-card, .deck-stack")) {
+      if (e.pointerType === "touch") {
         // Touch: a press on a top-level card's own face starts a hover-style drag (the
         // release acts on the card under the finger — see endDeckTouch). The card's
         // buttons keep their native tap, and the sub-deck list keeps its own scroll.
-        if (e.pointerType === "touch" && nearCard === topCard && !onButton) {
-          e.preventDefault();
-          deckTouchGuard = true;
-          deckTouch = { id: e.pointerId };
-          try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
-          deckSetHighlight(deckHitAt(e.clientX, e.clientY));
-        } else if (topCard && e.pointerType !== "touch" && !cardDrag) {
-          // A mouse press parts the stack there too; hover already does as it moves.
-          setDeckHover(topCard.parentNode, topCard);
+        if (onDeck) {
+          if (nearCard === topCard && !onButton) {
+            e.preventDefault();
+            deckTouchGuard = true;
+            deckTouch = { id: e.pointerId };
+            try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+            deckSetHighlight(deckHitAt(e.clientX, e.clientY));
+          }
+          return;
         }
+        // Touch on the deck's empty space drags the column to scroll it.
+        deckScroll = { id: e.pointerId, y: e.clientY, top: deckBodyEl.scrollTop, moved: true };
+        try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+        deckEl.classList.add("scrolling");
+        e.preventDefault();
         return;
       }
-      deckScroll = { id: e.pointerId, y: e.clientY, top: deckBodyEl.scrollTop };
-      try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+      // Mouse or pen: a drag anywhere in the column scrolls it, so the docked decks can
+      // be moved out of view. A press on a card still parts its stack, and a tap (no
+      // movement) keeps its click — open the page, or activate the deck.
+      if (topCard && !cardDrag) setDeckHover(topCard.parentNode, topCard);
+      deckScroll = { id: e.pointerId, y: e.clientY, top: deckBodyEl.scrollTop, moved: false };
+      if (!onDeck) {
+        try { deckBodyEl.setPointerCapture(e.pointerId); } catch (err) {}
+        e.preventDefault();
+      }
       deckEl.classList.add("scrolling");
-      e.preventDefault();
     });
     deckBodyEl.addEventListener("pointermove", function (e) {
       if (!deckTouch || e.pointerId !== deckTouch.id) return;
@@ -6539,7 +6703,13 @@
     }, true);
     deckBodyEl.addEventListener("pointermove", function (e) {
       if (!deckScroll || e.pointerId !== deckScroll.id) return;
-      deckBodyEl.scrollTop = deckScroll.top - (e.clientY - deckScroll.y);
+      var dy = e.clientY - deckScroll.y;
+      if (!deckScroll.moved) {
+        if (Math.abs(dy) < 5) return;                 // a tap, not a drag
+        deckScroll.moved = true;
+        deckTouchGuard = true;                        // a drag swallows the click it fires
+      }
+      deckBodyEl.scrollTop = deckScroll.top - dy;
     });
     deckBodyEl.addEventListener("pointerup", endDeckScroll);
     deckBodyEl.addEventListener("pointercancel", endDeckScroll);
