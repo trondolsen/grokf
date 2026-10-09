@@ -15,6 +15,7 @@ okfx:
         - docs/guides/read-a-concept.md
         - docs/guides/controls.md
         - docs/guides/troubleshooting.md
+        - docs/guides/install-as-web-app.md
     - name: Model
       pages:
         - docs/model/bundle-and-concept.md

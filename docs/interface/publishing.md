@@ -28,12 +28,14 @@ Bundle pages are crawled lazily, so publishing is recommended for **small** bund
 
 # Notes
 
-- Bundles are discovered from `index.md` by following links; there is no manifest.
+- Bundles are discovered from `index.md` by following links; there is no bundle manifest to declare them.
+- To let visitors install grokf, also serve `favicons/site.webmanifest` and `grokf-sw.js` next to `grokf.html`; see [Installable web app](installable-web-app.md).
 - Requests omit credentials and reject redirects, so a bundle behind authentication, HTTP credentials or redirects will not load. Use plain static hosting rather than removing the URL controls.[^readme]
 
 # Connections
 
 - [URL parameters](url-parameters.md)
+- [Link previews](link-previews.md)
 - [Local processing](../principles/local-processing.md)
 - [URL and network bounds](../security/url-and-network-bounds.md)
 

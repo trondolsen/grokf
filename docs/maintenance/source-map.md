@@ -30,7 +30,9 @@ sources:
 | [`2026-10-05.md`](../reviews/2026-10-05.md) | Security findings, limits and behavior changes |
 | [`test/README.md`](../../test/README.md) | The test suite and how to run it |
 | [`attachments/favicon.svg`](../design/attachments/favicon.svg) | The project's mascot and favicon, shown in the interface design concept |
-| [`favicons/`](../../favicons/) | The favicon assets the tool references: the SVG and ICO sources (embedded in the page), `apple-touch-icon`, and the web manifest with its icons |
+| [`favicons/`](../../favicons/) | The favicon and app assets the tool references: the SVG and ICO sources (embedded in the page), `apple-touch-icon`, and `site.webmanifest` with the app name, scope, icons and screenshot |
+| [`grokf-sw.js`](../../grokf-sw.js) | The optional service worker that keeps the app shell available offline |
+| [`grokf.png`](../../grokf.png) | The wide screenshot declared in the web app manifest |
 
 # Notes
 

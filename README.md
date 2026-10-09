@@ -28,6 +28,27 @@ Visit https://grokf.org/ to try it out.
 2. Add link to `grokf.html?bundle={relative-path-to-bundle}/`
 3. Publish to website
 
+### Install as a web app
+
+> Note: installing requires HTTPS (or `localhost`) and the companion files
+> `favicons/site.webmanifest` and `grokf-sw.js`, published next to `grokf.html`.
+> A copy with only `grokf.html` still runs in the browser, without installation.
+
+1. Open the published page over HTTPS.
+2. Use the browser's install command:
+   - Chrome or Edge (desktop): the install icon in the address bar, or the ⋮
+     menu → *Install*. grokf also shows an **Install** button once the browser
+     offers installation.
+   - Chrome (Android): ⋮ menu → *Install app* (or *Add to Home screen*).
+   - Safari (iOS/iPadOS 16.4+): *Share* → *Add to Home Screen*.
+   - Safari (macOS 14+): *File* → *Add to Dock*.
+3. Launch grokf from the installed icon; it opens in its own window.
+
+The optional `grokf-sw.js` service worker caches only the app shell, so an
+installed grokf starts offline. A served bundle still needs the network; a
+bundle opened from disk works offline by itself. See
+[Install grokf as a web app](docs/guides/install-as-web-app.md).
+
 ### URL parameters
 
 Optional; append to the URL and combine as needed (e.g. `?bundle=acme/&depth=1`).

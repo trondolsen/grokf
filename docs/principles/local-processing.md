@@ -22,6 +22,7 @@ The tool reads, parses, renders and lays out a whole bundle **in the browser**. 
 # Why it matters
 
 - The tool can be published as a single static file, for example on GitHub Pages, and it works offline over `file://`.[^readme]
+- It can be installed as an [installable web app](../interface/installable-web-app.md) and start offline from its cached app shell, still without a backend.
 - Sensitive or private bundles stay on the machine.
 - There is no server to trust with the bundle's contents; the browser is the only execution environment.
 

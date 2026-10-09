@@ -23,6 +23,8 @@ The protections bound what the tool does, not what the browser or the platform d
 - **Chunk allocation.** Streaming limits retained content, but the browser or the decompression engine can allocate a chunk before JavaScript checks it.
 - **Server mapping.** URL containment constrains addresses, not the server's mapping from URL to file. Symlinks, rewrites and misconfiguration must be handled on the server, and a dedicated static origin is preferred.
 - **No memory promise.** A combined byte limit is not a guarantee of low memory use for every allowed graph.
+- **Service worker.** An installed grokf registers a same-origin service worker. It caches only the app shell and handles only navigations, but it is a persistent same-origin actor whose behaviour still needs checking in the target browsers.
+- **Same-origin icons.** The CSP allows `img-src 'self'` so the web app manifest's own icons and screenshot can load for install surfaces. This does not let the renderer show bundle images over the network, because the renderer never emits a network image `src`.
 
 # Checks that remain
 

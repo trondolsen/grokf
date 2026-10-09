@@ -27,7 +27,7 @@ Every URL the tool loads passes through the same checks before any request is ma
 
 # Effect
 
-A malicious bundle cannot probe other hosts, read another origin, or smuggle a different resource in through a redirect. Images in bundle content follow the same rules; external and `data:` images from content are not shown, and valid bundle images are displayed from blob URLs. The only `data:` image the page itself uses is its inline SVG favicon, which is page chrome and not part of a bundle.[^review]
+A malicious bundle cannot probe other hosts, read another origin, or smuggle a different resource in through a redirect. Images in bundle content follow the same rules; external and `data:` images from content are not shown, and valid bundle images are displayed from blob URLs. The only same-origin network images the page may load are its own web app manifest icons and screenshot, allowed by `img-src 'self'` for install surfaces; the renderer never emits a network image `src`. The optional service worker caches only the app shell and never intercepts bundle requests, so the bounds are unchanged. The only `data:` image the page itself uses is its inline SVG favicon, which is page chrome and not part of a bundle.[^review]
 
 # Limits of the control
 
@@ -38,6 +38,7 @@ The rules constrain URLs, not the server's mapping from URLs to files. Symlinks,
 - [Untrusted bundles](../principles/untrusted-bundles.md)
 - [Crawling](../algorithms/crawling.md)
 - [Publishing](../interface/publishing.md)
+- [Installable web app](../interface/installable-web-app.md)
 - [Bounded streaming and reserved capacity](streaming-and-budgets.md)
 
 [^source]: `normalizeLinkPath`, `urlWithinBundle`, `bundleUrl` and `trackedFetch` in the tool source.

@@ -10,6 +10,7 @@ documented as reference under [Interface](../interface/index.md).
 - [Read a concept](read-a-concept.md) – open a page, follow links and footnotes, and page back and forward.
 - [Controls](controls.md) – the mouse, touch, keyboard and toolbar controls in one place.
 - [Troubleshooting](troubleshooting.md) – what to check when a bundle or a page does not load.
+- [Install grokf as a web app](install-as-web-app.md) – install grokf as a progressive web app on a computer, Android or iOS.
 
 ## Collecting pages
 
