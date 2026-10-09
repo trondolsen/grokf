@@ -598,15 +598,16 @@
   .deck-menu.add button:not(.new) { font-size: 11px; }
   .deck-menu.add button .n { font-size: 10px; }
   /* In the add-to-deck menu each deck is shown the way its docked stack looks: all its
-     pages stacked so about a quarter of each stays visible, its kind chip on the top page
-     and its tag chip under the bottom one. The deck that already holds the page is ringed
-     in the accent; the others are dimmed. */
-  .deck-menu.add { min-width: 0; width: max-content; display: flex; flex-direction: column; gap: 4px; }
+     pages stacked, the first page about a tenth visible and the rest a thin sliver, its
+     kind chip on the top page and its tag chip under the bottom one. The deck that already
+     holds the page is ringed in the accent; the others are dimmed. */
+  .deck-menu.add { min-width: 0; width: max-content; }
   .deck-menu .dm {
     display: flex; justify-content: center; align-items: center; width: 100%; padding: 11px 6px;
     border: 0; border-radius: 9px; background: transparent; font: inherit; cursor: pointer;
   }
   .deck-menu .dm:hover { background: var(--panel-2); }
+  .deck-menu .dm + .dm { margin-top: 4px; }
   .deck-menu .dm.out { opacity: .5; }
   .deck-menu .dm > .dm-stack { overflow: visible; }
   .deck-menu .dm-stack { position: relative; width: var(--dc-w); }
@@ -5527,7 +5528,7 @@
   var deckMenuOnPick = null;
   function deckMenuOpen() { return !!(deckMenuEl && !deckMenuEl.hidden); }
   function closeDeckMenu() {
-    if (deckMenuEl) { deckMenuEl.hidden = true; deckMenuEl.textContent = ""; }
+    if (deckMenuEl) { deckMenuEl.hidden = true; deckMenuEl.textContent = ""; deckMenuEl.classList.remove("add"); }
     deckMenuAnchor = null; deckMenuNode = null; deckMenuOnPick = null;
   }
   function positionDeckMenu() {
