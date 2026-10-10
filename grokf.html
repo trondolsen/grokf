@@ -350,8 +350,12 @@
     transform: rotate(45deg);   /* points down */
   }
   /* On small screens the panel opens collapsed to the banner and revision, with the
-     description, the usage list, the AI note and the source link behind the toggle. */
+     description, the usage list, the AI note and the source link behind the toggle.
+     Once shown it fits its text rather than scrolling — it is not capped to a share of
+     the viewport and its body does not scroll — so the whole panel is read at once. */
   @media (max-width: 760px) {
+    #aboutPop { max-height: none; }
+    #aboutPop .about-body { overflow: visible; }
     #aboutPop.collapsible .about-toggle { display: flex; }
     #aboutPop.collapsed .about-more { display: none; }
   }
