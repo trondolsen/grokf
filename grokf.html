@@ -5643,6 +5643,7 @@
   var deckMoreBottomEl = document.getElementById("deckMoreBottom");
   var deckRoomPx = 0;                          // scroll room above and below the decks, in px
   var deckScrollOffset = 0;                    // the column's scroll, measured from its home position
+  var deckWasOpen = false;                     // was the column shown on the previous render?
   var deckMenuEl = document.getElementById("deckMenu");
   var pvDeckBtn = document.getElementById("pvDeck");
 
@@ -6318,15 +6319,19 @@
     deck = decks[activeDeck].items;
     var anyCards = decks.some(function (d) { return d.items.length > 0; });
     var deckOpen = anyCards || decks.length > 1;
+    var wasOpen = deckWasOpen;
+    deckWasOpen = deckOpen;
     document.body.classList.toggle("deck-open", deckOpen);
-    if (!deckOpen) deckScrollOffset = 0;    // the column is hidden; start fresh next time
-    // Every deck becomes its own stack, set apart by a gap. The active stack is live;
-    // the others are dimmed and activate on click.
     // Keep the column where the user scrolled it, measured from its home (the decks at
-    // the top of the visible area), so re-rendering does not snap it back.
-    if (deckRoomPx > 0) deckScrollOffset = deckBodyEl.scrollTop - deckRoomPx;
+    // the top of the visible area), so re-rendering does not snap it back — but return to
+    // home whenever the column was not already open, so a deck created after the panel
+    // emptied (or after a card drag showed it) is not left scrolled out of view.
+    if (deckOpen && wasOpen && deckRoomPx > 0) deckScrollOffset = deckBodyEl.scrollTop - deckRoomPx;
+    else deckScrollOffset = 0;
     deckBodyEl.textContent = "";
     var activeStackEl = null;
+    // Every deck becomes its own stack, set apart by a gap. The active stack is live;
+    // the others are dimmed and activate on click.
     decks.forEach(function (d, i) {
       var isActive = i === activeDeck;
       var stack = document.createElement("div");
