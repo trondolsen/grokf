@@ -62,6 +62,10 @@ try {
   const reset = () => page.evaluate(() => { window.mascotMutations = 0; });
   const mutations = () => page.evaluate(() => window.mascotMutations);
 
+  // The viewer opens on the About panel and keeps it until the user interacts;
+  // dismiss it so both panels start hidden.
+  await page.keyboard.press('Escape');
+
   await page.clock.runFor(2000); // warm up the graph loop
 
   // 1) Both panels hidden: the mascot must stay completely idle, even across

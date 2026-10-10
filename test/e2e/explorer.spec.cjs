@@ -55,6 +55,10 @@ async function loadBundle(page, depth = 'all') {
   await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);
   await expect(page.locator('#spinner')).toBeHidden();
   await expect(page.locator('#stats')).toContainText('files');
+  // The viewer opens on the About panel and keeps it until the user interacts;
+  // dismiss it so each test can drive the graph and panels unobstructed.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#aboutPop')).toBeHidden();
 }
 
 async function renderedLabels(page) {

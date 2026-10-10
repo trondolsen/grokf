@@ -3,6 +3,8 @@ type: Guide
 title: Find a concept
 description: Narrow the graph with search, the attribute filters and the legend to find the concepts you want.
 tags: [guide, how-to, search, filter]
+okfx:
+  decks: [Tour]
 sources:
   - id: source
     resource: ../../grokf.html

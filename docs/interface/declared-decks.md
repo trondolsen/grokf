@@ -1,70 +1,60 @@
 ---
 type: Reference
 title: Declared decks
-description: How a bundle declares decks in frontmatter, and how the viewer builds them when the bundle loads.
+description: How each page declares the decks it belongs to in frontmatter, and how the viewer builds them when the bundle loads.
 tags: [interface, deck, frontmatter, okfx]
 okfx:
   mode: reference
   version: praxis/1
-  decks:
-    - name: Tour
-      pages:
-        - docs/guides/getting-started.md
-        - docs/guides/explore-the-graph.md
-        - docs/guides/find-a-concept.md
-        - docs/guides/read-a-concept.md
-        - docs/guides/controls.md
-        - docs/guides/troubleshooting.md
-        - docs/guides/install-as-web-app.md
-    - name: Model
-      pages:
-        - docs/model/bundle-and-concept.md
-        - docs/model/graph-model.md
-        - docs/model/okf-tutorial.md
-        - docs/model/chapters.md
 sources:
   - id: source
     resource: ../../grokf.html
-    title: grokf.html – applyBundleDecks, resolveDeclaredPath
+    title: grokf.html – applyBundleDecks, declaredDeckSpecs
 ---
 
 # What it is
 
-A bundle can ship **decks**: the viewer builds them when the bundle loads, in
-place of the empty default deck. Each deck names its pages, so a reader opens the
-bundle with a reading list already assembled.[^source]
+A bundle can ship **decks**: groups of concepts the viewer assembles when the
+bundle loads, in place of the empty default deck. Each page names the decks it
+belongs to, so a reader opens the bundle with a reading list already
+assembled.[^source]
 
 # Frontmatter
 
-A concept declares decks under the OKF Praxis extension key `okfx.decks`, a list
-of decks with a name and pages:
+A page declares its membership under the OKF Praxis extension key `okfx.decks`, a
+deck name or a list of deck names:
+
+```yaml
+---
+type: Guide
+title: Explore the graph
+okfx:
+  mode: how-to
+  version: praxis/1
+  decks: [Tour]
+---
+```
 
 ```yaml
 okfx:
-  decks:
-    - name: Tour
-      pages: [docs/guides/getting-started.md, docs/guides/explore-the-graph.md]
-    - name: Model
-      pages:
-        - docs/model/bundle-and-concept.md
-        - docs/model/graph-model.md
+  decks: [Tour, Model]
 ```
 
-- Any concept may declare `okfx.decks`; the viewer collects every declaration from
-  the loaded concepts and builds the decks in that order.
-- `name` is optional; without it a deck is named "Deck 1", "Deck 2" and so on.
-- Each page is a path to a concept, resolved like other frontmatter paths: a bare
-  or `/`-prefixed path is relative to the bundle root, a `./` or `../` path is
-  relative to the file, and the `.md` extension is optional.
-- A page that is not a loaded concept is skipped, and at most eight decks are
-  built. Decks live in memory only, so editing one in the interface lasts until
-  the bundle is loaded again.
+- A deck holds every loaded page whose frontmatter names it; a page may belong to
+  several decks. A name no page uses is not a deck.
+- Decks are created and filled in as content loads: a deck appears when its first
+  member page loads and its remaining members are appended as they load —
+  including pages loaded on demand from a dashed node. Each new card fades in rather
+  than highlighting. Members keep the bundle's order, and at most eight decks are
+  built.
+- Decks live in memory only, so editing one in the interface lasts until the
+  bundle is loaded again.
 
 # This bundle's decks
 
-This concept declares two decks, from its own frontmatter: a **Tour** of the user
-guides in reading order, and a **Model** deck of the model concepts. A reader who
-opens the bundle finds both in the deck panel.
+The user guides name a **Tour** deck and the model concepts name a **Model** deck,
+each from its own frontmatter. A reader who opens the bundle finds both in the deck
+panel.
 
 # Connections
 
@@ -72,4 +62,4 @@ opens the bundle finds both in the deck panel.
 - [Interface](index.md)
 - [Deck of cards (design)](../design/deck.md)
 
-[^source]: `applyBundleDecks` and `resolveDeclaredPath` in the tool source.
+[^source]: `applyBundleDecks` and `declaredDeckSpecs` in the tool source.

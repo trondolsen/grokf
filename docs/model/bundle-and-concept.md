@@ -6,6 +6,7 @@ tags: [okf, bundle, concept, frontmatter]
 okfx:
   mode: reference
   version: praxis/1
+  decks: [Model]
 sources:
   - id: spec
     resource: https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md
@@ -26,7 +27,7 @@ For every Markdown file the tool extracts two parts:[^source]
 - the **frontmatter**, parsed as YAML between two `---` lines;
 - the **body**, the remaining Markdown.
 
-It uses these frontmatter fields directly: `type`, `title`, `description`, `tags` and `status`. A file named `index.md` is treated as an index file; every other Markdown file is a concept. Unknown fields are kept but not shown. It also reads `okfx.decks` to build the bundle's decks; see [Declared decks](../interface/declared-decks.md).
+It uses these frontmatter fields directly: `type`, `title`, `description`, `tags` and `status`. A file named `index.md` is treated as an index file; every other Markdown file is a concept. Unknown fields are kept but not shown. It also reads `okfx.decks` — each page's deck membership — to build the bundle's decks; see [Declared decks](../interface/declared-decks.md).
 
 # Fallbacks
 

@@ -3,6 +3,8 @@ type: Guide
 title: Read a concept
 description: Open a page in the preview, follow links and footnotes, jump by tag, and page back and forward.
 tags: [guide, how-to, reading, preview]
+okfx:
+  decks: [Tour]
 sources:
   - id: source
     resource: ../../grokf.html

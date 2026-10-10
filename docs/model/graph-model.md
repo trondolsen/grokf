@@ -6,6 +6,7 @@ tags: [graph, data-structure, nodes, links, tags]
 okfx:
   mode: reference
   version: praxis/1
+  decks: [Model]
 sources:
   - id: source
     resource: ../../grokf.html

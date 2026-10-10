@@ -6,6 +6,7 @@ tags: [okf, tutorial, format, bundle]
 okfx:
   mode: tutorial
   version: praxis/1
+  decks: [Model]
 sources:
   - id: spec
     resource: https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md

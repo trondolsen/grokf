@@ -33,7 +33,7 @@ The tool reads the Markdown files and shows one level at a time: `?depth=N` keep
 
 - The folder picker uses the File System Access API when the browser provides it, and falls back to a directory file input otherwise.
 - Directories whose name starts with `.` are skipped, and the read is bounded by the same file, byte and depth limits as server loading.
-- On `file://`, auto-load is impossible; opening a folder is the intended path.[^readme]
+- On `file://`, auto-load is impossible; opening a folder is the intended path. The viewer starts on the About panel, so dismiss it by clicking outside or use the toolbar's **Open folder…** control.[^readme]
 
 # Connections
 

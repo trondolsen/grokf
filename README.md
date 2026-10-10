@@ -66,21 +66,14 @@ Optional; append to the URL and combine as needed (e.g. `?bundle=acme/&depth=1`)
 
 ### Declared decks
 
-A bundle can ship decks. A concept declares them in frontmatter, and the viewer
-builds them when the bundle loads:
+A bundle can ship decks: each page names the decks it belongs to in frontmatter,
+and the viewer groups those pages into decks when the bundle loads:
 
 ```yaml
 okfx:
-  decks:
-    - name: Tour
-      pages: [docs/guides/getting-started.md, docs/guides/explore-the-graph.md]
-    - name: Model
-      pages:
-        - docs/model/bundle-and-concept.md
-        - docs/model/graph-model.md
+  decks: [Tour]
 ```
 
-Any concept may declare `okfx.decks`; the viewer collects every declaration on
-load, resolves the page paths (a bare or `/`-prefixed path from the bundle root, a
-`./` or `../` path from the file, `.md` optional), and fills the deck panel. A
-page that is not a loaded concept is skipped, and at most eight decks are built.
+A page may name several decks (`decks: [Tour, Model]`), and any deck name a page
+uses becomes a deck holding every page that names it. Decks are created and filled
+in as the bundle loads, and at most eight decks are built.

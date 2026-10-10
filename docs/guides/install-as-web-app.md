@@ -3,6 +3,8 @@ type: Guide
 title: Install grokf as a web app
 description: Install grokf as a progressive web app on a computer, Android or iOS, and launch it as an app.
 tags: [guide, how-to, pwa, install]
+okfx:
+  decks: [Tour]
 sources:
   - id: mdn-installable
     resource: https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable

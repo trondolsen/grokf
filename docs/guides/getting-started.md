@@ -3,6 +3,8 @@ type: Guide
 title: Getting started
 description: Open a bundle in the viewer, orient in the graph and read your first concept.
 tags: [guide, tutorial, getting-started]
+okfx:
+  decks: [Tour]
 sources:
   - id: readme
     resource: ../../README.md
@@ -21,11 +23,13 @@ browser, and your files are never uploaded.[^readme]
 # Steps
 
 1. **Open the viewer.** Use a deployed copy such as the one at `grokf.org`, or
-   open `grokf.html` from your own disk.
+   open `grokf.html` from your own disk. The viewer opens on its **About** panel.
 2. **Load a bundle.** On a web server the viewer loads `bundles/` next to the
    page automatically; add `?bundle=<name|path>` to load another one. In a local
    copy nothing auto-loads, so choose **Open folder…** and pick the bundle
-   directory, or drag the folder onto the window.[^source]
+   directory, or drag the folder onto the window. The graph fills in as files
+   are read, and the About panel stays until you interact with the interface,
+   then closes so the graph is unobstructed.[^source]
 3. **Find the graph.** Every node is a file, a directory or a tag; the root
    directory is labelled "bundle". The top bar reports the totals, for example
    "24 files · 31 links".

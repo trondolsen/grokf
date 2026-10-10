@@ -9,7 +9,7 @@ okfx:
 sources:
   - id: source
     resource: ../../grokf.html
-    title: grokf.html – crawlFromUrl, filterByDepth
+    title: grokf.html – crawlFromUrl, filterByDepth, onProgress
   - id: readme
     resource: ../../README.md
     title: grokf – README
@@ -31,6 +31,10 @@ Given one entry file, find the set of concept files reachable through Markdown l
 
 Only Markdown files are fetched and followed. Any other referenced file — non-Markdown text or a binary attachment — is not fetched; it appears as an unloaded placeholder node and is loaded on click. The crawl therefore stays bounded to the Markdown graph.[^source]
 
+# Progressive rendering
+
+The crawl reports each file it loads while it is still running, and the viewer rebuilds the graph from the files discovered so far. Nodes appear as they are found instead of all at once when the crawl ends, and the finished crawl grows the graph in place, keeping node positions. Declared decks are created and filled in the same way, so a deck appears when its first member page loads and its remaining members are appended as they load. The rebuilds back off geometrically, so their number grows with the logarithm of the file count, not with the file count itself.[^source]
+
 # Invariants
 
 - Only same-origin URLs inside the declared bundle root are fetched; a link that escapes the root is never scheduled.
@@ -51,5 +55,5 @@ A folder opened locally cannot be crawled over the network. The tool reads the M
 - [Graph construction](graph-construction.md)
 - [URL parameters](../interface/url-parameters.md)
 
-[^source]: `crawlFromUrl` and `filterByDepth` in the tool source.
+[^source]: `crawlFromUrl`, `filterByDepth` and the crawl progress hook in the tool source.
 [^readme]: Project README, "URL parameters".

@@ -3,6 +3,8 @@ type: Guide
 title: Troubleshooting
 description: What to check when a bundle, a node or a page does not behave the way you expect.
 tags: [guide, how-to, troubleshooting]
+okfx:
+  decks: [Tour]
 sources:
   - id: source
     resource: ../../grokf.html

@@ -3,6 +3,8 @@ type: Reference
 title: Controls
 description: The mouse, touch, keyboard and toolbar controls and the two side panels, in one reference.
 tags: [guide, reference, controls, keyboard, touch]
+okfx:
+  decks: [Tour]
 sources:
   - id: source
     resource: ../../grokf.html

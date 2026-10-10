@@ -3,6 +3,8 @@ type: Guide
 title: Explore the graph
 description: Pan, zoom, inspect nodes and move through directories to read a whole bundle.
 tags: [guide, how-to, navigation, graph]
+okfx:
+  decks: [Tour]
 sources:
   - id: source
     resource: ../../grokf.html

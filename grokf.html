@@ -335,6 +335,26 @@
   #aboutPop .about-links { margin: 10px 0 0; }
   #aboutPop .about-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-rev { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  #aboutPop .about-toggle {
+    display: none; flex: 0 0 auto; align-items: center; justify-content: center;
+    width: 100%; padding: 7px 0;
+    background: transparent; border: 0; border-top: 1px solid var(--line);
+    color: var(--muted); line-height: 1; cursor: pointer;
+  }
+  #aboutPop .about-toggle:hover { color: var(--accent); }
+  /* The toggle is a narrow chevron: it points down while the detail can be shown and
+     up while it is shown. Drawn from two bars so it stays crisp at a small size. */
+  #aboutPop .about-chevron {
+    display: block; width: 8px; height: 8px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);   /* points down */
+  }
+  /* On small screens the panel opens collapsed to the banner and revision, with the
+     description, the usage list, the AI note and the source link behind the toggle. */
+  @media (max-width: 760px) {
+    #aboutPop.collapsible .about-toggle { display: flex; }
+    #aboutPop.collapsed .about-more { display: none; }
+  }
 
   #overlay {
     position: fixed; inset: 0; z-index: 30; display: none;
@@ -702,6 +722,14 @@
     box-shadow: 0 12px 24px rgba(0,0,0,.6), inset 0 0 12px color-mix(in srgb, var(--accent) 22%, transparent);
   }
   .deck-card.flash { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+  /* A card added automatically as a declared deck fills in — or a page revealed on
+     demand — fades in rather than just appearing in place. */
+  @keyframes deckCardIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .deck-card.enter { animation: deckCardIn .22s ease; }
+  @media (prefers-reduced-motion: reduce) { .deck-card.enter { animation: none; } }
   /* The card for the page currently open in the preview (deck reading tracks it). */
   .deck-card.current { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent), 0 6px 14px rgba(0,0,0,.45); }
   .dc-mini { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--panel); border-radius: inherit; }
@@ -963,21 +991,24 @@
     </svg>
     <p><b class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
     <p class="about-rev">Revision <span id="aboutRev"></span></p>
-    <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
-    <ul>
-      <li>Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
-      <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
-      <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
-      <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
-    </ul>
-    <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
-    <p class="about-links">
-      <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener">Source on GitHub</a>
-    </p>
+    <div class="about-more" id="aboutMore">
+      <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
+      <ul>
+        <li>Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
+        <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
+        <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
+        <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
+      </ul>
+      <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
+      <p class="about-links">
+        <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener">Source on GitHub</a>
+      </p>
+    </div>
   </div>
+  <button id="aboutToggle" class="about-toggle" type="button" aria-expanded="false" aria-controls="aboutMore" aria-label="Show details"><span class="about-chevron" aria-hidden="true"></span></button>
 </div>
 
-<div id="overlay" class="show">
+<div id="overlay">
   <div id="card">
     <svg class="card-logo" data-mascot width="72" height="72" viewBox="0 0 32 32" role="img" aria-label="grokf">
       <path data-links d="M15.5 15 L21 21.5 M15.5 15 L9.5 22 M9.5 22 L6.5 29 M21 21.5 L27 29 M3.5 13 L8 11 M20 6 L27 3 M15.5 15 L10.5 8.5 M10.5 8.5 L8 5 M3.5 13 L10.5 8.5 M10.5 8.5 L20 6" fill="none" stroke="#6a7488" stroke-width="1.8" stroke-linecap="round"/>
@@ -1607,8 +1638,10 @@
   }
 
   // Depth-limited link crawl. `maxDepth` caps how many link hops are prefetched
-  // (0 = the start file only, null/undefined = all levels).
-  async function crawlFromUrl(startHref, maxDepth, rootHref) {
+  // (0 = the start file only, null/undefined = all levels). `onProgress`, when
+  // given, is called with the growing result after each file loads, so a caller
+  // can render the partial bundle while the crawl is still running.
+  async function crawlFromUrl(startHref, maxDepth, rootHref, onProgress) {
     var request = bundleLoadRequest;
     var limit = (maxDepth == null) ? Infinity : maxDepth;
     var start = new URL(startHref || "index.md", location.href);
@@ -1657,6 +1690,7 @@
         item.status = "loaded";
         var text = file.text;
         out.push(file);
+        if (onProgress) onProgress(out);
         if (item.depth >= limit) continue;
         extractLinks(text).forEach(function (link) {
           var urls = linkCandidates(rel, link).filter(isMarkdownPath).map(function (path) { return bundleUrl(path, base.href); }).filter(Boolean);
@@ -2888,8 +2922,10 @@
           function previewCurrentNode() {
             if (generation === bundleGeneration && fileMap && fileMap.has(node.path)) openPreview(fileMap.get(node.path));
           }
-          expandNode(node).then(function (added) { if (!added) previewCurrentNode(); })
-            .catch(previewCurrentNode);
+          expandNode(node).then(function (added) {
+            if (added) applyBundleDecks();   // a revealed page may belong to a deck
+            else previewCurrentNode();
+          }).catch(previewCurrentNode);
         } else {
           openPreview(node);
         }
@@ -4663,15 +4699,18 @@
   bindChips("typeChips", typeInclude, typeExclude, renderTypeChips);
   bindChips("statusChips", statusInclude, statusExclude, renderStatusChips);
 
-  // Clicking the title reveals an "about" panel with usage notes and the
-  // source repository link. Outside click / Escape dismisses it.
-  // Shown in the About panel so a deployed copy is easy to identify. Bump this
-  // whenever the file is revised. An unreleased revision uses a "-draft" suffix
-  // (for example "2-draft").
+  // The "about" panel holds usage notes and the source repository link. It is
+  // revealed by the title, opens at startup (as the initial panel instead of the
+  // bundle dialog) and is dismissed by an outside click or Escape. Shown in the
+  // About panel so a deployed copy is easy to identify. Bump this whenever the
+  // file is revised. An unreleased revision uses a "-draft" suffix (for example
+  // "2-draft").
   var REVISION = "2-draft";
   var titleBtn = document.getElementById("titleBtn");
   var aboutPop = document.getElementById("aboutPop");
   var aboutRevEl = document.getElementById("aboutRev");
+  var aboutToggle = document.getElementById("aboutToggle");
+  var aboutStartup = true;   // only the first (startup) open starts collapsed
   if (aboutRevEl) aboutRevEl.textContent = String(REVISION);
   function positionAbout() {
     // Anchor to the title's bordered box (the .group), not the button inside it,
@@ -4685,30 +4724,70 @@
     aboutPop.style.left = left + "px";
     aboutPop.style.top = (r.bottom + 6) + "px";
   }
+  function openAbout() {
+    if (!aboutPop || !aboutPop.hidden) return;
+    // Only the startup open starts collapsed, with the toggle to expand it. Opening the
+    // panel again from the title shows everything, with no collapse control.
+    var startup = aboutStartup;
+    aboutStartup = false;
+    aboutPop.classList.toggle("collapsible", startup);
+    setAboutCollapsed(startup);
+    aboutPop.hidden = false;
+    if (titleBtn) titleBtn.setAttribute("aria-expanded", "true");
+    positionAbout();
+    mascotPlay();
+  }
+  // On small screens the panel opens collapsed to the banner and revision; the toggle
+  // reveals the detail (description, usage list, AI note and source link). The class is
+  // harmless on wider screens, where the toggle is hidden and nothing collapses.
+  function setAboutCollapsed(collapsed) {
+    if (!aboutPop) return;
+    aboutPop.classList.toggle("collapsed", collapsed);
+    if (aboutToggle) {
+      aboutToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      aboutToggle.setAttribute("aria-label", collapsed ? "Show details" : "Hide details");
+    }
+  }
   function closeAbout() {
     if (!aboutPop || aboutPop.hidden) return;
     aboutPop.hidden = true;
-    titleBtn.setAttribute("aria-expanded", "false");
+    if (titleBtn) titleBtn.setAttribute("aria-expanded", "false");
   }
   if (titleBtn && aboutPop) {
     titleBtn.addEventListener("click", function () {
-      if (aboutPop.hidden) {
-        aboutPop.hidden = false;
-        titleBtn.setAttribute("aria-expanded", "true");
-        positionAbout();
-        mascotPlay();
-      } else {
-        closeAbout();
-      }
+      if (aboutPop.hidden) openAbout();
+      else closeAbout();
     });
     window.addEventListener("resize", function () { if (!aboutPop.hidden) positionAbout(); });
+    if (aboutToggle) {
+      // The toggle only expands: pressing it reveals everything and is then removed.
+      aboutToggle.addEventListener("click", function () {
+        setAboutCollapsed(false);
+        aboutPop.classList.remove("collapsible");
+      });
+    }
+    // The panel is the startup screen: it stays until the user interacts with the
+    // interface outside it. Its own controls (the title toggle, the expand toggle and
+    // the scrolling body) are not a dismissal.
     document.addEventListener("pointerdown", function (e) {
       if (aboutPop.hidden) return;
       var t = e.target;
       if (t.closest && (t.closest("#aboutPop") || t.closest("#titleBtn"))) return;
       closeAbout();
     }, true);
-    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAbout(); });
+    window.addEventListener("wheel", function (e) {
+      if (aboutPop.hidden) return;
+      var t = e.target;
+      if (t && t.closest && t.closest("#aboutPop")) return;
+      closeAbout();
+    }, { passive: true });
+    document.addEventListener("keydown", function (e) {
+      if (aboutPop.hidden) return;
+      if (e.key === "Escape") { closeAbout(); return; }
+      var t = e.target;
+      if (t && t.closest && t.closest("#aboutPop")) return;
+      closeAbout();
+    });
   }
 
   // Toolbar: a hamburger that expands the nav groups horizontally. On desktop
@@ -4790,19 +4869,21 @@
       if (e && e.name === "AbortError") return; // the user dismissed the picker
       overlay.classList.add("show");
       overlayMsg.textContent = "Folder picker failed: " + (e && e.message ? e.message : e);
+      closeAbout();
       return;
     }
     busyStart();
     try {
       var files = await fromDirectoryHandle(dir);
       if (request !== bundleLoadRequest) return;
-      if (files.length) loadLocal(files);
+      if (files.length) { loadLocal(files); closeAbout(); }
       else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
     } catch (e) {
       if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
       overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
       if (window.console && console.error) console.error(e);
+      closeAbout();
     } finally {
       busyEnd();
     }
@@ -4815,13 +4896,14 @@
     try {
       var files = await fromFileList(dirInput.files);
       if (request !== bundleLoadRequest) return;
-      if (files.length) loadLocal(files);
+      if (files.length) { loadLocal(files); closeAbout(); }
       else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
     } catch (e) {
       if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
       overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
       if (window.console && console.error) console.error(e);
+      closeAbout();
     } finally {
       busyEnd();
     }
@@ -4833,6 +4915,7 @@
       e.preventDefault();
       document.getElementById("card").classList.add("dropping");
       overlay.classList.add("show");
+      closeAbout();
     });
   });
   window.addEventListener("dragleave", function (e) {
@@ -4846,7 +4929,7 @@
     try {
       var files = await fromDataTransfer(e.dataTransfer);
       if (request !== bundleLoadRequest) return;
-      if (files.length) loadLocal(files);
+      if (files.length) { loadLocal(files); closeAbout(); }
       else overlayMsg.textContent = "No Markdown files found in the dropped folder.";
     } catch (err) {
       if (request !== bundleLoadRequest) return;
@@ -5193,7 +5276,7 @@
     return u.origin === location.origin && /^https?:$/.test(u.protocol);
   }
   // Load a folder by crawling its index.md (or the ?start file).
-  async function loadBundleFromFolder(folderHref, maxDepth) {
+  async function loadBundleFromFolder(folderHref, maxDepth, onProgress) {
     var folder = new URL(folderHref);
     var startRel = urlParam("start");
     var start = startRel ? new URL(startRel, folder) : new URL("index.md", folder);
@@ -5201,57 +5284,91 @@
     if (!urlWithinBundle(start.href, folder.href)) {
       start = new URL("index.md", folder);
     }
-    var files = await crawlFromUrl(start.href, maxDepth, folder.href);
+    var files = await crawlFromUrl(start.href, maxDepth, folder.href, onProgress);
     return files.length ? files : null;
   }
 
   async function autoLoad(force) {
     var proto = location.protocol;
     if (proto !== "http:" && proto !== "https:") {
-      if (force) overlayMsg.textContent = "Auto-load needs a web server; open the folder instead.";
+      if (force) { overlayMsg.textContent = "Auto-load needs a web server; open the folder instead."; overlay.classList.add("show"); closeAbout(); }
       return false;
     }
     overlayMsg.textContent = "Loading bundle…";
     var bundle = urlParam("bundle");
     var depth = urlDepth();
     var request = ++bundleLoadRequest;
+    // Render the graph and decks while the crawl runs, so nodes and declared
+    // decks appear as they load instead of all at once when it finishes.
+    // `previewRoot` is set per branch before each crawl, and the geometric step
+    // keeps the number of rebuilds proportional to the logarithm of the file count.
+    var previewRoot = null, previewed = false, previewNext = 1;
+    function previewFiles(files) {
+      if (files.length < previewNext) return;
+      previewNext = previewed ? Math.max(files.length + 1, Math.ceil(files.length * 1.5)) : 2;
+      var first = !previewed;
+      previewed = true;
+      if (load(files.slice(), previewRoot, null, !first)) { applyBundleDecks(); autoFit = true; }
+    }
     try {
       var files = null, root = null;
       if (bundle && /\.md$/i.test(bundle)) {
         var bUrl = new URL(bundle, location.href);
-        if (!isAllowedUrl(bUrl)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
+        if (!isAllowedUrl(bUrl)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; overlay.classList.add("show"); closeAbout(); return false; }
         root = new URL("./", bUrl).href;
-        files = await crawlFromUrl(bUrl.href, depth, root);
+        previewRoot = root;
+        files = await crawlFromUrl(bUrl.href, depth, root, previewFiles);
       } else if (bundle) {
         var loc = resolveBundleLoc(bundle);
-        if (!isAllowedUrl(loc)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; return false; }
+        if (!isAllowedUrl(loc)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; overlay.classList.add("show"); closeAbout(); return false; }
         loc.search = ""; loc.hash = "";
         if (!/\/$/.test(loc.pathname)) loc.pathname += "/";
         var folder = loc;
         root = folder.href;
-        files = await loadBundleFromFolder(folder.href, depth);
+        previewRoot = root;
+        files = await loadBundleFromFolder(folder.href, depth, previewFiles);
         if (request !== bundleLoadRequest) return false;
         if (!files) {
           overlayMsg.textContent = "No bundle at ?bundle=" + bundle + " (no index.md).";
+          overlay.classList.add("show");
+          closeAbout();
           return false;
         }
       } else {
         // Default: bundles/ next to the page, else index.md beside the page.
         var bundlesRoot = new URL("bundles/", location.href);
         root = bundlesRoot.href;
-        files = await loadBundleFromFolder(bundlesRoot.href, depth);
+        previewRoot = root;
+        files = await loadBundleFromFolder(bundlesRoot.href, depth, previewFiles);
         if (request !== bundleLoadRequest) return false;
         if (!files) {
           root = new URL("./", location.href).href;
-          files = await crawlFromUrl(new URL("index.md", location.href).href, depth, root);
+          previewRoot = root;
+          files = await crawlFromUrl(new URL("index.md", location.href).href, depth, root, previewFiles);
         }
       }
       if (request !== bundleLoadRequest) return false;
-      if (files && files.length) return load(files, root);
+      if (files && files.length) {
+        // With previews already on screen, grow the finished graph in place and
+        // apply the bundle's declared decks; otherwise build it once as before.
+        var ok;
+        if (previewed) {
+          ok = load(files, root, null, true);
+          if (ok) { applyBundleDecks(); fitView(); autoFit = true; }
+        } else {
+          ok = load(files, root);
+        }
+        return ok;
+      }
       overlayMsg.textContent = "Nothing to load: add bundles/index.md, or pass ?bundle=<name>.";
+      // A missing bundle asked for by name is an error worth showing; the plain
+      // startup state keeps the About panel and leaves the bundle dialog hidden.
+      if (bundle || force) { overlay.classList.add("show"); closeAbout(); }
     } catch (e) {
       if (request !== bundleLoadRequest) return false;
       overlayMsg.textContent = "Auto-load failed: " + e.message;
+      overlay.classList.add("show");
+      closeAbout();
     }
     return false;
   }
@@ -5554,53 +5671,82 @@
     deck = decks[activeDeck].items;
   }
 
-  // Decks a bundle declares in frontmatter. Any loaded concept may list decks
-  // under `okfx.decks`; each deck names its pages, which resolve like other
-  // frontmatter paths (a bare or "/"-prefixed path from the bundle root, a "./"
-  // or "../" path from the file, ".md" optional). The declarations are collected
-  // when a bundle loads and replace the default empty deck.
-  function resolveDeclaredPath(from, ref) {
-    if (typeof ref !== "string") return null;
-    var p = normalizeLinkPath(ref);
-    if (p && !extOf(p)) p += ".md";
-    if (!p || !fileMap) return null;
-    var cands = resourceCandidates(from, p);
-    for (var i = 0; i < cands.length; i++) if (fileMap.has(cands[i])) return cands[i];
-    return null;
-  }
-  function applyBundleDecks() {
-    if (!fileMap) return false;
-    var specs = [];
+  // Deck membership is declared per page: a concept names the decks it belongs to
+  // under the OKF Praxis extension key `okfx.decks` (a name, or a list of names).
+  // The viewer groups the loaded concepts by deck name, so a deck holds every page
+  // that names it. Membership is merged in as the bundle loads: a deck is created
+  // when its first member page loads and its remaining members are appended as they
+  // load, so the panel fills in instead of rebuilding all at once.
+  //
+  // One entry per deck named by a loaded concept, in the order the names first
+  // appear, with the member pages in bundle order. `key` is the deck name, which
+  // identifies the deck across the progressive rebuilds of a single bundle.
+  function declaredDeckSpecs() {
+    var specs = [], byName = new Map();
     allNodes.forEach(function (node) {
       var decl = node.fm && node.fm.okfx && node.fm.okfx.decks;
-      if (!decl) return;
-      var list = Array.isArray(decl) ? decl : [decl];
-      list.forEach(function (spec) {
-        var name = "", pages = [];
-        if (typeof spec === "string") { pages = [spec]; }
-        else if (spec && typeof spec === "object") {
-          if (typeof spec.name === "string") name = spec.name.trim();
-          var p = spec.pages;
-          pages = Array.isArray(p) ? p : (typeof p === "string" ? [p] : []);
-        } else return;
-        var items = [], seen = new Set();
-        pages.forEach(function (ref) {
-          var path = resolveDeclaredPath(node.path, ref);
-          if (!path || seen.has(path)) return;
-          seen.add(path);
-          items.push({ path: path, sub: null, open: false });
-        });
-        if (items.length) specs.push({ name: name, items: items });
+      if (!decl || !fileMap || !fileMap.has(node.path)) return;
+      var names = Array.isArray(decl) ? decl : [decl];
+      names.forEach(function (name) {
+        if (typeof name !== "string") return;
+        name = name.trim();
+        if (!name) return;
+        var spec = byName.get(name);
+        if (!spec) { spec = { key: name, name: name, pages: [] }; byName.set(name, spec); specs.push(spec); }
+        if (spec.pages.indexOf(node.path) < 0) spec.pages.push(node.path);
       });
     });
-    if (!specs.length) return false;
-    decks = specs.slice(0, MAX_DECKS).map(function (s, i) {
-      return { name: s.name || ("Deck " + (i + 1)), items: s.items };
-    });
-    activeDeck = 0;
-    deck = decks[0].items;
-    renderDeck();
+    return specs;
+  }
+  function findDeclaredDeck(key) {
+    for (var i = 0; i < decks.length; i++) if (decks[i].key === key) return decks[i];
+    return null;
+  }
+  function sameDeckItems(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
     return true;
+  }
+  // Merge the deck membership into the panel. A deck is created when its first
+  // member page loads and members are appended, in bundle order, as they load. The
+  // existing decks — including user-made ones — and the active deck are kept.
+  function applyBundleDecks() {
+    if (!fileMap) return false;
+    var changed = false, added = [];
+    declaredDeckSpecs().forEach(function (spec) {
+      if (!spec.pages.length) return;   // nothing resolvable yet
+      var d = findDeclaredDeck(spec.key);
+      if (!d) {
+        if (decks.length >= MAX_DECKS) return;
+        d = { name: spec.name || ("Deck " + (decks.length + 1)), items: [], key: spec.key };
+        decks.push(d);
+        changed = true;
+      }
+      var byPath = new Map();
+      d.items.forEach(function (it) { if (!byPath.has(it.path)) byPath.set(it.path, it); });
+      var declared = [], used = new Set();
+      spec.pages.forEach(function (path) {
+        var it = byPath.get(path);
+        if (!it) { it = { path: path, sub: null, open: false }; changed = true; added.push(path); }
+        declared.push(it);
+        used.add(path);
+      });
+      // Keep any card that is not part of the declaration (added by hand).
+      var extras = d.items.filter(function (it) { return !used.has(it.path); });
+      var next = declared.concat(extras);
+      if (!sameDeckItems(d.items, next)) {
+        d.items = next;
+        if (decks[activeDeck] === d) deck = d.items;
+        changed = true;
+      }
+    });
+    if (changed) {
+      renderDeck();
+      // Fade each newly added card in, so a deck that fills in while a bundle loads
+      // does not just snap in.
+      for (var i = 0; i < added.length; i++) enterDeckCard(added[i]);
+    }
+    return changed;
   }
 
   // The deck menu, opened from the preview's add button and from the deck switcher.
@@ -5889,6 +6035,21 @@
       (function (el) {
         el.classList.add("flash");
         setTimeout(function () { el.classList.remove("flash"); }, 700);
+      })(cards[i]);
+    }
+  }
+  // A card that joins a deck while a bundle loads (its membership resolved) fades in
+  // instead of highlighting.
+  function enterDeckCard(path) {
+    if (!deckEl) return;
+    var cards = deckEl.querySelectorAll(".deck-card");
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute("data-path") !== path) continue;
+      (function (el) {
+        el.classList.add("enter");
+        var done = function () { el.classList.remove("enter"); el.removeEventListener("animationend", done); };
+        el.addEventListener("animationend", done);
+        setTimeout(done, 400);   // fallback if the animation event is not delivered
       })(cards[i]);
     }
   }
@@ -6825,6 +6986,9 @@
   view.x = W / 2; view.y = H / 2;
   initMascot();
   initDeck();
+  // Start on the About panel instead of the bundle dialog. It stays until the
+  // user interacts with the interface, while auto-loading runs underneath.
+  openAbout();
   autoLoad(false);
 })();
 </script>

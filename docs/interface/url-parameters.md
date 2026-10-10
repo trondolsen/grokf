@@ -30,7 +30,8 @@ They are optional; append to the URL and combine as needed, for example `?bundle
 - `bundle` and `start` must be **same-origin**; a value pointing elsewhere is rejected with a message.[^source]
 - A bare `bundle` name without `/`, and not ending in `.json`, resolves under `bundles/`. A value ending in `.md` is treated as the start file itself.
 - `start` is only honoured while it stays inside the bundle folder; otherwise the tool falls back to `index.md`.[^source]
-- With no parameters on a web server, the tool tries `bundles/index.md`, then `index.md` beside the page. On `file://` it does not auto-load and asks the user to open a folder instead.[^readme]
+- With no parameters on a web server, the tool tries `bundles/index.md`, then `index.md` beside the page. On `file://` it does not auto-load; the About panel is shown and **Open folder…** in the toolbar opens a local folder instead.[^readme]
+- The graph fills in as the crawl loads files, growing in place rather than appearing all at once; see [crawling](../algorithms/crawling.md).
 
 # Connections
 
