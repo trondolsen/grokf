@@ -314,11 +314,18 @@ test('åpner .runtime fra Om-panelet og oppdaterer siden mens den leses', async 
 });
 
 test('oversetter grensesnittet og støtter høyre-til-venstre', async ({ page }) => {
-  // Arabic: right-to-left orientation, translated controls and Arabic plurals.
-  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all&lang=ar`);
+  // Arabic: chosen from the language dialog, which persists it in the browser (there is
+  // no ?lang URL parameter any more). Right-to-left orientation and translated controls.
+  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all`);
   await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);
   await expect(page.locator('#spinner')).toBeHidden();
   await expect(page.locator('#stats')).toHaveText(/\S/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#aboutPop')).toBeHidden();
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  await page.locator('#langSearch').fill('arabic');
+  await page.locator('#langList .lang-row[data-tag="ar"]').click();
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -340,10 +347,11 @@ test('oversetter grensesnittet og støtter høyre-til-venstre', async ({ page })
   const handleAr = await page.locator('#sideHandle').boundingBox();
   expect(handleAr.x + handleAr.width).toBeLessThanOrEqual(vw);
 
-  // Spanish: left-to-right again, with Spanish plural nouns.
-  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all&lang=es`);
-  await expect(page.locator('#spinner')).toBeHidden();
-  await expect(page.locator('#stats')).toHaveText(/\S/);
+  // Spanish: chosen from the dialog too — left-to-right again, with Spanish plural nouns.
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  await page.locator('#langSearch').fill('spanish');
+  await page.locator('#langList .lang-row[data-tag="es"]').first().click();
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).toHaveAttribute('lang', 'es');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
@@ -361,18 +369,20 @@ test('oversetter grensesnittet og støtter høyre-til-venstre', async ({ page })
   const handleEs = await page.locator('#sideHandle').boundingBox();
   expect(handleEs.x).toBeGreaterThanOrEqual(0);
 
-  // The language selector now lives in the About panel: open it to switch language,
-  // which flips the interface (including the panel's own anchor) in place.
-  await expect(page.locator('#aboutPop #langSelect')).toHaveCount(1);
-  await expect(page.locator('#sidebar #langSelect')).toHaveCount(0);
+  // The language picker now lives in the About panel: its trigger opens a searchable
+  // dialog, and choosing a language flips the interface (and the panel's anchor) in place.
+  await expect(page.locator('#sidebar #langOpen')).toHaveCount(0);
   await page.locator('#titleBtn').click();
-  await expect(page.locator('#langSelect')).toHaveValue('es');
-  // The selector carries the Index node colour (#37b6c4), like the runtime link and File colour.
-  await expect(page.locator('#aboutPop .about-lang label')).toHaveCSS('color', 'rgb(55, 182, 196)');
-  await expect(page.locator('#langSelect')).toHaveCSS('border-top-color', 'rgb(55, 182, 196)');
-  await page.locator('#langSelect').selectOption('ar');
+  await expect(page.locator('#langCurrent')).not.toBeEmpty();
+  // The picker carries the Directory node colour (#8b93a7), like the runtime link and File colour.
+  await expect(page.locator('#aboutPop .about-lang label')).toHaveCSS('color', 'rgb(139, 147, 167)');
+  await expect(page.locator('#langOpen')).toHaveCSS('border-top-color', 'rgb(139, 147, 167)');
+  await page.locator('#langOpen').click();
+  await expect(page.locator('#langPop')).toBeVisible();
+  await page.locator('#langList .lang-row[data-tag="ar"]').click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('#resetView')).toHaveText('إعادة ضبط العرض');
+  await expect(page.locator('#langPop')).toBeHidden();
   await page.keyboard.press('Escape');
   await expect(page.locator('#aboutPop')).toBeHidden();
 
@@ -393,8 +403,107 @@ test('oversetter grensesnittet og støtter høyre-til-venstre', async ({ page })
   await expect(page.locator('#pvFwd')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
 });
 
+test('grupperer språkvalget etter verdensdel', async ({ page }) => {
+  await loadBundle(page);
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  // Region headings: the English name, sorted alphabetically, with the languages under them.
+  await expect(page.locator('#langList .pop-sec').first()).toHaveText('Africa');
+  await expect(page.locator('#langList .pop-sec', { hasText: 'Asia' })).toHaveCount(1);
+  await expect(page.locator('#langList .pop-sec', { hasText: 'Africa' })).toHaveCount(1);
+  // English is listed under both Europe and the Americas.
+  await expect(page.locator('#langList .lang-row[data-tag="en"]')).toHaveCount(2);
+  await expect(page.locator('#langList .lang-row[data-tag="zh-Hans"]')).toHaveCount(1);
+  await expect(page.locator('#langList .lang-row[data-tag="sw"]')).toHaveCount(1);
+  // Serbian ships in both scripts: the default Cyrillic (no script subtag) and Latin.
+  await page.locator('#langSearch').fill('serbian');
+  await expect(page.locator('#langList .lang-row')).toHaveCount(2);
+  await page.locator('#langList .lang-row[data-tag="sr-Latn"]').click();
+  // Serbian (Latin) has no dictionary: the interface text stays English and is declared as
+  // such, the direction follows the chosen script, and the choice is remembered.
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  expect(await page.evaluate(() => localStorage.getItem('grokf.lang'))).toBe('sr-Latn');
+  // A language with its own dictionary switches the interface.
+  await page.locator('#langOpen').click();
+  await page.locator('#langSearch').fill('dutch');
+  await page.locator('#langList .lang-row[data-tag="nl"]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'nl');
+  await expect(page.locator('#resetView')).toHaveText('Weergave resetten');
+  // A newly shipped dictionary switches the interface too (found by its own name, "svenska").
+  await page.locator('#langOpen').click();
+  // The list stays in English whatever the interface language is (now Dutch); only the
+  // region headings gain the interface language's name in parentheses.
+  await expect(page.locator('#langList .lang-row[data-tag="es"]').first()).toHaveText('Spanish (español)');
+  await expect(page.locator('#langList .pop-sec', { hasText: 'Europe (Europa)' })).toHaveCount(1);
+  await page.locator('#langSearch').fill('svenska');
+  await page.locator('#langList .lang-row[data-tag="sv"]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'sv');
+  await expect(page.locator('#resetView')).toHaveText('Återställ vy');
+});
+
+test('søker i språklista og støtter språk uten ordbok', async ({ page }) => {
+  await loadBundle(page);
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  // The dialog offers every language.
+  expect(await page.locator('#langList .lang-row').count()).toBeGreaterThan(100);
+  // Every entry is the English name, with the language's own name in parentheses.
+  await expect(page.locator('#langList .lang-row[data-tag="es"]').first()).toHaveText('Spanish (español)');
+  await expect(page.locator('#langList .lang-row[data-tag="ja"]')).toHaveText('Japanese (日本語)');
+  // The search narrows the list by name (case- and accent-insensitive).
+  await page.locator('#langSearch').fill('arab');
+  await expect(page.locator('#langList .lang-row')).toHaveCount(1);
+  await expect(page.locator('#langList .lang-row[data-tag="ar"]')).toHaveCount(1);
+  // A language without a dictionary is still selectable: the interface text is declared
+  // and shown as English, and the choice is remembered.
+  await page.locator('#langSearch').fill('maori');
+  await page.locator('#langList .lang-row[data-tag="mi"]').click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('#resetView')).toHaveText('Reset view');
+  expect(await page.evaluate(() => localStorage.getItem('grokf.lang'))).toBe('mi');
+});
+
+test('holder språkvalgdialogen innenfor vinduet', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 380 });
+  await loadBundle(page);
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  await expect(page.locator('#langPop')).toBeVisible();
+  const vp = page.viewportSize();
+  const box = await page.locator('#langPop').boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 0.5);
+  expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 0.5);
+});
+
+test('viser hele Om-panelet når det er plass', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 1200 });
+  await loadBundle(page);
+  await page.locator('#titleBtn').click();
+  await expect(page.locator('#aboutPop')).toBeVisible();
+  const body = page.locator('#aboutPop .about-body');
+  // The panel's full height, measured in a tall window.
+  const full = await body.evaluate(el => el.scrollHeight);
+  // In a window tall enough to hold it, the panel is shown in full with no inner scroll.
+  await page.setViewportSize({ width: 900, height: full + 120 });
+  const slack = await body.evaluate(el => el.scrollHeight - el.clientHeight);
+  expect(slack).toBeLessThanOrEqual(1);
+  const vp = page.viewportSize();
+  const box = await page.locator('#aboutPop').boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 0.5);
+  // In a short window it caps to the remaining height but still stays inside.
+  await page.setViewportSize({ width: 900, height: 320 });
+  const box2 = await page.locator('#aboutPop').boundingBox();
+  expect(box2.y).toBeGreaterThanOrEqual(0);
+  expect(box2.y + box2.height).toBeLessThanOrEqual(320 + 0.5);
+});
+
 test('isolerer innskutte verdier i meldinger med bdi', async ({ page }) => {
-  await page.goto(`${explorer}?bundle=${encodeURIComponent('https://example.invalid/private/')}&lang=ar`);
+  // The interface language is persisted before the page loads.
+  await page.addInitScript(() => { try { localStorage.setItem('grokf.lang', 'ar'); } catch (e) {} });
+  await page.goto(`${explorer}?bundle=${encodeURIComponent('https://example.invalid/private/')}`);
   await expect(page.locator('#overlay')).toHaveClass(/\bshow\b/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -409,4 +518,39 @@ test('laster prosjektets kunnskapsindeks som en separat røykprøve', async ({ p
   await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);
   await expect(page.locator('#spinner')).toBeHidden();
   await expect(page.locator('#stats')).toHaveText(/[1-9]\d* files · \d+ links/);
+});
+
+test('husker valgt språk til neste besøk', async ({ page }) => {
+  await loadBundle(page);
+  // Choose Swedish from the dialog.
+  await page.locator('#titleBtn').click();
+  await page.locator('#langOpen').click();
+  await page.locator('#langSearch').fill('swedish');
+  await page.locator('#langList .lang-row[data-tag="sv"]').click();
+  await expect(page.locator('#resetView')).toHaveText('Återställ vy');
+  // The choice is persisted in the browser and restored on the next visit.
+  await page.reload();
+  await expect(page.locator('#spinner')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'sv');
+  await expect(page.locator('#resetView')).toHaveText('Återställ vy');
+});
+
+test('bruker nettleserens foretrukne språk når intet er lagret', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'languages', { get: () => ['de-DE', 'en'] });
+  });
+  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all`);
+  await expect(page.locator('#spinner')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+});
+
+test('fjerner et foreldet ?lang fra adressen', async ({ page }) => {
+  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all&lang=de`);
+  await expect(page.locator('#spinner')).toBeHidden();
+  // The parameter is gone from the URL and has no effect on the interface.
+  expect(page.url()).not.toContain('lang=');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });

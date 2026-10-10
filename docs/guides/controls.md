@@ -69,8 +69,9 @@ There are no other global shortcuts.[^source]
   filters, and **Clear filters**. Open or close it with the **Filters** tab.
 - **Legend** docks left: the list of groups with their colours and counts; click
   a row to filter the graph to that group.
-- **About** opens from the **grokf ▾** title as the startup panel. It holds the
-  **Language** selector and a **Runtime internals** link that opens the synthetic
+- **About** opens from the **grokf ▾** title as the startup panel. It holds a
+  **Language** picker (a searchable dialog of every language, grouped by geographic
+  region) and a **Runtime internals** link that opens the synthetic
   [`.runtime` directory](../interface/runtime.md).
 
 On screens narrower than 760px the toolbar collapses behind the **☰** button and

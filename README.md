@@ -59,7 +59,6 @@ Optional; append to the URL and combine as needed (e.g. `?bundle=acme/&depth=1`)
 | `bundle` | name, path, or `*.md` file | — | Bundle to load; a bare name resolves to `bundles/<name>/`. |
 | `start` | file in the bundle folder | `index.md` | Crawl entry point. |
 | `depth` (or `levels`) | `0`…`n`, or `all` | `all` | Link levels to prefetch; nodes with unloaded content (pages, files or attachments) show a dashed ring and load on click. |
-| `lang` | a BCP 47 tag, or a comma-separated list | the browser's language | Interface language; right-to-left languages flip the page direction. |
 
 - Bundles are discovered from `index.md` by following links (no manifest); with no parameters the tool loads `bundles/` next to the page. `bundle` and `start` must be same-origin (served from the same site).
 - The crawl loads only Markdown files. Other files (non-Markdown text and binary attachments) are shown as nodes and fetched on demand when clicked.

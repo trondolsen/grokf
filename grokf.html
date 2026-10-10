@@ -338,15 +338,31 @@
   #aboutPop a:hover { text-decoration: underline; }
   #aboutPop .about-links { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 10px 0 0; }
   #aboutPop a.about-runtime { color: #c9a24d; }   /* the File node colour (FILE_COLOR) */
-  /* The language selector sits with the About panel's links and uses the Index node
-     colour (INDEX_COLOR), the way the runtime link uses the File colour. */
+  /* The language picker sits with the About panel's links and uses the Directory node
+     colour (DIR_COLOR), the way the runtime link uses the File colour. Its trigger
+     opens a searchable dialog grouped by region. */
   #aboutPop .about-lang { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
-  #aboutPop .about-lang label { flex: none; color: var(--index); }
-  #aboutPop .about-lang select {
-    flex: 1 1 auto; min-width: 0; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13px;
-    background: var(--panel-2); color: var(--index); border: 1px solid var(--index);
+  #aboutPop .about-lang label { flex: none; color: var(--dir); }
+  #aboutPop .lang-open {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13px; text-align: start;
+    background: var(--panel-2); color: var(--dir); border: 1px solid var(--dir); cursor: pointer;
   }
-  #aboutPop .about-lang select:focus { outline: none; border-color: var(--index); }
+  #aboutPop .lang-open:hover, #aboutPop .lang-open[aria-expanded="true"] { border-color: var(--accent); }
+  #aboutPop .lang-open .caret { margin-inline-start: auto; color: var(--text); }
+  .lang-pop { z-index: 47; }
+  .lang-list { display: block; }
+  .lang-list .pop-sec {
+    margin: 6px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  }
+  .lang-list .pop-sec:first-child { margin-top: 0; }
+  .lang-row {
+    display: block; width: 100%; text-align: start; font: inherit; font-size: 13px;
+    padding: 5px 8px; border: 1px solid transparent; border-radius: 8px;
+    background: transparent; color: var(--text); cursor: pointer;
+  }
+  .lang-row:hover { border-color: var(--accent); }
+  .lang-row[aria-selected="true"] { border-color: var(--dir); color: var(--dir); }
   #aboutPop .about-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-rev { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-toggle {
@@ -995,6 +1011,13 @@
   </div>
 </div>
 
+<div id="langPop" class="pop lang-pop" hidden>
+  <div class="pop-search">
+    <input id="langSearch" type="search" placeholder="Search languages…" data-i18n-placeholder="lang.search" aria-label="Search languages" data-i18n-aria-label="lang.search" autocomplete="off" spellcheck="false">
+  </div>
+  <div id="langList" class="pop-list lang-list" role="listbox" aria-label="Language" data-i18n-aria-label="lang.label"></div>
+</div>
+
 <div id="kindPop" class="pop" hidden>
   <div class="pop-search">
     <input id="kindSearch" type="search" placeholder="Search kinds…" data-i18n-placeholder="facet.searchKinds" autocomplete="off" spellcheck="false">
@@ -1062,10 +1085,10 @@
         <li data-i18n="about.li4">Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
       </ul>
       <p class="about-note" data-i18n="about.note">This tool was generated with AI assistance. Review it before relying on it.</p>
-      <p class="about-lang">
-        <label for="langSelect" data-i18n="lang.label">Language</label>
-        <select id="langSelect" aria-label="Language" data-i18n-aria-label="lang.label"></select>
-      </p>
+      <div class="about-lang">
+        <label for="langOpen" data-i18n="lang.label">Language</label>
+        <button id="langOpen" type="button" class="lang-open" aria-haspopup="listbox" aria-expanded="false"><span id="langCurrent"></span><span class="caret" aria-hidden="true">▾</span></button>
+      </div>
       <p class="about-links">
         <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener" data-i18n="about.source">Source on GitHub</a>
         <a href="#" id="aboutRuntime" class="about-runtime" data-i18n="about.runtime">Runtime internals</a>
@@ -2437,14 +2460,1610 @@
       "msg.nothingToLoad": "لا يوجد ما يُحمّل: أضف bundles/index.md، أو مرّر ?bundle=<name>.",
       "msg.autoLoadFailed": "فشل التحميل التلقائي: {0}",
       "msg.buildFailed": "تعذّر إنشاء الرسم البياني: {0}"
+    },
+    "nl": {
+      "nav.toggleToolbar": "Werkbalk tonen/verbergen",
+      "nav.about": "Over",
+      "nav.open": "Map openen…",
+      "nav.reload": "Herladen",
+      "nav.resetView": "Weergave resetten",
+      "nav.resetLayout": "Indeling resetten",
+      "nav.labels": "Labels",
+      "nav.tags": "Tags",
+      "nav.tagsTitle": "Tag-koppelingen",
+      "nav.install": "Installeren",
+      "nav.installTitle": "grokf als app installeren",
+      "nav.top": "Boven",
+      "nav.topTitle": "Bovenste niveau",
+      "nav.back": "Terug",
+      "nav.forward": "Vooruit",
+      "spinner.loading": "Laden",
+      "side.handle": "Filters",
+      "side.toggleFilters": "Filters tonen/verbergen",
+      "side.head": "Zoeken en filteren",
+      "search.label": "Zoeken",
+      "search.placeholder": "bijv. json, guide, nsm…",
+      "search.in": "in",
+      "field.all": "Alle velden",
+      "field.title": "Titel",
+      "field.description": "Beschrijving",
+      "field.type": "Type",
+      "field.tags": "Tags",
+      "field.path": "Pad",
+      "facet.kinds": "Soorten",
+      "facet.types": "Typen",
+      "facet.tags": "Tags",
+      "facet.status": "Status",
+      "facet.selectKinds": "Soorten selecteren…",
+      "facet.selectTypes": "Typen selecteren…",
+      "facet.selectTags": "Tags selecteren…",
+      "facet.selectStatus": "Status selecteren…",
+      "facet.searchTags": "Tags zoeken…",
+      "facet.searchKinds": "Soorten zoeken…",
+      "facet.searchTypes": "Typen zoeken…",
+      "facet.searchStatuses": "Statussen zoeken…",
+      "btn.clear": "Wissen",
+      "btn.clearFilters": "Filters wissen",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Legenda tonen/verbergen",
+      "lang.label": "Taal",
+      "about.tagline": "— een zelfstandige viewer zonder afhankelijkheden voor Open Knowledge Format-bundels.",
+      "about.rev": "Revisie",
+      "about.desc": "Het toont Markdown-concepten, hun frontmatter (type, tags, status, description) en referentielinks als een interactieve grafiek die je kunt filteren, verschuiven en zoomen.",
+      "about.li1": "Open een map of sleep er een naar het venster. Op een webserver laadt <code>bundles/</code> automatisch.",
+      "about.li2": "Houd een knooppunt ingedrukt en sleep de kaart naar de rechterrand om een stapel te maken; voeg pagina's toe vanuit het voorbeeld met Toevoegen aan stapel.",
+      "about.li3": "Desktop: klik op een knooppunt voor een voorbeeld, dubbelklik op een map om erin te gaan, scroll om te zoomen.",
+      "about.li4": "Aanraken: tik voor een voorbeeld of om erin te gaan, sleep om te verschuiven, knijp om te zoomen.",
+      "about.note": "Dit hulpmiddel is gemaakt met AI-ondersteuning. Controleer het voordat je erop vertrouwt.",
+      "about.source": "Bron op GitHub",
+      "about.runtime": "Interne werking",
+      "about.showDetails": "Details tonen",
+      "about.hideDetails": "Details verbergen",
+      "card.desc": "Zelfstandige viewer zonder afhankelijkheden voor deze kennisbundel.",
+      "card.li1": "Geserveerd: op een statische server (ook GitHub Pages) wordt <code>bundles/</code> automatisch geladen uit <code>bundles/index.md</code>.",
+      "card.li2": "Kies een bundel met een URL-parameter, bijvoorbeeld <code>?bundle=acme_retail</code> (een naam, een mappad of een startbestand <code>.md</code>).",
+      "card.li3": "Beperk de voorlaaddiepte met <code>?depth=N</code> (standaard: alle niveaus); klik op een gestippeld knooppunt om het volgende niveau te laden en nogmaals om een voorbeeld te zien.",
+      "card.li4": "Lokaal bestand: klik op Map openen en kies een bundelmap, of sleep die naar dit venster.",
+      "card.li5": "Houd een knooppunt ingedrukt en sleep de kaart naar de rechterrand om een stapel te maken; voeg pagina's toe vanuit het voorbeeld met Toevoegen aan stapel.",
+      "card.retry": "Automatisch laden opnieuw proberen",
+      "pv.back": "Terug",
+      "pv.forward": "Vooruit",
+      "pv.close": "Sluiten",
+      "pv.addDeck": "Deze pagina aan de stapel toevoegen",
+      "filter.active": "{n} actief",
+      "filter.search": "zoeken",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Map kiezen mislukt: {0}",
+      "msg.noMdFolder": "Geen Markdown-bestanden gevonden in de gekozen map.",
+      "msg.readFolderFailed": "Kan de map niet lezen: {0}",
+      "msg.noMdDropped": "Geen Markdown-bestanden gevonden in de neergezette map.",
+      "msg.readDroppedFailed": "Kan de neergezette map niet lezen: {0}",
+      "msg.unexpected": "Onverwachte fout",
+      "msg.needsServer": "Automatisch laden vereist een webserver; open de map.",
+      "msg.loading": "Bundel laden…",
+      "msg.sameOrigin": "De bundel moet een pad van dezelfde oorsprong zijn: {0}",
+      "msg.noBundleAt": "Geen bundel op ?bundle={0} (geen index.md).",
+      "msg.nothingToLoad": "Niets te laden: voeg bundles/index.md toe of geef ?bundle=<name> mee.",
+      "msg.autoLoadFailed": "Automatisch laden mislukt: {0}",
+      "msg.buildFailed": "Kan de grafiek niet opbouwen: {0}",
+      "stats.files": { "one": "bestand", "other": "bestanden" },
+      "stats.links": { "one": "koppeling", "other": "koppelingen" }
+    },
+    "pl": {
+      "nav.toggleToolbar": "Pokaż/ukryj pasek narzędzi",
+      "nav.about": "Informacje",
+      "nav.open": "Otwórz folder…",
+      "nav.reload": "Odśwież",
+      "nav.resetView": "Przywróć widok",
+      "nav.resetLayout": "Przywróć układ",
+      "nav.labels": "Etykiety",
+      "nav.tags": "Tagi",
+      "nav.tagsTitle": "Powiązania tagów",
+      "nav.install": "Zainstaluj",
+      "nav.installTitle": "Zainstaluj grokf jako aplikację",
+      "nav.top": "Góra",
+      "nav.topTitle": "Najwyższy poziom",
+      "nav.back": "Wstecz",
+      "nav.forward": "Dalej",
+      "spinner.loading": "Wczytywanie",
+      "side.handle": "Filtry",
+      "side.toggleFilters": "Pokaż/ukryj filtry",
+      "side.head": "Szukaj i filtruj",
+      "search.label": "Szukaj",
+      "search.placeholder": "np. json, guide, nsm…",
+      "search.in": "w",
+      "field.all": "Wszystkie pola",
+      "field.title": "Tytuł",
+      "field.description": "Opis",
+      "field.type": "Typ",
+      "field.tags": "Tagi",
+      "field.path": "Ścieżka",
+      "facet.kinds": "Rodzaje",
+      "facet.types": "Typy",
+      "facet.tags": "Tagi",
+      "facet.status": "Status",
+      "facet.selectKinds": "Wybierz rodzaje…",
+      "facet.selectTypes": "Wybierz typy…",
+      "facet.selectTags": "Wybierz tagi…",
+      "facet.selectStatus": "Wybierz status…",
+      "facet.searchTags": "Szukaj tagów…",
+      "facet.searchKinds": "Szukaj rodzajów…",
+      "facet.searchTypes": "Szukaj typów…",
+      "facet.searchStatuses": "Szukaj statusów…",
+      "btn.clear": "Wyczyść",
+      "btn.clearFilters": "Wyczyść filtry",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Pokaż/ukryj legendę",
+      "lang.label": "Język",
+      "about.tagline": "— samodzielna, niezależna przeglądarka paczek Open Knowledge Format.",
+      "about.rev": "Wersja",
+      "about.desc": "Renderuje koncepcje Markdown, ich frontmatter (type, tags, status, description) oraz linki referencyjne jako interaktywny graf, który można filtrować, przesuwać i powiększać.",
+      "about.li1": "Otwórz folder lub przeciągnij go na okno. Na serwerze WWW program automatycznie wczytuje <code>bundles/</code>.",
+      "about.li2": "Przytrzymaj węzeł i przeciągnij kartę do prawej krawędzi, aby utworzyć talię; dodawaj strony z podglądu przez Dodaj do talii.",
+      "about.li3": "Komputer: kliknij węzeł, aby wyświetlić podgląd, kliknij dwukrotnie katalog, aby wejść, przewiń, aby powiększyć.",
+      "about.li4": "Dotyk: dotknij, aby wyświetlić podgląd lub wejść, przeciągnij, aby przesuwać, uszczypnij, aby powiększyć.",
+      "about.note": "To narzędzie powstało z pomocą AI. Sprawdź je, zanim na nim polegniesz.",
+      "about.source": "Kod źródłowy na GitHubie",
+      "about.runtime": "Działanie wewnętrzne",
+      "about.showDetails": "Pokaż szczegóły",
+      "about.hideDetails": "Ukryj szczegóły",
+      "card.desc": "Samodzielna, niezależna przeglądarka tej paczki wiedzy.",
+      "card.li1": "Z serwera: na serwerze statycznym (także GitHub Pages) automatycznie wczytuje <code>bundles/</code> z <code>bundles/index.md</code>.",
+      "card.li2": "Wybierz paczkę za pomocą parametru URL, np. <code>?bundle=acme_retail</code> (nazwa, ścieżka folderu lub początkowy plik <code>.md</code>).",
+      "card.li3": "Ogranicz głębokość wstępnego wczytywania przez <code>?depth=N</code> (domyślnie: wszystkie poziomy); kliknij węzeł z kropkami, aby wczytać kolejny poziom, i ponownie, aby wyświetlić podgląd.",
+      "card.li4": "Plik lokalny: kliknij Otwórz folder i wybierz katalog paczki albo przeciągnij go na to okno.",
+      "card.li5": "Przytrzymaj węzeł i przeciągnij kartę do prawej krawędzi, aby utworzyć talię; dodawaj strony z podglądu przez Dodaj do talii.",
+      "card.retry": "Ponów automatyczne wczytywanie",
+      "pv.back": "Wstecz",
+      "pv.forward": "Dalej",
+      "pv.close": "Zamknij",
+      "pv.addDeck": "Dodaj tę stronę do talii",
+      "filter.active": "aktywne: {n}",
+      "filter.search": "szukaj",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Nie udało się wybrać folderu: {0}",
+      "msg.noMdFolder": "W wybranym folderze nie znaleziono plików Markdown.",
+      "msg.readFolderFailed": "Nie można odczytać folderu: {0}",
+      "msg.noMdDropped": "W upuszczonym folderze nie znaleziono plików Markdown.",
+      "msg.readDroppedFailed": "Nie można odczytać upuszczonego folderu: {0}",
+      "msg.unexpected": "Nieoczekiwany błąd",
+      "msg.needsServer": "Automatyczne wczytywanie wymaga serwera WWW; otwórz folder.",
+      "msg.loading": "Wczytywanie paczki…",
+      "msg.sameOrigin": "Paczka musi być ścieżką z tego samego źródła: {0}",
+      "msg.noBundleAt": "Brak paczki pod ?bundle={0} (brak index.md).",
+      "msg.nothingToLoad": "Nie ma czego wczytać: dodaj bundles/index.md lub podaj ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatyczne wczytywanie nie powiodło się: {0}",
+      "msg.buildFailed": "Nie udało się zbudować grafu: {0}",
+      "stats.files": { "one": "plik", "few": "pliki", "many": "plików", "other": "pliku" },
+      "stats.links": { "one": "łącze", "few": "łącza", "many": "łączy", "other": "łącza" }
+    },
+    "id": {
+      "nav.toggleToolbar": "Alihkan bilah alat",
+      "nav.about": "Tentang",
+      "nav.open": "Buka folder…",
+      "nav.reload": "Muat ulang",
+      "nav.resetView": "Atur ulang tampilan",
+      "nav.resetLayout": "Atur ulang tata letak",
+      "nav.labels": "Label",
+      "nav.tags": "Tag",
+      "nav.tagsTitle": "Tautan tag",
+      "nav.install": "Pasang",
+      "nav.installTitle": "Pasang grokf sebagai aplikasi",
+      "nav.top": "Atas",
+      "nav.topTitle": "Tingkat teratas",
+      "nav.back": "Kembali",
+      "nav.forward": "Maju",
+      "spinner.loading": "Memuat",
+      "side.handle": "Filter",
+      "side.toggleFilters": "Alihkan filter",
+      "side.head": "Cari & filter",
+      "search.label": "Cari",
+      "search.placeholder": "mis. json, guide, nsm…",
+      "search.in": "di",
+      "field.all": "Semua kolom",
+      "field.title": "Judul",
+      "field.description": "Deskripsi",
+      "field.type": "Jenis",
+      "field.tags": "Tag",
+      "field.path": "Jalur",
+      "facet.kinds": "Jenis",
+      "facet.types": "Tipe",
+      "facet.tags": "Tag",
+      "facet.status": "Status",
+      "facet.selectKinds": "Pilih jenis…",
+      "facet.selectTypes": "Pilih tipe…",
+      "facet.selectTags": "Pilih tag…",
+      "facet.selectStatus": "Pilih status…",
+      "facet.searchTags": "Cari tag…",
+      "facet.searchKinds": "Cari jenis…",
+      "facet.searchTypes": "Cari tipe…",
+      "facet.searchStatuses": "Cari status…",
+      "btn.clear": "Bersihkan",
+      "btn.clearFilters": "Bersihkan filter",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Alihkan legenda",
+      "lang.label": "Bahasa",
+      "about.tagline": "— penampil tanpa dependensi dalam satu berkas untuk bundel Open Knowledge Format.",
+      "about.rev": "Revisi",
+      "about.desc": "Menampilkan konsep Markdown, frontmatter-nya (type, tags, status, description) dan tautan rujukan sebagai graf interaktif yang dapat Anda filter, geser, dan perbesar.",
+      "about.li1": "Buka folder, atau seret folder ke jendela. Di server web, berkas otomatis memuat <code>bundles/</code>.",
+      "about.li2": "Tekan dan tahan sebuah simpul, lalu seret kartunya ke tepi kanan untuk membuat dek; tambahkan halaman dari pratinjau dengan Tambahkan ke dek.",
+      "about.li3": "Desktop: klik simpul untuk pratinjau, klik ganda direktori untuk masuk, gulir untuk memperbesar.",
+      "about.li4": "Sentuh: ketuk untuk pratinjau atau masuk, seret untuk menggeser, cubit untuk memperbesar.",
+      "about.note": "Alat ini dibuat dengan bantuan AI. Tinjau sebelum mengandalkannya.",
+      "about.source": "Sumber di GitHub",
+      "about.runtime": "Seluk-beluk runtime",
+      "about.showDetails": "Tampilkan detail",
+      "about.hideDetails": "Sembunyikan detail",
+      "card.desc": "Penampil tanpa dependensi dalam satu berkas untuk bundel pengetahuan ini.",
+      "card.li1": "Disajikan: di server statis (termasuk GitHub Pages) berkas memuat <code>bundles/</code> secara otomatis dari <code>bundles/index.md</code>.",
+      "card.li2": "Pilih bundel dengan parameter URL, misalnya <code>?bundle=acme_retail</code> (nama, jalur folder, atau berkas <code>.md</code> awal).",
+      "card.li3": "Batasi kedalaman pramuat dengan <code>?depth=N</code> (bawaan: semua tingkat); klik simpul bertitik untuk memuat tingkat berikutnya, klik lagi untuk pratinjau.",
+      "card.li4": "Berkas lokal: klik Buka folder dan pilih direktori bundel, atau seret ke jendela ini.",
+      "card.li5": "Tekan dan tahan sebuah simpul, lalu seret kartunya ke tepi kanan untuk membuat dek; tambahkan halaman dari pratinjau dengan Tambahkan ke dek.",
+      "card.retry": "Coba muat otomatis lagi",
+      "pv.back": "Kembali",
+      "pv.forward": "Maju",
+      "pv.close": "Tutup",
+      "pv.addDeck": "Tambahkan halaman ini ke dek",
+      "filter.active": "{n} aktif",
+      "filter.search": "cari",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Gagal memilih folder: {0}",
+      "msg.noMdFolder": "Tidak ada berkas Markdown di folder yang dipilih.",
+      "msg.readFolderFailed": "Tidak dapat membaca folder: {0}",
+      "msg.noMdDropped": "Tidak ada berkas Markdown di folder yang dijatuhkan.",
+      "msg.readDroppedFailed": "Tidak dapat membaca folder yang dijatuhkan: {0}",
+      "msg.unexpected": "Galat tak terduga",
+      "msg.needsServer": "Pemuatan otomatis memerlukan server web; buka foldernya.",
+      "msg.loading": "Memuat bundel…",
+      "msg.sameOrigin": "Bundel harus berupa jalur dari asal yang sama: {0}",
+      "msg.noBundleAt": "Tidak ada bundel di ?bundle={0} (tidak ada index.md).",
+      "msg.nothingToLoad": "Tidak ada yang dimuat: tambahkan bundles/index.md atau berikan ?bundle=<name>.",
+      "msg.autoLoadFailed": "Pemuatan otomatis gagal: {0}",
+      "msg.buildFailed": "Tidak dapat membangun graf: {0}",
+      "stats.files": { "other": "berkas" },
+      "stats.links": { "other": "tautan" }
+    },
+    "vi": {
+      "nav.toggleToolbar": "Bật/tắt thanh công cụ",
+      "nav.about": "Giới thiệu",
+      "nav.open": "Mở thư mục…",
+      "nav.reload": "Tải lại",
+      "nav.resetView": "Đặt lại chế độ xem",
+      "nav.resetLayout": "Đặt lại bố cục",
+      "nav.labels": "Nhãn",
+      "nav.tags": "Thẻ",
+      "nav.tagsTitle": "Liên kết thẻ",
+      "nav.install": "Cài đặt",
+      "nav.installTitle": "Cài grokf làm ứng dụng",
+      "nav.top": "Trên cùng",
+      "nav.topTitle": "Cấp cao nhất",
+      "nav.back": "Quay lại",
+      "nav.forward": "Tiến",
+      "spinner.loading": "Đang tải",
+      "side.handle": "Bộ lọc",
+      "side.toggleFilters": "Bật/tắt bộ lọc",
+      "side.head": "Tìm và lọc",
+      "search.label": "Tìm kiếm",
+      "search.placeholder": "vd: json, guide, nsm…",
+      "search.in": "trong",
+      "field.all": "Tất cả trường",
+      "field.title": "Tiêu đề",
+      "field.description": "Mô tả",
+      "field.type": "Loại",
+      "field.tags": "Thẻ",
+      "field.path": "Đường dẫn",
+      "facet.kinds": "Nhóm",
+      "facet.types": "Loại",
+      "facet.tags": "Thẻ",
+      "facet.status": "Trạng thái",
+      "facet.selectKinds": "Chọn nhóm…",
+      "facet.selectTypes": "Chọn loại…",
+      "facet.selectTags": "Chọn thẻ…",
+      "facet.selectStatus": "Chọn trạng thái…",
+      "facet.searchTags": "Tìm thẻ…",
+      "facet.searchKinds": "Tìm nhóm…",
+      "facet.searchTypes": "Tìm loại…",
+      "facet.searchStatuses": "Tìm trạng thái…",
+      "btn.clear": "Xóa",
+      "btn.clearFilters": "Xóa bộ lọc",
+      "legend.handle": "Chú giải",
+      "legend.toggle": "Bật/tắt chú giải",
+      "lang.label": "Ngôn ngữ",
+      "about.tagline": "— trình xem một tệp, không phụ thuộc, cho các gói Open Knowledge Format.",
+      "about.rev": "Bản sửa đổi",
+      "about.desc": "Nó hiển thị các khái niệm Markdown, frontmatter của chúng (type, tags, status, description) và các liên kết tham chiếu dưới dạng đồ thị tương tác mà bạn có thể lọc, kéo và thu phóng.",
+      "about.li1": "Mở một thư mục hoặc kéo thư mục vào cửa sổ. Trên máy chủ web, nó tự động tải <code>bundles/</code>.",
+      "about.li2": "Nhấn giữ một nút, rồi kéo thẻ sang mép phải để tạo bộ thẻ; thêm trang từ bản xem trước bằng Thêm vào bộ thẻ.",
+      "about.li3": "Máy tính: nhấp một nút để xem trước, nhấp đúp một thư mục để vào, cuộn để thu phóng.",
+      "about.li4": "Cảm ứng: chạm để xem trước hoặc vào, kéo để di chuyển, chụm để thu phóng.",
+      "about.note": "Công cụ này được tạo với sự hỗ trợ của AI. Hãy xem xét trước khi dựa vào nó.",
+      "about.source": "Mã nguồn trên GitHub",
+      "about.runtime": "Nội bộ khi chạy",
+      "about.showDetails": "Hiện chi tiết",
+      "about.hideDetails": "Ẩn chi tiết",
+      "card.desc": "Trình xem một tệp, không phụ thuộc, cho gói kiến thức này.",
+      "card.li1": "Khi phục vụ: trên máy chủ tĩnh (kể cả GitHub Pages) nó tự động tải <code>bundles/</code> từ <code>bundles/index.md</code>.",
+      "card.li2": "Chọn một gói bằng tham số URL, ví dụ <code>?bundle=acme_retail</code> (tên, đường dẫn thư mục hoặc tệp <code>.md</code> bắt đầu).",
+      "card.li3": "Giới hạn độ sâu tải trước bằng <code>?depth=N</code> (mặc định: mọi cấp); nhấp một nút có chấm để tải cấp tiếp theo, nhấp lần nữa để xem trước.",
+      "card.li4": "Tệp cục bộ: nhấp Mở thư mục và chọn thư mục gói, hoặc kéo nó vào cửa sổ này.",
+      "card.li5": "Nhấn giữ một nút, rồi kéo thẻ sang mép phải để tạo bộ thẻ; thêm trang từ bản xem trước bằng Thêm vào bộ thẻ.",
+      "card.retry": "Thử tải tự động lại",
+      "pv.back": "Quay lại",
+      "pv.forward": "Tiến",
+      "pv.close": "Đóng",
+      "pv.addDeck": "Thêm trang này vào bộ thẻ",
+      "filter.active": "{n} đang bật",
+      "filter.search": "tìm kiếm",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Không chọn được thư mục: {0}",
+      "msg.noMdFolder": "Không tìm thấy tệp Markdown trong thư mục đã chọn.",
+      "msg.readFolderFailed": "Không đọc được thư mục: {0}",
+      "msg.noMdDropped": "Không tìm thấy tệp Markdown trong thư mục đã thả.",
+      "msg.readDroppedFailed": "Không đọc được thư mục đã thả: {0}",
+      "msg.unexpected": "Lỗi không mong đợi",
+      "msg.needsServer": "Tải tự động cần máy chủ web; hãy mở thư mục.",
+      "msg.loading": "Đang tải gói…",
+      "msg.sameOrigin": "Gói phải là đường dẫn cùng nguồn gốc: {0}",
+      "msg.noBundleAt": "Không có gói tại ?bundle={0} (không có index.md).",
+      "msg.nothingToLoad": "Không có gì để tải: thêm bundles/index.md hoặc truyền ?bundle=<name>.",
+      "msg.autoLoadFailed": "Tải tự động thất bại: {0}",
+      "msg.buildFailed": "Không dựng được đồ thị: {0}",
+      "stats.files": { "other": "tệp" },
+      "stats.links": { "other": "liên kết" }
+    },
+    "fa": {
+      "nav.toggleToolbar": "نمایش/پنهان‌سازی نوار ابزار",
+      "nav.about": "درباره",
+      "nav.open": "باز کردن پوشه…",
+      "nav.reload": "بارگذاری مجدد",
+      "nav.resetView": "بازنشانی نما",
+      "nav.resetLayout": "بازنشانی چیدمان",
+      "nav.labels": "برچسب‌ها",
+      "nav.tags": "تگ‌ها",
+      "nav.tagsTitle": "پیوندهای تگ",
+      "nav.install": "نصب",
+      "nav.installTitle": "نصب grokf به‌صورت برنامه",
+      "nav.top": "بالا",
+      "nav.topTitle": "سطح بالا",
+      "nav.back": "بازگشت",
+      "nav.forward": "جلو",
+      "spinner.loading": "در حال بارگذاری",
+      "side.handle": "فیلترها",
+      "side.toggleFilters": "نمایش/پنهان‌سازی فیلترها",
+      "side.head": "جست‌وجو و فیلتر",
+      "search.label": "جست‌وجو",
+      "search.placeholder": "مثلاً json، guide، nsm…",
+      "search.in": "در",
+      "field.all": "همهٔ فیلدها",
+      "field.title": "عنوان",
+      "field.description": "توضیحات",
+      "field.type": "نوع",
+      "field.tags": "برچسب‌ها",
+      "field.path": "مسیر",
+      "facet.kinds": "گونه‌ها",
+      "facet.types": "انواع",
+      "facet.tags": "تگ‌ها",
+      "facet.status": "وضعیت",
+      "facet.selectKinds": "انتخاب گونه‌ها…",
+      "facet.selectTypes": "انتخاب انواع…",
+      "facet.selectTags": "انتخاب تگ‌ها…",
+      "facet.selectStatus": "انتخاب وضعیت…",
+      "facet.searchTags": "جست‌وجوی تگ‌ها…",
+      "facet.searchKinds": "جست‌وجوی گونه‌ها…",
+      "facet.searchTypes": "جست‌وجوی انواع…",
+      "facet.searchStatuses": "جست‌وجوی وضعیت‌ها…",
+      "btn.clear": "پاک کردن",
+      "btn.clearFilters": "پاک کردن فیلترها",
+      "legend.handle": "راهنما",
+      "legend.toggle": "نمایش/پنهان‌سازی راهنما",
+      "lang.label": "زبان",
+      "about.tagline": "— نمایشگری تک‌فایلی و بدون وابستگی برای بسته‌های Open Knowledge Format.",
+      "about.rev": "نسخه",
+      "about.desc": "مفاهیم Markdown، پیش‌مادهٔ آن‌ها (type، tags، status، description) و پیوندهای ارجاع را به‌صورت گرافی تعاملی نمایش می‌دهد که می‌توانید فیلتر، جابه‌جا و بزرگ‌نمایی کنید.",
+      "about.li1": "یک پوشه باز کنید یا آن را روی پنجره بکشید. روی سرور وب، <code>bundles/</code> به‌طور خودکار بارگذاری می‌شود.",
+      "about.li2": "یک گره را نگه دارید و کارت را به لبهٔ راست بکشید تا دسته‌ای بسازید؛ از پیش‌نمایش با افزودن به دسته صفحه اضافه کنید.",
+      "about.li3": "رومیزی: برای پیش‌نمایش روی گره کلیک کنید، برای ورود روی پوشه دوبار کلیک کنید، برای بزرگ‌نمایی اسکرول کنید.",
+      "about.li4": "لمسی: برای پیش‌نمایش یا ورود ضربه بزنید، برای جابه‌جایی بکشید، برای بزرگ‌نمایی دو انگشت را جمع کنید.",
+      "about.note": "این ابزار با کمک هوش مصنوعی ساخته شده است. پیش از اعتماد به آن، بررسی کنید.",
+      "about.source": "منبع در GitHub",
+      "about.runtime": "جزئیات درونی اجرا",
+      "about.showDetails": "نمایش جزئیات",
+      "about.hideDetails": "پنهان کردن جزئیات",
+      "card.desc": "نمایشگری تک‌فایلی و بدون وابستگی برای این بستهٔ دانش.",
+      "card.li1": "میزبانی: روی سرور ایستا (از جمله GitHub Pages) به‌طور خودکار <code>bundles/</code> را از <code>bundles/index.md</code> بارگذاری می‌کند.",
+      "card.li2": "بسته را با پارامتر URL انتخاب کنید، مثلاً <code>?bundle=acme_retail</code> (یک نام، مسیر پوشه یا فایل <code>.md</code> آغازین).",
+      "card.li3": "عمق پیش‌بارگذاری را با <code>?depth=N</code> محدود کنید (پیش‌فرض: همهٔ سطوح)؛ برای بارگذاری سطح بعدی روی گره نقطه‌چین کلیک کنید و برای پیش‌نمایش دوباره کلیک کنید.",
+      "card.li4": "فایل محلی: روی باز کردن پوشه کلیک کنید و پوشهٔ بسته را انتخاب کنید، یا آن را روی این پنجره بکشید.",
+      "card.li5": "یک گره را نگه دارید و کارت را به لبهٔ راست بکشید تا دسته‌ای بسازید؛ از پیش‌نمایش با افزودن به دسته صفحه اضافه کنید.",
+      "card.retry": "تلاش دوباره برای بارگذاری خودکار",
+      "pv.back": "بازگشت",
+      "pv.forward": "جلو",
+      "pv.close": "بستن",
+      "pv.addDeck": "افزودن این صفحه به دسته",
+      "filter.active": "{n} فعال",
+      "filter.search": "جست‌وجو",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "انتخاب پوشه ناموفق بود: {0}",
+      "msg.noMdFolder": "در پوشهٔ انتخاب‌شده فایل Markdown یافت نشد.",
+      "msg.readFolderFailed": "خواندن پوشه ممکن نشد: {0}",
+      "msg.noMdDropped": "در پوشهٔ رهاشده فایل Markdown یافت نشد.",
+      "msg.readDroppedFailed": "خواندن پوشهٔ رهاشده ممکن نشد: {0}",
+      "msg.unexpected": "خطای غیرمنتظره",
+      "msg.needsServer": "بارگذاری خودکار به سرور وب نیاز دارد؛ پوشه را باز کنید.",
+      "msg.loading": "در حال بارگذاری بسته…",
+      "msg.sameOrigin": "بسته باید مسیری هم‌مبدأ باشد: {0}",
+      "msg.noBundleAt": "بسته‌ای در ?bundle={0} نیست (index.md وجود ندارد).",
+      "msg.nothingToLoad": "چیزی برای بارگذاری نیست: bundles/index.md را اضافه کنید یا ?bundle=<name> را بدهید.",
+      "msg.autoLoadFailed": "بارگذاری خودکار ناموفق بود: {0}",
+      "msg.buildFailed": "ساخت گراف ممکن نشد: {0}",
+      "stats.files": { "one": "فایل", "other": "فایل" },
+      "stats.links": { "one": "پیوند", "other": "پیوند" }
+    },
+    "ur": {
+      "nav.toggleToolbar": "ٹول بار دکھائیں/چھپائیں",
+      "nav.about": "تعارف",
+      "nav.open": "فولڈر کھولیں…",
+      "nav.reload": "دوبارہ لوڈ کریں",
+      "nav.resetView": "منظر ری سیٹ کریں",
+      "nav.resetLayout": "ترتیب ری سیٹ کریں",
+      "nav.labels": "لیبل",
+      "nav.tags": "ٹیگز",
+      "nav.tagsTitle": "ٹیگ روابط",
+      "nav.install": "انسٹال کریں",
+      "nav.installTitle": "grokf کو بطور ایپ انسٹال کریں",
+      "nav.top": "اوپر",
+      "nav.topTitle": "بالائی سطح",
+      "nav.back": "واپس",
+      "nav.forward": "آگے",
+      "spinner.loading": "لوڈ ہو رہا ہے",
+      "side.handle": "فلٹرز",
+      "side.toggleFilters": "فلٹرز دکھائیں/چھپائیں",
+      "side.head": "تلاش اور فلٹر",
+      "search.label": "تلاش",
+      "search.placeholder": "مثلاً json, guide, nsm…",
+      "search.in": "میں",
+      "field.all": "تمام فیلڈز",
+      "field.title": "عنوان",
+      "field.description": "تفصیل",
+      "field.type": "قسم",
+      "field.tags": "ٹیگز",
+      "field.path": "راستہ",
+      "facet.kinds": "اقسام",
+      "facet.types": "انواع",
+      "facet.tags": "ٹیگز",
+      "facet.status": "حالت",
+      "facet.selectKinds": "اقسام منتخب کریں…",
+      "facet.selectTypes": "انواع منتخب کریں…",
+      "facet.selectTags": "ٹیگز منتخب کریں…",
+      "facet.selectStatus": "حالت منتخب کریں…",
+      "facet.searchTags": "ٹیگز تلاش کریں…",
+      "facet.searchKinds": "اقسام تلاش کریں…",
+      "facet.searchTypes": "انواع تلاش کریں…",
+      "facet.searchStatuses": "حالتیں تلاش کریں…",
+      "btn.clear": "صاف کریں",
+      "btn.clearFilters": "فلٹرز صاف کریں",
+      "legend.handle": "علامت",
+      "legend.toggle": "علامت دکھائیں/چھپائیں",
+      "lang.label": "زبان",
+      "about.tagline": "— Open Knowledge Format بنڈلوں کے لیے واحد فائل، بغیر انحصار ویوئر۔",
+      "about.rev": "نظرثانی",
+      "about.desc": "یہ Markdown تصورات، اُن کا فرنٹ میٹر (type، tags، status، description) اور حوالہ روابط کو ایک تعاملی گراف کے طور پر دکھاتا ہے جسے آپ فلٹر، پین اور زوم کر سکتے ہیں۔",
+      "about.li1": "کوئی فولڈر کھولیں، یا اسے ونڈو پر گھسیٹیں۔ ویب سرور پر یہ خودکار طور پر <code>bundles/</code> لوڈ کرتا ہے۔",
+      "about.li2": "کسی نوڈ کو دبا کر رکھیں، پھر کارڈ کو دائیں کنارے تک گھسیٹ کر ڈیک بنائیں؛ پیش منظر میں ’ڈیک میں شامل کریں‘ سے صفحات شامل کریں۔",
+      "about.li3": "ڈیسک ٹاپ: پیش منظر کے لیے نوڈ پر کلک کریں، داخل ہونے کے لیے فولڈر پر ڈبل کلک کریں، زوم کے لیے اسکرول کریں۔",
+      "about.li4": "ٹچ: پیش منظر یا داخل ہونے کے لیے تھپتھپائیں، پین کے لیے گھسیٹیں، زوم کے لیے پنچ کریں۔",
+      "about.note": "یہ ٹول AI کی مدد سے بنایا گیا ہے۔ اس پر انحصار کرنے سے پہلے جائزہ لیں۔",
+      "about.source": "GitHub پر سورس",
+      "about.runtime": "رن ٹائم کی تفصیلات",
+      "about.showDetails": "تفصیلات دکھائیں",
+      "about.hideDetails": "تفصیلات چھپائیں",
+      "card.desc": "اس علمی بنڈل کے لیے واحد فائل، بغیر انحصار ویوئر۔",
+      "card.li1": "میزبانی: جامد سرور پر (بشمول GitHub Pages) یہ خودکار طور پر <code>bundles/index.md</code> سے <code>bundles/</code> لوڈ کرتا ہے۔",
+      "card.li2": "URL پیرامیٹر کے ذریعے بنڈل منتخب کریں، مثلاً <code>?bundle=acme_retail</code> (ایک نام، فولڈر راستہ، یا ابتدائی <code>.md</code> فائل)۔",
+      "card.li3": "<code>?depth=N</code> کے ذریعے پیشگی لوڈ کی گہرائی محدود کریں (طے شدہ: تمام سطحیں)؛ اگلی سطح لوڈ کرنے کے لیے نقطہ والے نوڈ پر کلک کریں اور پیش منظر کے لیے دوبارہ کلک کریں۔",
+      "card.li4": "مقامی فائل: Open folder پر کلک کر کے بنڈل ڈائریکٹری منتخب کریں، یا اسے اس ونڈو پر گھسیٹیں۔",
+      "card.li5": "کسی نوڈ کو دبا کر رکھیں، پھر کارڈ کو دائیں کنارے تک گھسیٹ کر ڈیک بنائیں؛ پیش منظر میں ’ڈیک میں شامل کریں‘ سے صفحات شامل کریں۔",
+      "card.retry": "خودکار لوڈ دوبارہ آزمائیں",
+      "pv.back": "واپس",
+      "pv.forward": "آگے",
+      "pv.close": "بند کریں",
+      "pv.addDeck": "یہ صفحہ ڈیک میں شامل کریں",
+      "filter.active": "{n} فعال",
+      "filter.search": "تلاش",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "فولڈر منتخب نہیں ہو سکا: {0}",
+      "msg.noMdFolder": "منتخب فولڈر میں کوئی Markdown فائل نہیں ملی۔",
+      "msg.readFolderFailed": "فولڈر پڑھا نہیں جا سکا: {0}",
+      "msg.noMdDropped": "گرائے گئے فولڈر میں کوئی Markdown فائل نہیں ملی۔",
+      "msg.readDroppedFailed": "گرایا گیا فولڈر پڑھا نہیں جا سکا: {0}",
+      "msg.unexpected": "غیر متوقع خرابی",
+      "msg.needsServer": "خودکار لوڈ کے لیے ویب سرور درکار ہے؛ فولڈر کھولیں۔",
+      "msg.loading": "بنڈل لوڈ ہو رہا ہے…",
+      "msg.sameOrigin": "بنڈل ایک ہی ماخذ کا راستہ ہونا چاہیے: {0}",
+      "msg.noBundleAt": "?bundle={0} پر کوئی بنڈل نہیں (کوئی index.md نہیں)۔",
+      "msg.nothingToLoad": "لوڈ کرنے کے لیے کچھ نہیں: bundles/index.md شامل کریں یا ?bundle=<name> دیں۔",
+      "msg.autoLoadFailed": "خودکار لوڈ ناکام: {0}",
+      "msg.buildFailed": "گراف نہیں بن سکا: {0}",
+      "stats.files": { "one": "فائل", "other": "فائلیں" },
+      "stats.links": { "one": "ربط", "other": "روابط" }
+    },
+    "bn": {
+      "nav.toggleToolbar": "টুলবার দেখান/লুকান",
+      "nav.about": "পরিচিতি",
+      "nav.open": "ফোল্ডার খুলুন…",
+      "nav.reload": "পুনরায় লোড করুন",
+      "nav.resetView": "ভিউ রিসেট করুন",
+      "nav.resetLayout": "লেআউট রিসেট করুন",
+      "nav.labels": "লেবেল",
+      "nav.tags": "ট্যাগ",
+      "nav.tagsTitle": "ট্যাগ লিঙ্ক",
+      "nav.install": "ইনস্টল করুন",
+      "nav.installTitle": "grokf অ্যাপ হিসেবে ইনস্টল করুন",
+      "nav.top": "শীর্ষ",
+      "nav.topTitle": "শীর্ষ স্তর",
+      "nav.back": "পিছনে",
+      "nav.forward": "সামনে",
+      "spinner.loading": "লোড হচ্ছে",
+      "side.handle": "ফিল্টার",
+      "side.toggleFilters": "ফিল্টার দেখান/লুকান",
+      "side.head": "অনুসন্ধান ও ফিল্টার",
+      "search.label": "অনুসন্ধান",
+      "search.placeholder": "যেমন json, guide, nsm…",
+      "search.in": "মধ্যে",
+      "field.all": "সব ক্ষেত্র",
+      "field.title": "শিরোনাম",
+      "field.description": "বিবরণ",
+      "field.type": "ধরন",
+      "field.tags": "ট্যাগ",
+      "field.path": "পথ",
+      "facet.kinds": "প্রকার",
+      "facet.types": "ধরন",
+      "facet.tags": "ট্যাগ",
+      "facet.status": "অবস্থা",
+      "facet.selectKinds": "প্রকার নির্বাচন করুন…",
+      "facet.selectTypes": "ধরন নির্বাচন করুন…",
+      "facet.selectTags": "ট্যাগ নির্বাচন করুন…",
+      "facet.selectStatus": "অবস্থা নির্বাচন করুন…",
+      "facet.searchTags": "ট্যাগ অনুসন্ধান…",
+      "facet.searchKinds": "প্রকার অনুসন্ধান…",
+      "facet.searchTypes": "ধরন অনুসন্ধান…",
+      "facet.searchStatuses": "অবস্থা অনুসন্ধান…",
+      "btn.clear": "মুছুন",
+      "btn.clearFilters": "ফিল্টার মুছুন",
+      "legend.handle": "লেজেন্ড",
+      "legend.toggle": "লেজেন্ড দেখান/লুকান",
+      "lang.label": "ভাষা",
+      "about.tagline": "— Open Knowledge Format বান্ডলের জন্য একক ফাইল, নির্ভরতাহীন ভিউয়ার।",
+      "about.rev": "সংশোধন",
+      "about.desc": "এটি Markdown ধারণা, তাদের ফ্রন্টম্যাটার (type, tags, status, description) এবং রেফারেন্স লিঙ্ক একটি ইন্টারঅ্যাকটিভ গ্রাফ হিসেবে দেখায়, যা আপনি ফিল্টার, প্যান ও জুম করতে পারেন।",
+      "about.li1": "একটি ফোল্ডার খুলুন, বা উইন্ডোতে টেনে আনুন। ওয়েব সার্ভারে এটি স্বয়ংক্রিয়ভাবে <code>bundles/</code> লোড করে।",
+      "about.li2": "একটি নোড চেপে ধরে কার্ডটি ডান প্রান্তে টেনে ডেক তৈরি করুন; প্রিভিউতে ‘ডেকে যোগ করুন’ দিয়ে পৃষ্ঠা যোগ করুন।",
+      "about.li3": "ডেস্কটপ: প্রিভিউ দেখতে নোডে ক্লিক করুন, ঢুকতে ডিরেক্টরিতে ডাবল-ক্লিক করুন, জুম করতে স্ক্রল করুন।",
+      "about.li4": "স্পর্শ: প্রিভিউ বা প্রবেশ করতে ট্যাপ করুন, প্যান করতে টেনে আনুন, জুম করতে পিঞ্চ করুন।",
+      "about.note": "এই সরঞ্জামটি AI সহায়তায় তৈরি। এর উপর নির্ভর করার আগে পর্যালোচনা করুন।",
+      "about.source": "GitHub-এ সোর্স",
+      "about.runtime": "রানটাইম অন্তর্নিহিত",
+      "about.showDetails": "বিস্তারিত দেখান",
+      "about.hideDetails": "বিস্তারিত লুকান",
+      "card.desc": "এই নলেজ বান্ডলের জন্য একক ফাইল, নির্ভরতাহীন ভিউয়ার।",
+      "card.li1": "সার্ভড: স্ট্যাটিক সার্ভারে (GitHub Pages সহ) এটি <code>bundles/index.md</code> থেকে স্বয়ংক্রিয়ভাবে <code>bundles/</code> লোড করে।",
+      "card.li2": "URL প্যারামিটার দিয়ে বান্ডল বাছুন, যেমন <code>?bundle=acme_retail</code> (একটি নাম, ফোল্ডার পথ, বা প্রারম্ভিক <code>.md</code> ফাইল)।",
+      "card.li3": "<code>?depth=N</code> দিয়ে প্রিফেচ গভীরতা সীমিত করুন (ডিফল্ট: সব স্তর); পরবর্তী স্তর লোড করতে ডটেড নোডে ক্লিক করুন এবং প্রিভিউ দেখতে আবার ক্লিক করুন।",
+      "card.li4": "স্থানীয় ফাইল: Open folder-এ ক্লিক করে একটি বান্ডল ডিরেক্টরি বাছুন, বা এটি এই উইন্ডোতে টেনে আনুন।",
+      "card.li5": "একটি নোড চেপে ধরে কার্ডটি ডান প্রান্তে টেনে ডেক তৈরি করুন; প্রিভিউতে ‘ডেকে যোগ করুন’ দিয়ে পৃষ্ঠা যোগ করুন।",
+      "card.retry": "স্বয়ংক্রিয় লোড আবার চেষ্টা করুন",
+      "pv.back": "পিছনে",
+      "pv.forward": "সামনে",
+      "pv.close": "বন্ধ",
+      "pv.addDeck": "এই পৃষ্ঠা ডেকে যোগ করুন",
+      "filter.active": "{n} সক্রিয়",
+      "filter.search": "অনুসন্ধান",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "ফোল্ডার নির্বাচন ব্যর্থ: {0}",
+      "msg.noMdFolder": "নির্বাচিত ফোল্ডারে কোনো Markdown ফাইল পাওয়া যায়নি।",
+      "msg.readFolderFailed": "ফোল্ডার পড়া যায়নি: {0}",
+      "msg.noMdDropped": "ফেলে দেওয়া ফোল্ডারে কোনো Markdown ফাইল পাওয়া যায়নি।",
+      "msg.readDroppedFailed": "ফেলে দেওয়া ফোল্ডার পড়া যায়নি: {0}",
+      "msg.unexpected": "অপ্রত্যাশিত ত্রুটি",
+      "msg.needsServer": "স্বয়ংক্রিয় লোডের জন্য ওয়েব সার্ভার দরকার; ফোল্ডার খুলুন।",
+      "msg.loading": "বান্ডল লোড হচ্ছে…",
+      "msg.sameOrigin": "বান্ডলটি একই উৎসের পথ হতে হবে: {0}",
+      "msg.noBundleAt": "?bundle={0}-এ কোনো বান্ডল নেই (index.md নেই)।",
+      "msg.nothingToLoad": "লোড করার কিছু নেই: bundles/index.md যোগ করুন বা ?bundle=<name> দিন।",
+      "msg.autoLoadFailed": "স্বয়ংক্রিয় লোড ব্যর্থ: {0}",
+      "msg.buildFailed": "গ্রাফ তৈরি করা যায়নি: {0}",
+      "stats.files": { "one": "ফাইল", "other": "ফাইল" },
+      "stats.links": { "one": "লিঙ্ক", "other": "লিঙ্ক" }
+    },
+    "sv": {
+      "nav.toggleToolbar": "Visa/dölj verktygsfältet",
+      "nav.about": "Om",
+      "nav.open": "Öppna mapp…",
+      "nav.reload": "Ladda om",
+      "nav.resetView": "Återställ vy",
+      "nav.resetLayout": "Återställ layout",
+      "nav.labels": "Etiketter",
+      "nav.tags": "Taggar",
+      "nav.tagsTitle": "Tagg-länkar",
+      "nav.install": "Installera",
+      "nav.installTitle": "Installera grokf som app",
+      "nav.top": "Topp",
+      "nav.topTitle": "Översta nivån",
+      "nav.back": "Tillbaka",
+      "nav.forward": "Framåt",
+      "spinner.loading": "Laddar",
+      "side.handle": "Filter",
+      "side.toggleFilters": "Visa/dölj filter",
+      "side.head": "Sök och filtrera",
+      "search.label": "Sök",
+      "search.placeholder": "t.ex. json, guide, nsm…",
+      "search.in": "i",
+      "field.all": "Alla fält",
+      "field.title": "Titel",
+      "field.description": "Beskrivning",
+      "field.type": "Typ",
+      "field.tags": "Taggar",
+      "field.path": "Sökväg",
+      "facet.kinds": "Slag",
+      "facet.types": "Typer",
+      "facet.tags": "Taggar",
+      "facet.status": "Status",
+      "facet.selectKinds": "Välj slag…",
+      "facet.selectTypes": "Välj typer…",
+      "facet.selectTags": "Välj taggar…",
+      "facet.selectStatus": "Välj status…",
+      "facet.searchTags": "Sök taggar…",
+      "facet.searchKinds": "Sök slag…",
+      "facet.searchTypes": "Sök typer…",
+      "facet.searchStatuses": "Sök statusar…",
+      "btn.clear": "Rensa",
+      "btn.clearFilters": "Rensa filter",
+      "legend.handle": "Teckenförklaring",
+      "legend.toggle": "Visa/dölj teckenförklaring",
+      "lang.label": "Språk",
+      "about.tagline": "— en enfilig, beroendefri visare för paket i Open Knowledge Format.",
+      "about.rev": "Revision",
+      "about.desc": "Den visar Markdown-koncept, deras frontmatter (type, tags, status, description) och referenslänkar som en interaktiv graf du kan filtrera, panorera och zooma.",
+      "about.li1": "Öppna en mapp eller dra in en i fönstret. På en webbserver läses <code>bundles/</code> in automatiskt.",
+      "about.li2": "Håll ned en nod och dra kortet till högerkanten för att bygga en hög; lägg till sidor från förhandsvisningen med Lägg till i hög.",
+      "about.li3": "Dator: klicka på en nod för att förhandsvisa, dubbelklicka på en katalog för att gå in, rulla för att zooma.",
+      "about.li4": "Pekskärm: tryck för att förhandsvisa eller gå in, dra för att panorera, nyp för att zooma.",
+      "about.note": "Det här verktyget skapades med AI-hjälp. Granska det innan du litar på det.",
+      "about.source": "Källkod på GitHub",
+      "about.runtime": "Interna körtidsdetaljer",
+      "about.showDetails": "Visa detaljer",
+      "about.hideDetails": "Dölj detaljer",
+      "card.desc": "Enfilig, beroendefri visare för detta kunskapspaket.",
+      "card.li1": "Serverad: på en statisk server (inklusive GitHub Pages) läses <code>bundles/</code> in automatiskt från <code>bundles/index.md</code>.",
+      "card.li2": "Välj ett paket med en URL-parameter, till exempel <code>?bundle=acme_retail</code> (ett namn, en mappsökväg eller en startfil i <code>.md</code>).",
+      "card.li3": "Begränsa förhämtningens djup med <code>?depth=N</code> (standard: alla nivåer); klicka på en punktad nod för att läsa in nästa nivå, klicka igen för att förhandsvisa.",
+      "card.li4": "Lokal fil: klicka på Öppna mapp och välj en paketmapp, eller dra den till det här fönstret.",
+      "card.li5": "Håll ned en nod och dra kortet till högerkanten för att bygga en hög; lägg till sidor från förhandsvisningen med Lägg till i hög.",
+      "card.retry": "Försök läsa in automatiskt igen",
+      "pv.back": "Tillbaka",
+      "pv.forward": "Framåt",
+      "pv.close": "Stäng",
+      "pv.addDeck": "Lägg till den här sidan i högen",
+      "filter.active": "{n} aktiva",
+      "filter.search": "sökning",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Mappväljaren misslyckades: {0}",
+      "msg.noMdFolder": "Inga Markdown-filer hittades i den valda mappen.",
+      "msg.readFolderFailed": "Kunde inte läsa mappen: {0}",
+      "msg.noMdDropped": "Inga Markdown-filer hittades i den släppta mappen.",
+      "msg.readDroppedFailed": "Kunde inte läsa den släppta mappen: {0}",
+      "msg.unexpected": "Oväntat fel",
+      "msg.needsServer": "Automatisk inläsning kräver en webbserver; öppna mappen.",
+      "msg.loading": "Läser in paket…",
+      "msg.sameOrigin": "Paketet måste vara en sökväg med samma ursprung: {0}",
+      "msg.noBundleAt": "Inget paket vid ?bundle={0} (ingen index.md).",
+      "msg.nothingToLoad": "Inget att läsa in: lägg till bundles/index.md eller ange ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatisk inläsning misslyckades: {0}",
+      "msg.buildFailed": "Kunde inte bygga grafen: {0}",
+      "stats.files": { "one": "fil", "other": "filer" },
+      "stats.links": { "one": "länk", "other": "länkar" }
+    },
+    "da": {
+      "nav.toggleToolbar": "Vis/skjul værktøjslinjen",
+      "nav.about": "Om",
+      "nav.open": "Åbn mappe…",
+      "nav.reload": "Genindlæs",
+      "nav.resetView": "Nulstil visning",
+      "nav.resetLayout": "Nulstil layout",
+      "nav.labels": "Etiketter",
+      "nav.tags": "Tags",
+      "nav.tagsTitle": "Taglink",
+      "nav.install": "Installer",
+      "nav.installTitle": "Installer grokf som app",
+      "nav.top": "Top",
+      "nav.topTitle": "Øverste niveau",
+      "nav.back": "Tilbage",
+      "nav.forward": "Frem",
+      "spinner.loading": "Indlæser",
+      "side.handle": "Filtre",
+      "side.toggleFilters": "Vis/skjul filtre",
+      "side.head": "Søg og filtrer",
+      "search.label": "Søg",
+      "search.placeholder": "f.eks. json, guide, nsm…",
+      "search.in": "i",
+      "field.all": "Alle felter",
+      "field.title": "Titel",
+      "field.description": "Beskrivelse",
+      "field.type": "Type",
+      "field.tags": "Tags",
+      "field.path": "Sti",
+      "facet.kinds": "Slags",
+      "facet.types": "Typer",
+      "facet.tags": "Tags",
+      "facet.status": "Status",
+      "facet.selectKinds": "Vælg slags…",
+      "facet.selectTypes": "Vælg typer…",
+      "facet.selectTags": "Vælg tags…",
+      "facet.selectStatus": "Vælg status…",
+      "facet.searchTags": "Søg tags…",
+      "facet.searchKinds": "Søg slags…",
+      "facet.searchTypes": "Søg typer…",
+      "facet.searchStatuses": "Søg statusser…",
+      "btn.clear": "Ryd",
+      "btn.clearFilters": "Ryd filtre",
+      "legend.handle": "Signaturforklaring",
+      "legend.toggle": "Vis/skjul signaturforklaring",
+      "lang.label": "Sprog",
+      "about.tagline": "— en enkeltfil-, afhængighedsfri visning af Open Knowledge Format-pakker.",
+      "about.rev": "Revision",
+      "about.desc": "Den viser Markdown-begreber, deres frontmatter (type, tags, status, description) og referencelinks som en interaktiv graf, du kan filtrere, panorere og zoome.",
+      "about.li1": "Åbn en mappe, eller træk en ind i vinduet. På en webserver indlæses <code>bundles/</code> automatisk.",
+      "about.li2": "Hold en node nede, og træk kortet til højre kant for at bygge et dæk; tilføj sider fra visningen med Føj til dæk.",
+      "about.li3": "Computer: klik på en node for at se den, dobbeltklik på en mappe for at gå ind, rul for at zoome.",
+      "about.li4": "Berøring: tryk for at se eller gå ind, træk for at panorere, knib for at zoome.",
+      "about.note": "Dette værktøj blev lavet med AI-hjælp. Gennemgå det, før du stoler på det.",
+      "about.source": "Kildekode på GitHub",
+      "about.runtime": "Intern kørsel",
+      "about.showDetails": "Vis detaljer",
+      "about.hideDetails": "Skjul detaljer",
+      "card.desc": "Enkeltfil-, afhængighedsfri visning af denne videnspakke.",
+      "card.li1": "Serveret: på en statisk server (inklusive GitHub Pages) indlæses <code>bundles/</code> automatisk fra <code>bundles/index.md</code>.",
+      "card.li2": "Vælg en pakke med en URL-parameter, f.eks. <code>?bundle=acme_retail</code> (et navn, en mappesti eller en start-<code>.md</code>-fil).",
+      "card.li3": "Begræns forhåndsindlæsningens dybde med <code>?depth=N</code> (standard: alle niveauer); klik på en stiplet node for at indlæse næste niveau, klik igen for at se den.",
+      "card.li4": "Lokal fil: klik på Åbn mappe, og vælg en pakkemappe, eller træk den ind i dette vindue.",
+      "card.li5": "Hold en node nede, og træk kortet til højre kant for at bygge et dæk; tilføj sider fra visningen med Føj til dæk.",
+      "card.retry": "Prøv automatisk indlæsning igen",
+      "pv.back": "Tilbage",
+      "pv.forward": "Frem",
+      "pv.close": "Luk",
+      "pv.addDeck": "Føj denne side til dækket",
+      "filter.active": "{n} aktive",
+      "filter.search": "søgning",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Mappevælgeren mislykkedes: {0}",
+      "msg.noMdFolder": "Der blev ikke fundet nogen Markdown-filer i den valgte mappe.",
+      "msg.readFolderFailed": "Kunne ikke læse mappen: {0}",
+      "msg.noMdDropped": "Der blev ikke fundet nogen Markdown-filer i den viste mappe.",
+      "msg.readDroppedFailed": "Kunne ikke læse den viste mappe: {0}",
+      "msg.unexpected": "Uventet fejl",
+      "msg.needsServer": "Automatisk indlæsning kræver en webserver; åbn mappen.",
+      "msg.loading": "Indlæser pakke…",
+      "msg.sameOrigin": "Pakken skal være en sti fra samme oprindelse: {0}",
+      "msg.noBundleAt": "Ingen pakke ved ?bundle={0} (ingen index.md).",
+      "msg.nothingToLoad": "Intet at indlæse: tilføj bundles/index.md, eller angiv ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatisk indlæsning mislykkedes: {0}",
+      "msg.buildFailed": "Kunne ikke opbygge grafen: {0}",
+      "stats.files": { "one": "fil", "other": "filer" },
+      "stats.links": { "one": "link", "other": "links" }
+    },
+    "nb": {
+      "nav.toggleToolbar": "Vis/skjul verktøylinjen",
+      "nav.about": "Om",
+      "nav.open": "Åpne mappe…",
+      "nav.reload": "Last inn på nytt",
+      "nav.resetView": "Tilbakestill visning",
+      "nav.resetLayout": "Tilbakestill layout",
+      "nav.labels": "Etiketter",
+      "nav.tags": "Tagger",
+      "nav.tagsTitle": "Tagglenker",
+      "nav.install": "Installer",
+      "nav.installTitle": "Installer grokf som app",
+      "nav.top": "Topp",
+      "nav.topTitle": "Øverste nivå",
+      "nav.back": "Tilbake",
+      "nav.forward": "Frem",
+      "spinner.loading": "Laster",
+      "side.handle": "Filtre",
+      "side.toggleFilters": "Vis/skjul filtre",
+      "side.head": "Søk og filtrer",
+      "search.label": "Søk",
+      "search.placeholder": "f.eks. json, guide, nsm…",
+      "search.in": "i",
+      "field.all": "Alle felt",
+      "field.title": "Tittel",
+      "field.description": "Beskrivelse",
+      "field.type": "Type",
+      "field.tags": "Tagger",
+      "field.path": "Sti",
+      "facet.kinds": "Slag",
+      "facet.types": "Typer",
+      "facet.tags": "Tagger",
+      "facet.status": "Status",
+      "facet.selectKinds": "Velg slag…",
+      "facet.selectTypes": "Velg typer…",
+      "facet.selectTags": "Velg tagger…",
+      "facet.selectStatus": "Velg status…",
+      "facet.searchTags": "Søk tagger…",
+      "facet.searchKinds": "Søk slag…",
+      "facet.searchTypes": "Søk typer…",
+      "facet.searchStatuses": "Søk statuser…",
+      "btn.clear": "Tøm",
+      "btn.clearFilters": "Tøm filtre",
+      "legend.handle": "Tegnforklaring",
+      "legend.toggle": "Vis/skjul tegnforklaring",
+      "lang.label": "Språk",
+      "about.tagline": "— en énfil-, avhengighetsfri visning av Open Knowledge Format-pakker.",
+      "about.rev": "Revisjon",
+      "about.desc": "Den viser Markdown-begreper, frontmatteren deres (type, tags, status, description) og referanselenker som en interaktiv graf du kan filtrere, panorere og zoome i.",
+      "about.li1": "Åpne en mappe, eller dra en inn i vinduet. På en webserver lastes <code>bundles/</code> inn automatisk.",
+      "about.li2": "Hold inne en node og dra kortet til høyre kant for å bygge en stokk; legg til sider fra forhåndsvisningen med Legg til i stokk.",
+      "about.li3": "Skrivebord: klikk på en node for å forhåndsvise, dobbeltklikk på en mappe for å gå inn, rull for å zoome.",
+      "about.li4": "Berøring: trykk for å forhåndsvise eller gå inn, dra for å panorere, klyp for å zoome.",
+      "about.note": "Dette verktøyet ble laget med AI-hjelp. Vurder det før du stoler på det.",
+      "about.source": "Kildekode på GitHub",
+      "about.runtime": "Indre kjøring",
+      "about.showDetails": "Vis detaljer",
+      "about.hideDetails": "Skjul detaljer",
+      "card.desc": "Énfil-, avhengighetsfri visning av denne kunnskapspakken.",
+      "card.li1": "Servert: på en statisk server (inkludert GitHub Pages) lastes <code>bundles/</code> automatisk fra <code>bundles/index.md</code>.",
+      "card.li2": "Velg en pakke med en URL-parameter, for eksempel <code>?bundle=acme_retail</code> (et navn, en mappesti eller en startfil i <code>.md</code>).",
+      "card.li3": "Begrens forhåndsinnlastingens dybde med <code>?depth=N</code> (standard: alle nivåer); klikk på en stiplet node for å laste neste nivå, klikk igjen for å forhåndsvise.",
+      "card.li4": "Lokal fil: klikk på Åpne mappe og velg en pakkemappe, eller dra den inn i dette vinduet.",
+      "card.li5": "Hold inne en node og dra kortet til høyre kant for å bygge en stokk; legg til sider fra forhåndsvisningen med Legg til i stokk.",
+      "card.retry": "Prøv automatisk innlasting igjen",
+      "pv.back": "Tilbake",
+      "pv.forward": "Frem",
+      "pv.close": "Lukk",
+      "pv.addDeck": "Legg denne siden i stokken",
+      "filter.active": "{n} aktive",
+      "filter.search": "søk",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Mappevelgeren mislyktes: {0}",
+      "msg.noMdFolder": "Fant ingen Markdown-filer i den valgte mappen.",
+      "msg.readFolderFailed": "Kunne ikke lese mappen: {0}",
+      "msg.noMdDropped": "Fant ingen Markdown-filer i den droppede mappen.",
+      "msg.readDroppedFailed": "Kunne ikke lese den droppede mappen: {0}",
+      "msg.unexpected": "Uventet feil",
+      "msg.needsServer": "Automatisk innlasting krever en webserver; åpne mappen.",
+      "msg.loading": "Laster pakke…",
+      "msg.sameOrigin": "Pakken må være en sti fra samme opphav: {0}",
+      "msg.noBundleAt": "Ingen pakke ved ?bundle={0} (ingen index.md).",
+      "msg.nothingToLoad": "Ingenting å laste: legg til bundles/index.md eller oppgi ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatisk innlasting mislyktes: {0}",
+      "msg.buildFailed": "Kunne ikke bygge grafen: {0}",
+      "stats.files": { "one": "fil", "other": "filer" },
+      "stats.links": { "one": "lenke", "other": "lenker" }
+    },
+    "fi": {
+      "nav.toggleToolbar": "Näytä/piilota työkalurivi",
+      "nav.about": "Tietoja",
+      "nav.open": "Avaa kansio…",
+      "nav.reload": "Lataa uudelleen",
+      "nav.resetView": "Palauta näkymä",
+      "nav.resetLayout": "Palauta asettelu",
+      "nav.labels": "Nimet",
+      "nav.tags": "Tunnisteet",
+      "nav.tagsTitle": "Tunnistelinkit",
+      "nav.install": "Asenna",
+      "nav.installTitle": "Asenna grokf sovelluksena",
+      "nav.top": "Ylös",
+      "nav.topTitle": "Ylin taso",
+      "nav.back": "Edellinen",
+      "nav.forward": "Seuraava",
+      "spinner.loading": "Ladataan",
+      "side.handle": "Suodattimet",
+      "side.toggleFilters": "Näytä/piilota suodattimet",
+      "side.head": "Haku ja suodatus",
+      "search.label": "Hae",
+      "search.placeholder": "esim. json, guide, nsm…",
+      "search.in": "kohteessa",
+      "field.all": "Kaikki kentät",
+      "field.title": "Otsikko",
+      "field.description": "Kuvaus",
+      "field.type": "Tyyppi",
+      "field.tags": "Tunnisteet",
+      "field.path": "Polku",
+      "facet.kinds": "Lajit",
+      "facet.types": "Tyypit",
+      "facet.tags": "Tunnisteet",
+      "facet.status": "Tila",
+      "facet.selectKinds": "Valitse lajit…",
+      "facet.selectTypes": "Valitse tyypit…",
+      "facet.selectTags": "Valitse tunnisteet…",
+      "facet.selectStatus": "Valitse tila…",
+      "facet.searchTags": "Hae tunnisteita…",
+      "facet.searchKinds": "Hae lajeja…",
+      "facet.searchTypes": "Hae tyyppejä…",
+      "facet.searchStatuses": "Hae tiloja…",
+      "btn.clear": "Tyhjennä",
+      "btn.clearFilters": "Tyhjennä suodattimet",
+      "legend.handle": "Selite",
+      "legend.toggle": "Näytä/piilota selite",
+      "lang.label": "Kieli",
+      "about.tagline": "— yhden tiedoston, riippuvuudeton katselin Open Knowledge Format -paketeille.",
+      "about.rev": "Versio",
+      "about.desc": "Se esittää Markdown-käsitteet, niiden frontmatterin (type, tags, status, description) ja viittauslinkit vuorovaikutteisena kaaviona, jota voi suodattaa, siirtää ja zoomata.",
+      "about.li1": "Avaa kansio tai vedä kansio ikkunaan. Verkkopalvelimella <code>bundles/</code> latautuu automaattisesti.",
+      "about.li2": "Pidä solmua painettuna ja vedä kortti oikeaan reunaan rakentaaksesi pinon; lisää sivuja esikatselusta kohdasta Lisää pinoon.",
+      "about.li3": "Työpöytä: napsauta solmua esikatsellaksesi, kaksoisnapsauta hakemistoa siirtyäksesi siihen, vieritä zoomataksesi.",
+      "about.li4": "Kosketus: napauta esikatsellaksesi tai siirtyäksesi, vedä siirtääksesi, nipistä zoomataksesi.",
+      "about.note": "Tämä työkalu on luotu tekoälyn avulla. Tarkista se ennen kuin luotat siihen.",
+      "about.source": "Lähdekoodi GitHubissa",
+      "about.runtime": "Sisäinen suoritus",
+      "about.showDetails": "Näytä tiedot",
+      "about.hideDetails": "Piilota tiedot",
+      "card.desc": "Yhden tiedoston, riippuvuudeton katselin tälle tietopaketille.",
+      "card.li1": "Palveltu: staattisella palvelimella (myös GitHub Pages) <code>bundles/</code> latautuu automaattisesti tiedostosta <code>bundles/index.md</code>.",
+      "card.li2": "Valitse paketti URL-parametrilla, esimerkiksi <code>?bundle=acme_retail</code> (nimi, kansiopolku tai aloitus-<code>.md</code>-tiedosto).",
+      "card.li3": "Rajoita esilatauksen syvyyttä parametrilla <code>?depth=N</code> (oletus: kaikki tasot); napsauta katkoviivaista solmua ladataksesi seuraavan tason, napsauta uudelleen esikatsellaksesi.",
+      "card.li4": "Paikallinen tiedosto: napsauta Avaa kansio ja valitse pakkikansio tai vedä se tähän ikkunaan.",
+      "card.li5": "Pidä solmua painettuna ja vedä kortti oikeaan reunaan rakentaaksesi pinon; lisää sivuja esikatselusta kohdasta Lisää pinoon.",
+      "card.retry": "Yritä automaattista latausta uudelleen",
+      "pv.back": "Edellinen",
+      "pv.forward": "Seuraava",
+      "pv.close": "Sulje",
+      "pv.addDeck": "Lisää tämä sivu pinoon",
+      "filter.active": "{n} aktiivista",
+      "filter.search": "haku",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Kansiovalitsin epäonnistui: {0}",
+      "msg.noMdFolder": "Valitusta kansiosta ei löytynyt Markdown-tiedostoja.",
+      "msg.readFolderFailed": "Kansiota ei voitu lukea: {0}",
+      "msg.noMdDropped": "Pudotetusta kansiosta ei löytynyt Markdown-tiedostoja.",
+      "msg.readDroppedFailed": "Pudotettua kansiota ei voitu lukea: {0}",
+      "msg.unexpected": "Odottamaton virhe",
+      "msg.needsServer": "Automaattinen lataus vaatii verkkopalvelimen; avaa kansio.",
+      "msg.loading": "Ladataan pakettia…",
+      "msg.sameOrigin": "Paketin on oltava samasta alkuperästä oleva polku: {0}",
+      "msg.noBundleAt": "Ei pakettia kohteessa ?bundle={0} (ei index.md).",
+      "msg.nothingToLoad": "Ei ladattavaa: lisää bundles/index.md tai anna ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automaattinen lataus epäonnistui: {0}",
+      "msg.buildFailed": "Kaaviota ei voitu rakentaa: {0}",
+      "stats.files": { "one": "tiedosto", "other": "tiedostoa" },
+      "stats.links": { "one": "linkki", "other": "linkkiä" }
+    },
+    "el": {
+      "nav.toggleToolbar": "Εναλλαγή γραμμής εργαλείων",
+      "nav.about": "Σχετικά",
+      "nav.open": "Άνοιγμα φακέλου…",
+      "nav.reload": "Επαναφόρτωση",
+      "nav.resetView": "Επαναφορά προβολής",
+      "nav.resetLayout": "Επαναφορά διάταξης",
+      "nav.labels": "Επιγραφές",
+      "nav.tags": "Ετικέτες",
+      "nav.tagsTitle": "Σύνδεσμοι ετικετών",
+      "nav.install": "Εγκατάσταση",
+      "nav.installTitle": "Εγκατάσταση του grokf ως εφαρμογής",
+      "nav.top": "Κορυφή",
+      "nav.topTitle": "Ανώτατο επίπεδο",
+      "nav.back": "Πίσω",
+      "nav.forward": "Μπροστά",
+      "spinner.loading": "Φόρτωση",
+      "side.handle": "Φίλτρα",
+      "side.toggleFilters": "Εναλλαγή φίλτρων",
+      "side.head": "Αναζήτηση και φίλτρα",
+      "search.label": "Αναζήτηση",
+      "search.placeholder": "π.χ. json, guide, nsm…",
+      "search.in": "σε",
+      "field.all": "Όλα τα πεδία",
+      "field.title": "Τίτλος",
+      "field.description": "Περιγραφή",
+      "field.type": "Τύπος",
+      "field.tags": "Ετικέτες",
+      "field.path": "Διαδρομή",
+      "facet.kinds": "Είδη",
+      "facet.types": "Τύποι",
+      "facet.tags": "Ετικέτες",
+      "facet.status": "Κατάσταση",
+      "facet.selectKinds": "Επιλογή ειδών…",
+      "facet.selectTypes": "Επιλογή τύπων…",
+      "facet.selectTags": "Επιλογή ετικετών…",
+      "facet.selectStatus": "Επιλογή κατάστασης…",
+      "facet.searchTags": "Αναζήτηση ετικετών…",
+      "facet.searchKinds": "Αναζήτηση ειδών…",
+      "facet.searchTypes": "Αναζήτηση τύπων…",
+      "facet.searchStatuses": "Αναζήτηση καταστάσεων…",
+      "btn.clear": "Καθαρισμός",
+      "btn.clearFilters": "Καθαρισμός φίλτρων",
+      "legend.handle": "Υπόμνημα",
+      "legend.toggle": "Εναλλαγή υπομνήματος",
+      "lang.label": "Γλώσσα",
+      "about.tagline": "— ένας προβολέας ενός αρχείου, χωρίς εξαρτήσεις, για πακέτα Open Knowledge Format.",
+      "about.rev": "Έκδοση",
+      "about.desc": "Αποδίδει έννοιες Markdown, το frontmatter τους (type, tags, status, description) και συνδέσμους αναφοράς ως διαδραστικό γράφο που μπορείτε να φιλτράρετε, να μετακινήσετε και να μεγεθύνετε.",
+      "about.li1": "Ανοίξτε έναν φάκελο ή σύρετέ τον στο παράθυρο. Σε διακομιστή ιστού φορτώνει αυτόματα το <code>bundles/</code>.",
+      "about.li2": "Κρατήστε πατημένο έναν κόμβο και σύρετε την κάρτα στη δεξιά άκρη για να φτιάξετε μια τράπουλα· προσθέστε σελίδες από την προβολή με Προσθήκη στην τράπουλα.",
+      "about.li3": "Υπολογιστής: κάντε κλικ σε έναν κόμβο για προβολή, διπλό κλικ σε έναν κατάλογο για είσοδο, κύλιση για μεγέθυνση.",
+      "about.li4": "Αφή: πατήστε για προβολή ή είσοδο, σύρετε για μετακίνηση, τσιμπήστε για μεγέθυνση.",
+      "about.note": "Αυτό το εργαλείο δημιουργήθηκε με βοήθεια τεχνητής νοημοσύνης. Ελέγξτε το πριν βασιστείτε σε αυτό.",
+      "about.source": "Πηγαίος κώδικας στο GitHub",
+      "about.runtime": "Εσωτερικά λειτουργίας",
+      "about.showDetails": "Εμφάνιση λεπτομερειών",
+      "about.hideDetails": "Απόκρυψη λεπτομερειών",
+      "card.desc": "Προβολέας ενός αρχείου, χωρίς εξαρτήσεις, για αυτό το πακέτο γνώσης.",
+      "card.li1": "Σε διακομιστή: σε στατικό διακομιστή (συμπεριλαμβανομένου του GitHub Pages) φορτώνει αυτόματα το <code>bundles/</code> από το <code>bundles/index.md</code>.",
+      "card.li2": "Επιλέξτε πακέτο με παράμετρο URL, για παράδειγμα <code>?bundle=acme_retail</code> (όνομα, διαδρομή φακέλου ή αρχείο έναρξης <code>.md</code>).",
+      "card.li3": "Περιορίστε το βάθος προφόρτωσης με <code>?depth=N</code> (προεπιλογή: όλα τα επίπεδα)· κάντε κλικ σε έναν διακεκομμένο κόμβο για να φορτώσετε το επόμενο επίπεδο, ξανά για προβολή.",
+      "card.li4": "Τοπικό αρχείο: κάντε κλικ στο Άνοιγμα φακέλου και επιλέξτε φάκελο πακέτου ή σύρετέ τον σε αυτό το παράθυρο.",
+      "card.li5": "Κρατήστε πατημένο έναν κόμβο και σύρετε την κάρτα στη δεξιά άκρη για να φτιάξετε μια τράπουλα· προσθέστε σελίδες από την προβολή με Προσθήκη στην τράπουλα.",
+      "card.retry": "Νέα προσπάθεια αυτόματης φόρτωσης",
+      "pv.back": "Πίσω",
+      "pv.forward": "Μπροστά",
+      "pv.close": "Κλείσιμο",
+      "pv.addDeck": "Προσθήκη αυτής της σελίδας στην τράπουλα",
+      "filter.active": "{n} ενεργά",
+      "filter.search": "αναζήτηση",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Ο επιλογέας φακέλου απέτυχε: {0}",
+      "msg.noMdFolder": "Δεν βρέθηκαν αρχεία Markdown στον επιλεγμένο φάκελο.",
+      "msg.readFolderFailed": "Δεν ήταν δυνατή η ανάγνωση του φακέλου: {0}",
+      "msg.noMdDropped": "Δεν βρέθηκαν αρχεία Markdown στον φάκελο που αποθέσατε.",
+      "msg.readDroppedFailed": "Δεν ήταν δυνατή η ανάγνωση του φακέλου που αποθέσατε: {0}",
+      "msg.unexpected": "Μη αναμενόμενο σφάλμα",
+      "msg.needsServer": "Η αυτόματη φόρτωση απαιτεί διακομιστή ιστού· ανοίξτε τον φάκελο.",
+      "msg.loading": "Φόρτωση πακέτου…",
+      "msg.sameOrigin": "Το πακέτο πρέπει να είναι διαδρομή ίδιας προέλευσης: {0}",
+      "msg.noBundleAt": "Δεν υπάρχει πακέτο στο ?bundle={0} (χωρίς index.md).",
+      "msg.nothingToLoad": "Τίποτα προς φόρτωση: προσθέστε bundles/index.md ή δώστε ?bundle=<name>.",
+      "msg.autoLoadFailed": "Η αυτόματη φόρτωση απέτυχε: {0}",
+      "msg.buildFailed": "Δεν ήταν δυνατή η δημιουργία του γράφου: {0}",
+      "stats.files": { "one": "αρχείο", "other": "αρχεία" },
+      "stats.links": { "one": "σύνδεσμος", "other": "σύνδεσμοι" }
+    },
+    "cs": {
+      "nav.toggleToolbar": "Zobrazit/skrýt panel nástrojů",
+      "nav.about": "O aplikaci",
+      "nav.open": "Otevřít složku…",
+      "nav.reload": "Znovu načíst",
+      "nav.resetView": "Obnovit zobrazení",
+      "nav.resetLayout": "Obnovit rozvržení",
+      "nav.labels": "Popisky",
+      "nav.tags": "Štítky",
+      "nav.tagsTitle": "Odkazy štítků",
+      "nav.install": "Nainstalovat",
+      "nav.installTitle": "Nainstalovat grokf jako aplikaci",
+      "nav.top": "Nahoru",
+      "nav.topTitle": "Nejvyšší úroveň",
+      "nav.back": "Zpět",
+      "nav.forward": "Vpřed",
+      "spinner.loading": "Načítání",
+      "side.handle": "Filtry",
+      "side.toggleFilters": "Zobrazit/skrýt filtry",
+      "side.head": "Hledat a filtrovat",
+      "search.label": "Hledat",
+      "search.placeholder": "např. json, guide, nsm…",
+      "search.in": "v",
+      "field.all": "Všechna pole",
+      "field.title": "Název",
+      "field.description": "Popis",
+      "field.type": "Typ",
+      "field.tags": "Štítky",
+      "field.path": "Cesta",
+      "facet.kinds": "Druhy",
+      "facet.types": "Typy",
+      "facet.tags": "Štítky",
+      "facet.status": "Stav",
+      "facet.selectKinds": "Vybrat druhy…",
+      "facet.selectTypes": "Vybrat typy…",
+      "facet.selectTags": "Vybrat štítky…",
+      "facet.selectStatus": "Vybrat stav…",
+      "facet.searchTags": "Hledat štítky…",
+      "facet.searchKinds": "Hledat druhy…",
+      "facet.searchTypes": "Hledat typy…",
+      "facet.searchStatuses": "Hledat stavy…",
+      "btn.clear": "Vymazat",
+      "btn.clearFilters": "Vymazat filtry",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Zobrazit/skrýt legendu",
+      "lang.label": "Jazyk",
+      "about.tagline": "— jednosouborový prohlížeč balíčků Open Knowledge Format bez závislostí.",
+      "about.rev": "Revize",
+      "about.desc": "Vykresluje koncepty Markdown, jejich frontmatter (type, tags, status, description) a odkazy na zdroje jako interaktivní graf, který lze filtrovat, posouvat a přibližovat.",
+      "about.li1": "Otevřete složku nebo ji přetáhněte do okna. Na webovém serveru se <code>bundles/</code> načte automaticky.",
+      "about.li2": "Podržte uzel a přetáhněte kartu k pravému okraji a vytvořte balíček; přidávejte stránky z náhledu pomocí Přidat do balíčku.",
+      "about.li3": "Počítač: kliknutím na uzel zobrazíte náhled, dvojklikem na složku do ní vstoupíte, kolečkem přiblížíte.",
+      "about.li4": "Dotykové ovládání: klepnutím zobrazíte náhled nebo vstoupíte, tažením posouváte, stažením prstů přibližujete.",
+      "about.note": "Tento nástroj vznikl s pomocí umělé inteligence. Zkontrolujte jej, než se na něj spolehnete.",
+      "about.source": "Zdrojový kód na GitHubu",
+      "about.runtime": "Vnitřní chod",
+      "about.showDetails": "Zobrazit podrobnosti",
+      "about.hideDetails": "Skrýt podrobnosti",
+      "card.desc": "Jednosouborový prohlížeč tohoto znalostního balíčku bez závislostí.",
+      "card.li1": "Jako server: na statickém serveru (včetně GitHub Pages) se <code>bundles/</code> načte automaticky z <code>bundles/index.md</code>.",
+      "card.li2": "Balíček vyberte parametrem URL, například <code>?bundle=acme_retail</code> (název, cesta ke složce nebo počáteční soubor <code>.md</code>).",
+      "card.li3": "Hloubku přednačítání omezte parametrem <code>?depth=N</code> (výchozí: všechny úrovně); kliknutím na tečkovaný uzel načtete další úroveň, dalším kliknutím zobrazíte náhled.",
+      "card.li4": "Místní soubor: klikněte na Otevřít složku a vyberte složku balíčku, nebo ji přetáhněte do tohoto okna.",
+      "card.li5": "Podržte uzel a přetáhněte kartu k pravému okraji a vytvořte balíček; přidávejte stránky z náhledu pomocí Přidat do balíčku.",
+      "card.retry": "Zkusit automatické načtení znovu",
+      "pv.back": "Zpět",
+      "pv.forward": "Vpřed",
+      "pv.close": "Zavřít",
+      "pv.addDeck": "Přidat tuto stránku do balíčku",
+      "filter.active": "{n} aktivní",
+      "filter.search": "hledání",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Výběr složky selhal: {0}",
+      "msg.noMdFolder": "Ve vybrané složce nebyly nalezeny žádné soubory Markdown.",
+      "msg.readFolderFailed": "Složku nelze přečíst: {0}",
+      "msg.noMdDropped": "V přetažené složce nebyly nalezeny žádné soubory Markdown.",
+      "msg.readDroppedFailed": "Přetaženou složku nelze přečíst: {0}",
+      "msg.unexpected": "Neočekávaná chyba",
+      "msg.needsServer": "Automatické načtení vyžaduje webový server; otevřete složku.",
+      "msg.loading": "Načítání balíčku…",
+      "msg.sameOrigin": "Balíček musí být cesta ze stejného původu: {0}",
+      "msg.noBundleAt": "Žádný balíček na ?bundle={0} (chybí index.md).",
+      "msg.nothingToLoad": "Není co načíst: přidejte bundles/index.md nebo zadejte ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatické načtení selhalo: {0}",
+      "msg.buildFailed": "Graf se nepodařilo sestavit: {0}",
+      "stats.files": { "one": "soubor", "few": "soubory", "many": "souboru", "other": "souborů" },
+      "stats.links": { "one": "odkaz", "few": "odkazy", "many": "odkazu", "other": "odkazů" }
+    },
+    "sk": {
+      "nav.toggleToolbar": "Zobraziť/skryť panel nástrojov",
+      "nav.about": "O aplikácii",
+      "nav.open": "Otvoriť priečinok…",
+      "nav.reload": "Znova načítať",
+      "nav.resetView": "Obnoviť zobrazenie",
+      "nav.resetLayout": "Obnoviť rozloženie",
+      "nav.labels": "Popisy",
+      "nav.tags": "Štítky",
+      "nav.tagsTitle": "Odkazy štítkov",
+      "nav.install": "Nainštalovať",
+      "nav.installTitle": "Nainštalovať grokf ako aplikáciu",
+      "nav.top": "Nahor",
+      "nav.topTitle": "Najvyššia úroveň",
+      "nav.back": "Späť",
+      "nav.forward": "Vpred",
+      "spinner.loading": "Načítava sa",
+      "side.handle": "Filtre",
+      "side.toggleFilters": "Zobraziť/skryť filtre",
+      "side.head": "Hľadať a filtrovať",
+      "search.label": "Hľadať",
+      "search.placeholder": "napr. json, guide, nsm…",
+      "search.in": "v",
+      "field.all": "Všetky polia",
+      "field.title": "Názov",
+      "field.description": "Popis",
+      "field.type": "Typ",
+      "field.tags": "Štítky",
+      "field.path": "Cesta",
+      "facet.kinds": "Druhy",
+      "facet.types": "Typy",
+      "facet.tags": "Štítky",
+      "facet.status": "Stav",
+      "facet.selectKinds": "Vybrať druhy…",
+      "facet.selectTypes": "Vybrať typy…",
+      "facet.selectTags": "Vybrať štítky…",
+      "facet.selectStatus": "Vybrať stav…",
+      "facet.searchTags": "Hľadať štítky…",
+      "facet.searchKinds": "Hľadať druhy…",
+      "facet.searchTypes": "Hľadať typy…",
+      "facet.searchStatuses": "Hľadať stavy…",
+      "btn.clear": "Vymazať",
+      "btn.clearFilters": "Vymazať filtre",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Zobraziť/skryť legendu",
+      "lang.label": "Jazyk",
+      "about.tagline": "— jednosúborový prehliadač balíkov Open Knowledge Format bez závislostí.",
+      "about.rev": "Revízia",
+      "about.desc": "Vykresľuje koncepty Markdown, ich frontmatter (type, tags, status, description) a odkazy na zdroje ako interaktívny graf, ktorý môžete filtrovať, posúvať a približovať.",
+      "about.li1": "Otvorte priečinok alebo ho pretiahnite do okna. Na webovom serveri sa <code>bundles/</code> načíta automaticky.",
+      "about.li2": "Podržte uzol a pretiahnite kartu k pravému okraju, aby ste vytvorili balík; pridávajte stránky z náhľadu pomocou Pridať do balíka.",
+      "about.li3": "Počítač: kliknutím na uzol zobrazíte náhľad, dvojkliknutím na priečinok doň vstúpite, kolieskom priblížite.",
+      "about.li4": "Dotykové ovládanie: ťuknutím zobrazíte náhľad alebo vstúpite, potiahnutím posúvate, zovretím prstov približujete.",
+      "about.note": "Tento nástroj vznikol s pomocou umelej inteligencie. Skontrolujte ho, kým sa naň spoľahnete.",
+      "about.source": "Zdrojový kód na GitHube",
+      "about.runtime": "Vnútorná prevádzka",
+      "about.showDetails": "Zobraziť podrobnosti",
+      "about.hideDetails": "Skryť podrobnosti",
+      "card.desc": "Jednosúborový prehliadač tohto znalostného balíka bez závislostí.",
+      "card.li1": "Ako server: na statickom serveri (vrátane GitHub Pages) sa <code>bundles/</code> načíta automaticky z <code>bundles/index.md</code>.",
+      "card.li2": "Balík vyberte parametrom URL, napríklad <code>?bundle=acme_retail</code> (názov, cesta k priečinku alebo počiatočný súbor <code>.md</code>).",
+      "card.li3": "Hĺbku prednačítania obmedzte parametrom <code>?depth=N</code> (predvolené: všetky úrovne); kliknutím na bodkovaný uzol načítate ďalšiu úroveň, ďalším kliknutím zobrazíte náhľad.",
+      "card.li4": "Miestny súbor: kliknite na Otvoriť priečinok a vyberte priečinok balíka, alebo ho pretiahnite do tohto okna.",
+      "card.li5": "Podržte uzol a pretiahnite kartu k pravému okraju, aby ste vytvorili balík; pridávajte stránky z náhľadu pomocou Pridať do balíka.",
+      "card.retry": "Skúsiť automatické načítanie znova",
+      "pv.back": "Späť",
+      "pv.forward": "Vpred",
+      "pv.close": "Zavrieť",
+      "pv.addDeck": "Pridať túto stránku do balíka",
+      "filter.active": "{n} aktívne",
+      "filter.search": "hľadanie",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Výber priečinka zlyhal: {0}",
+      "msg.noMdFolder": "Vo zvolenom priečinku sa nenašli žiadne súbory Markdown.",
+      "msg.readFolderFailed": "Priečinok sa nepodarilo prečítať: {0}",
+      "msg.noMdDropped": "V pretiahnutom priečinku sa nenašli žiadne súbory Markdown.",
+      "msg.readDroppedFailed": "Pretiahnutý priečinok sa nepodarilo prečítať: {0}",
+      "msg.unexpected": "Neočakávaná chyba",
+      "msg.needsServer": "Automatické načítanie vyžaduje webový server; otvorte priečinok.",
+      "msg.loading": "Načítava sa balík…",
+      "msg.sameOrigin": "Balík musí byť cesta z rovnakého pôvodu: {0}",
+      "msg.noBundleAt": "Žiadny balík na ?bundle={0} (chýba index.md).",
+      "msg.nothingToLoad": "Nie je čo načítať: pridajte bundles/index.md alebo zadajte ?bundle=<name>.",
+      "msg.autoLoadFailed": "Automatické načítanie zlyhalo: {0}",
+      "msg.buildFailed": "Graf sa nepodarilo zostaviť: {0}",
+      "stats.files": { "one": "súbor", "few": "súbory", "many": "súboru", "other": "súborov" },
+      "stats.links": { "one": "odkaz", "few": "odkazy", "many": "odkazu", "other": "odkazov" }
+    },
+    "hu": {
+      "nav.toggleToolbar": "Eszköztár megjelenítése/elrejtése",
+      "nav.about": "Névjegy",
+      "nav.open": "Mappa megnyitása…",
+      "nav.reload": "Újratöltés",
+      "nav.resetView": "Nézet visszaállítása",
+      "nav.resetLayout": "Elrendezés visszaállítása",
+      "nav.labels": "Feliratok",
+      "nav.tags": "Címkék",
+      "nav.tagsTitle": "Címkehivatkozások",
+      "nav.install": "Telepítés",
+      "nav.installTitle": "A grokf telepítése alkalmazásként",
+      "nav.top": "Felső",
+      "nav.topTitle": "Legfelső szint",
+      "nav.back": "Vissza",
+      "nav.forward": "Előre",
+      "spinner.loading": "Betöltés",
+      "side.handle": "Szűrők",
+      "side.toggleFilters": "Szűrők megjelenítése/elrejtése",
+      "side.head": "Keresés és szűrés",
+      "search.label": "Keresés",
+      "search.placeholder": "pl. json, guide, nsm…",
+      "search.in": "itt:",
+      "field.all": "Minden mező",
+      "field.title": "Cím",
+      "field.description": "Leírás",
+      "field.type": "Típus",
+      "field.tags": "Címkék",
+      "field.path": "Útvonal",
+      "facet.kinds": "Fajták",
+      "facet.types": "Típusok",
+      "facet.tags": "Címkék",
+      "facet.status": "Állapot",
+      "facet.selectKinds": "Fajták kiválasztása…",
+      "facet.selectTypes": "Típusok kiválasztása…",
+      "facet.selectTags": "Címkék kiválasztása…",
+      "facet.selectStatus": "Állapot kiválasztása…",
+      "facet.searchTags": "Címkék keresése…",
+      "facet.searchKinds": "Fajták keresése…",
+      "facet.searchTypes": "Típusok keresése…",
+      "facet.searchStatuses": "Állapotok keresése…",
+      "btn.clear": "Törlés",
+      "btn.clearFilters": "Szűrők törlése",
+      "legend.handle": "Jelmagyarázat",
+      "legend.toggle": "Jelmagyarázat megjelenítése/elrejtése",
+      "lang.label": "Nyelv",
+      "about.tagline": "— egyfájlos, függőségektől mentes megjelenítő Open Knowledge Format csomagokhoz.",
+      "about.rev": "Változat",
+      "about.desc": "A Markdown-fogalmakat, azok frontmatterét (type, tags, status, description) és hivatkozásait interaktív gráfként jeleníti meg, amelyet szűrhetsz, mozgathatsz és nagyíthatsz.",
+      "about.li1": "Nyiss meg egy mappát, vagy húzz egyet az ablakba. Webkiszolgálón a <code>bundles/</code> automatikusan betöltődik.",
+      "about.li2": "Tartsd nyomva egy csomópontot, és húzd a kártyát a jobb szélre pakli építéséhez; adj hozzá oldalakat az előnézetből a Paklihoz adás gombbal.",
+      "about.li3": "Asztali: kattints egy csomópontra az előnézethez, duplán egy mappára a belépéshez, görgess a nagyításhoz.",
+      "about.li4": "Érintés: koppints az előnézethez vagy belépéshez, húzz a mozgatáshoz, csippents a nagyításhoz.",
+      "about.note": "Ez az eszköz AI segítségével készült. Nézd át, mielőtt megbízol benne.",
+      "about.source": "Forráskód a GitHubon",
+      "about.runtime": "Belső működés",
+      "about.showDetails": "Részletek megjelenítése",
+      "about.hideDetails": "Részletek elrejtése",
+      "card.desc": "Egyfájlos, függőségektől mentes megjelenítő ehhez a tudáscsomaghoz.",
+      "card.li1": "Kiszolgálva: statikus kiszolgálón (a GitHub Pages-t is beleértve) a <code>bundles/</code> automatikusan betöltődik a <code>bundles/index.md</code> fájlból.",
+      "card.li2": "Válassz csomagot URL-paraméterrel, például <code>?bundle=acme_retail</code> (név, mappaútvonal vagy kezdő <code>.md</code> fájl).",
+      "card.li3": "Az előzetes betöltés mélységét a <code>?depth=N</code> korlátozza (alapértelmezés: minden szint); kattints egy pontozott csomópontra a következő szint betöltéséhez, újra az előnézethez.",
+      "card.li4": "Helyi fájl: kattints a Mappa megnyitása gombra, és válassz csomagmappát, vagy húzd be az ablakba.",
+      "card.li5": "Tartsd nyomva egy csomópontot, és húzd a kártyát a jobb szélre pakli építéséhez; adj hozzá oldalakat az előnézetből a Paklihoz adás gombbal.",
+      "card.retry": "Automatikus betöltés újrapróbálása",
+      "pv.back": "Vissza",
+      "pv.forward": "Előre",
+      "pv.close": "Bezárás",
+      "pv.addDeck": "Oldal hozzáadása a paklihoz",
+      "filter.active": "{n} aktív",
+      "filter.search": "keresés",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "A mappaválasztó nem sikerült: {0}",
+      "msg.noMdFolder": "A kiválasztott mappában nem található Markdown-fájl.",
+      "msg.readFolderFailed": "A mappa nem olvasható: {0}",
+      "msg.noMdDropped": "A behúzott mappában nem található Markdown-fájl.",
+      "msg.readDroppedFailed": "A behúzott mappa nem olvasható: {0}",
+      "msg.unexpected": "Váratlan hiba",
+      "msg.needsServer": "Az automatikus betöltés webkiszolgálót igényel; nyisd meg a mappát.",
+      "msg.loading": "Csomag betöltése…",
+      "msg.sameOrigin": "A csomagnak azonos eredetű útvonalnak kell lennie: {0}",
+      "msg.noBundleAt": "Nincs csomag a ?bundle={0} helyen (nincs index.md).",
+      "msg.nothingToLoad": "Nincs mit betölteni: add hozzá a bundles/index.md fájlt, vagy add meg a ?bundle=<name> paramétert.",
+      "msg.autoLoadFailed": "Az automatikus betöltés nem sikerült: {0}",
+      "msg.buildFailed": "A gráf nem építhető fel: {0}",
+      "stats.files": { "one": "fájl", "other": "fájl" },
+      "stats.links": { "one": "hivatkozás", "other": "hivatkozás" }
+    },
+    "ro": {
+      "nav.toggleToolbar": "Comută bara de instrumente",
+      "nav.about": "Despre",
+      "nav.open": "Deschide folderul…",
+      "nav.reload": "Reîncarcă",
+      "nav.resetView": "Resetează vizualizarea",
+      "nav.resetLayout": "Resetează aspectul",
+      "nav.labels": "Marcaje",
+      "nav.tags": "Etichete",
+      "nav.tagsTitle": "Legături de etichete",
+      "nav.install": "Instalează",
+      "nav.installTitle": "Instalează grokf ca aplicație",
+      "nav.top": "Sus",
+      "nav.topTitle": "Nivel superior",
+      "nav.back": "Înapoi",
+      "nav.forward": "Înainte",
+      "spinner.loading": "Se încarcă",
+      "side.handle": "Filtre",
+      "side.toggleFilters": "Comută filtrele",
+      "side.head": "Căutare și filtrare",
+      "search.label": "Caută",
+      "search.placeholder": "de ex. json, guide, nsm…",
+      "search.in": "în",
+      "field.all": "Toate câmpurile",
+      "field.title": "Titlu",
+      "field.description": "Descriere",
+      "field.type": "Tip",
+      "field.tags": "Etichete",
+      "field.path": "Cale",
+      "facet.kinds": "Categorii",
+      "facet.types": "Tipuri",
+      "facet.tags": "Etichete",
+      "facet.status": "Stare",
+      "facet.selectKinds": "Selectează categorii…",
+      "facet.selectTypes": "Selectează tipuri…",
+      "facet.selectTags": "Selectează etichete…",
+      "facet.selectStatus": "Selectează starea…",
+      "facet.searchTags": "Caută etichete…",
+      "facet.searchKinds": "Caută categorii…",
+      "facet.searchTypes": "Caută tipuri…",
+      "facet.searchStatuses": "Caută stări…",
+      "btn.clear": "Golește",
+      "btn.clearFilters": "Golește filtrele",
+      "legend.handle": "Legendă",
+      "legend.toggle": "Comută legenda",
+      "lang.label": "Limbă",
+      "about.tagline": "— un vizualizator de fișier unic, fără dependențe, pentru pachete Open Knowledge Format.",
+      "about.rev": "Revizie",
+      "about.desc": "Redă concepte Markdown, frontmatterul lor (type, tags, status, description) și legăturile de referință ca un graf interactiv pe care îl poți filtra, deplasa și mări.",
+      "about.li1": "Deschide un folder sau trage unul în fereastră. Pe un server web, <code>bundles/</code> se încarcă automat.",
+      "about.li2": "Ține apăsat un nod și trage cardul spre marginea dreaptă pentru a crea un pachet de cărți; adaugă pagini din previzualizare cu Adaugă la pachet.",
+      "about.li3": "Desktop: fă clic pe un nod pentru previzualizare, dublu clic pe un director pentru a intra, derulează pentru a mări.",
+      "about.li4": "Atingere: atingere pentru previzualizare sau intrare, trage pentru deplasare, ciupește pentru mărire.",
+      "about.note": "Acest instrument a fost creat cu ajutorul IA. Verifică-l înainte de a te baza pe el.",
+      "about.source": "Cod sursă pe GitHub",
+      "about.runtime": "Funcționare internă",
+      "about.showDetails": "Arată detaliile",
+      "about.hideDetails": "Ascunde detaliile",
+      "card.desc": "Vizualizator de fișier unic, fără dependențe, pentru acest pachet de cunoștințe.",
+      "card.li1": "Servit: pe un server static (inclusiv GitHub Pages) încarcă automat <code>bundles/</code> din <code>bundles/index.md</code>.",
+      "card.li2": "Alege un pachet cu un parametru URL, de exemplu <code>?bundle=acme_retail</code> (un nume, o cale de folder sau un fișier de start <code>.md</code>).",
+      "card.li3": "Limitează adâncimea preîncărcării cu <code>?depth=N</code> (implicit: toate nivelurile); fă clic pe un nod punctat pentru a încărca nivelul următor, încă o dată pentru previzualizare.",
+      "card.li4": "Fișier local: fă clic pe Deschide folderul și alege un folder de pachet, sau trage-l în această fereastră.",
+      "card.li5": "Ține apăsat un nod și trage cardul spre marginea dreaptă pentru a crea un pachet de cărți; adaugă pagini din previzualizare cu Adaugă la pachet.",
+      "card.retry": "Reîncearcă încărcarea automată",
+      "pv.back": "Înapoi",
+      "pv.forward": "Înainte",
+      "pv.close": "Închide",
+      "pv.addDeck": "Adaugă această pagină la pachet",
+      "filter.active": "{n} active",
+      "filter.search": "căutare",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Selectorul de foldere a eșuat: {0}",
+      "msg.noMdFolder": "Nu s-au găsit fișiere Markdown în folderul ales.",
+      "msg.readFolderFailed": "Folderul nu a putut fi citit: {0}",
+      "msg.noMdDropped": "Nu s-au găsit fișiere Markdown în folderul tras.",
+      "msg.readDroppedFailed": "Folderul tras nu a putut fi citit: {0}",
+      "msg.unexpected": "Eroare neașteptată",
+      "msg.needsServer": "Încărcarea automată necesită un server web; deschide folderul.",
+      "msg.loading": "Se încarcă pachetul…",
+      "msg.sameOrigin": "Pachetul trebuie să fie o cale de aceeași origine: {0}",
+      "msg.noBundleAt": "Niciun pachet la ?bundle={0} (fără index.md).",
+      "msg.nothingToLoad": "Nimic de încărcat: adaugă bundles/index.md sau folosește ?bundle=<name>.",
+      "msg.autoLoadFailed": "Încărcarea automată a eșuat: {0}",
+      "msg.buildFailed": "Graful nu a putut fi construit: {0}",
+      "stats.files": { "one": "fișier", "few": "fișiere", "other": "de fișiere" },
+      "stats.links": { "one": "legătură", "few": "legături", "other": "de legături" }
+    },
+    "bg": {
+      "nav.toggleToolbar": "Показване/скриване на лентата с инструменти",
+      "nav.about": "Относно",
+      "nav.open": "Отваряне на папка…",
+      "nav.reload": "Презареждане",
+      "nav.resetView": "Нулиране на изгледа",
+      "nav.resetLayout": "Нулиране на оформлението",
+      "nav.labels": "Надписи",
+      "nav.tags": "Етикети",
+      "nav.tagsTitle": "Връзки на етикети",
+      "nav.install": "Инсталиране",
+      "nav.installTitle": "Инсталиране на grokf като приложение",
+      "nav.top": "Нагоре",
+      "nav.topTitle": "Най-горно ниво",
+      "nav.back": "Назад",
+      "nav.forward": "Напред",
+      "spinner.loading": "Зареждане",
+      "side.handle": "Филтри",
+      "side.toggleFilters": "Показване/скриване на филтрите",
+      "side.head": "Търсене и филтриране",
+      "search.label": "Търсене",
+      "search.placeholder": "напр. json, guide, nsm…",
+      "search.in": "в",
+      "field.all": "Всички полета",
+      "field.title": "Заглавие",
+      "field.description": "Описание",
+      "field.type": "Тип",
+      "field.tags": "Етикети",
+      "field.path": "Път",
+      "facet.kinds": "Видове",
+      "facet.types": "Типове",
+      "facet.tags": "Етикети",
+      "facet.status": "Състояние",
+      "facet.selectKinds": "Избор на видове…",
+      "facet.selectTypes": "Избор на типове…",
+      "facet.selectTags": "Избор на етикети…",
+      "facet.selectStatus": "Избор на състояние…",
+      "facet.searchTags": "Търсене на етикети…",
+      "facet.searchKinds": "Търсене на видове…",
+      "facet.searchTypes": "Търсене на типове…",
+      "facet.searchStatuses": "Търсене на състояния…",
+      "btn.clear": "Изчистване",
+      "btn.clearFilters": "Изчистване на филтрите",
+      "legend.handle": "Легенда",
+      "legend.toggle": "Показване/скриване на легендата",
+      "lang.label": "Език",
+      "about.tagline": "— еднофайлов, независим визуализатор за пакети Open Knowledge Format.",
+      "about.rev": "Ревизия",
+      "about.desc": "Изобразява концепциите в Markdown, техния frontmatter (type, tags, status, description) и референтните връзки като интерактивна графа, която можете да филтрирате, местите и увеличавате.",
+      "about.li1": "Отворете папка или я плъзнете в прозореца. На уеб сървър <code>bundles/</code> се зарежда автоматично.",
+      "about.li2": "Задръжте възел и плъзнете картата към десния ръб, за да построите тесте; добавяйте страници от прегледа с Добавяне към тестето.",
+      "about.li3": "Настолен: щракнете върху възел за преглед, двойно щракване върху папка за влизане, превъртете за увеличение.",
+      "about.li4": "Докосване: докоснете за преглед или влизане, плъзнете за местене, свийте за увеличение.",
+      "about.note": "Този инструмент е създаден с помощта на ИИ. Прегледайте го, преди да разчитате на него.",
+      "about.source": "Изходен код в GitHub",
+      "about.runtime": "Вътрешна работа",
+      "about.showDetails": "Показване на подробности",
+      "about.hideDetails": "Скриване на подробности",
+      "card.desc": "Еднофайлов, независим визуализатор за този пакет знания.",
+      "card.li1": "Обслужен: на статичен сървър (включително GitHub Pages) <code>bundles/</code> се зарежда автоматично от <code>bundles/index.md</code>.",
+      "card.li2": "Изберете пакет с URL параметър, например <code>?bundle=acme_retail</code> (име, път до папка или начален <code>.md</code> файл).",
+      "card.li3": "Ограничете дълбочината на предварително зареждане с <code>?depth=N</code> (по подразбиране: всички нива); щракнете върху пунктиран възел, за да заредите следващото ниво, отново за преглед.",
+      "card.li4": "Локален файл: щракнете върху Отваряне на папка и изберете папка на пакета или я плъзнете в този прозорец.",
+      "card.li5": "Задръжте възел и плъзнете картата към десния ръб, за да построите тесте; добавяйте страници от прегледа с Добавяне към тестето.",
+      "card.retry": "Нов опит за автоматично зареждане",
+      "pv.back": "Назад",
+      "pv.forward": "Напред",
+      "pv.close": "Затваряне",
+      "pv.addDeck": "Добавяне на тази страница към тестето",
+      "filter.active": "{n} активни",
+      "filter.search": "търсене",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Изборът на папка не успя: {0}",
+      "msg.noMdFolder": "В избраната папка не бяха намерени Markdown файлове.",
+      "msg.readFolderFailed": "Папката не можа да бъде прочетена: {0}",
+      "msg.noMdDropped": "В плъзнатата папка не бяха намерени Markdown файлове.",
+      "msg.readDroppedFailed": "Плъзнатата папка не можа да бъде прочетена: {0}",
+      "msg.unexpected": "Неочаквана грешка",
+      "msg.needsServer": "Автоматичното зареждане изисква уеб сървър; отворете папката.",
+      "msg.loading": "Зареждане на пакета…",
+      "msg.sameOrigin": "Пакетът трябва да е път от същия източник: {0}",
+      "msg.noBundleAt": "Няма пакет на ?bundle={0} (няма index.md).",
+      "msg.nothingToLoad": "Няма какво да се зареди: добавете bundles/index.md или подайте ?bundle=<name>.",
+      "msg.autoLoadFailed": "Автоматичното зареждане не успя: {0}",
+      "msg.buildFailed": "Графата не можа да бъде построена: {0}",
+      "stats.files": { "one": "файл", "other": "файла" },
+      "stats.links": { "one": "връзка", "other": "връзки" }
     }
   };   // locale tag -> { key: string | CLDR plural forms }
+
+  // The picker offers the ISO 639-1 languages that are in living use (with Simplified and
+  // Traditional Chinese), plus Esperanto, grouped by geographic region. Ancient and
+  // liturgical languages (Latin, Sanskrit, Pali, Avestan, Church Slavic) and the other
+  // constructed auxiliary languages are left out. Those with a dictionary translate, the
+  // rest fall back to English while the document still declares them.
+  var LANG_CODES = ("aa ab af ak am an ar as av ay az ba be bg bh bi bm bn bo br bs ca ce ch co cr cs cv cy da de dv dz ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz id ig ii ik is it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa pl ps pt qu rm rn ro ru rw sc sd se sg si sk sl sm sn so sq sr sr-Latn ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi wa wo xh yi yo za zu zh-Hans zh-Hant").split(" ");
+  var LANG_SET = Object.create(null);
+  LANG_CODES.forEach(function (tag) { LANG_SET[tag] = 1; });
+  // Grouped by geographic region. The group code is a UN M.49 continent code, named for its
+  // heading from the dictionaries (see REGION_I18N). A language spoken on more than one
+  // continent is listed under each of them, so the region lists are not a partition.
+  var LANG_REGIONS = [
+    { code: "150", fallback: "Europe", tags: "an be bg br bs ca ce co cs cv cy da de el en es et eu fi fo fr fy ga gd gl gv hr hu is it kv kw lb li lt lv mk mt nb nl nn no oc pl pt rm ro ru sc se sk sl sq sr sr-Latn sv tt uk wa yi" },
+    { code: "142", fallback: "Asia", tags: "ab ar as av az ba bh bn bo dv dz fa gu he hi hy id ii ja jv ka kk km kn ko ks ku ky lo ml mn mr ms my ne or os pa ps sd si su ta te tg th tk tl tr ug ur uz vi za zh-Hans zh-Hant" },
+    { code: "002", fallback: "Africa", tags: "aa af ak am bm ee ff ha hz ig kg ki kj kr lg ln lu mg nd ng nr ny om rn rw sg sn so ss st sw ti tn ts tw ve wo xh yo zu" },
+    { code: "019", fallback: "Americas", tags: "ay cr en es fr gn ht ik iu kl nv oj pt qu" },
+    { code: "009", fallback: "Oceania", tags: "bi ch fj ho mh mi na sm to ty" },
+    { code: "001", fallback: "World", tags: "eo" }
+  ];
+  LANG_REGIONS.forEach(function (r) { r.tags = r.tags.split(" "); });
+  // The language-search placeholder, per locale; a locale without a row falls back to English.
+  var LANG_EXTRA = {
+    es: "Buscar idiomas…",
+    fr: "Rechercher une langue…",
+    de: "Sprachen suchen…",
+    pt: "Pesquisar idiomas…",
+    it: "Cerca lingue…",
+    nl: "Talen zoeken…",
+    pl: "Szukaj języków…",
+    id: "Cari bahasa…",
+    vi: "Tìm ngôn ngữ…",
+    tr: "Dil ara…",
+    ru: "Поиск языков…",
+    fa: "جست‌وجوی زبان‌ها…",
+    ur: "زبانیں تلاش کریں…",
+    hi: "भाषाएँ खोजें…",
+    bn: "ভাষা খুঁজুন…",
+    "zh-Hans": "搜索语言…",
+    ja: "言語を検索…",
+    ko: "언어 검색…",
+    ar: "ابحث عن لغة…",
+    sv: "Sök språk…",
+    da: "Søg sprog…",
+    nb: "Søk språk…",
+    fi: "Hae kieliä…",
+    el: "Αναζήτηση γλωσσών…",
+    cs: "Hledat jazyky…",
+    sk: "Hľadať jazyky…",
+    hu: "Nyelvek keresése…",
+    ro: "Caută limbi…",
+    bg: "Търсене на езици…"
+  };
+  Object.keys(LANG_EXTRA).forEach(function (tag) {
+    if (I18N[tag]) I18N[tag]["lang.search"] = LANG_EXTRA[tag];
+  });
+  // Region headings are data too: Chromium's Intl.DisplayNames does not resolve the UN M.49
+  // continent codes ("150" stays "150"), so each locale's region names live here and are
+  // merged into its dictionary under "region.<code>". A locale without a row keeps English.
+  var REGION_I18N = {
+    es: { "150": "Europa", "142": "Asia", "002": "África", "019": "América", "009": "Oceanía", "001": "Mundo" },
+    fr: { "150": "Europe", "142": "Asie", "002": "Afrique", "019": "Amériques", "009": "Océanie", "001": "Monde" },
+    de: { "150": "Europa", "142": "Asien", "002": "Afrika", "019": "Amerika", "009": "Ozeanien", "001": "Welt" },
+    pt: { "150": "Europa", "142": "Ásia", "002": "África", "019": "Américas", "009": "Oceania", "001": "Mundo" },
+    it: { "150": "Europa", "142": "Asia", "002": "Africa", "019": "Americhe", "009": "Oceania", "001": "Mondo" },
+    nl: { "150": "Europa", "142": "Azië", "002": "Afrika", "019": "Amerika", "009": "Oceanië", "001": "Wereld" },
+    pl: { "150": "Europa", "142": "Azja", "002": "Afryka", "019": "Ameryka", "009": "Oceania", "001": "Świat" },
+    ru: { "150": "Европа", "142": "Азия", "002": "Африка", "019": "Америка", "009": "Океания", "001": "Мир" },
+    tr: { "150": "Avrupa", "142": "Asya", "002": "Afrika", "019": "Amerika", "009": "Okyanusya", "001": "Dünya" },
+    hi: { "150": "यूरोप", "142": "एशिया", "002": "अफ़्रीका", "019": "अमेरिका", "009": "ओशिनिया", "001": "विश्व" },
+    bn: { "150": "ইউরোপ", "142": "এশিয়া", "002": "আফ্রিকা", "019": "আমেরিকা", "009": "ওশেনিয়া", "001": "বিশ্ব" },
+    ur: { "150": "یورپ", "142": "ایشیا", "002": "افریقہ", "019": "امریکہ", "009": "اوقیانوسیہ", "001": "دنیا" },
+    id: { "150": "Eropa", "142": "Asia", "002": "Afrika", "019": "Amerika", "009": "Oseania", "001": "Dunia" },
+    vi: { "150": "Châu Âu", "142": "Châu Á", "002": "Châu Phi", "019": "Châu Mỹ", "009": "Châu Đại Dương", "001": "Thế giới" },
+    fa: { "150": "اروپا", "142": "آسیا", "002": "آفریقا", "019": "آمریکا", "009": "اقیانوسیه", "001": "جهان" },
+    "zh-Hans": { "150": "欧洲", "142": "亚洲", "002": "非洲", "019": "美洲", "009": "大洋洲", "001": "世界" },
+    ja: { "150": "ヨーロッパ", "142": "アジア", "002": "アフリカ", "019": "アメリカ", "009": "オセアニア", "001": "世界" },
+    ko: { "150": "유럽", "142": "아시아", "002": "아프리카", "019": "아메리카", "009": "오세아니아", "001": "세계" },
+    ar: { "150": "أوروبا", "142": "آسيا", "002": "أفريقيا", "019": "الأمريكتان", "009": "أوقيانوسيا", "001": "العالم" },
+    sv: { "150": "Europa", "142": "Asien", "002": "Afrika", "019": "Amerika", "009": "Oceanien", "001": "Världen" },
+    da: { "150": "Europa", "142": "Asien", "002": "Afrika", "019": "Amerika", "009": "Oceanien", "001": "Verden" },
+    nb: { "150": "Europa", "142": "Asia", "002": "Afrika", "019": "Amerika", "009": "Oseania", "001": "Verden" },
+    fi: { "150": "Eurooppa", "142": "Aasia", "002": "Afrikka", "019": "Amerikka", "009": "Oseania", "001": "Maailma" },
+    el: { "150": "Ευρώπη", "142": "Ασία", "002": "Αφρική", "019": "Αμερική", "009": "Ωκεανία", "001": "Κόσμος" },
+    cs: { "150": "Evropa", "142": "Asie", "002": "Afrika", "019": "Amerika", "009": "Oceánie", "001": "Svět" },
+    sk: { "150": "Európa", "142": "Ázia", "002": "Afrika", "019": "Amerika", "009": "Oceánia", "001": "Svet" },
+    hu: { "150": "Európa", "142": "Ázsia", "002": "Afrika", "019": "Amerika", "009": "Óceánia", "001": "Világ" },
+    ro: { "150": "Europa", "142": "Asia", "002": "Africa", "019": "America", "009": "Oceania", "001": "Lume" },
+    bg: { "150": "Европа", "142": "Азия", "002": "Африка", "019": "Америка", "009": "Океания", "001": "Свят" }
+  };
+  Object.keys(REGION_I18N).forEach(function (tag) {
+    if (!I18N[tag]) return;
+    Object.keys(REGION_I18N[tag]).forEach(function (code) { I18N[tag]["region." + code] = REGION_I18N[tag][code]; });
+  });
   var RTL_LANGS = { ar: 1, fa: 1, he: 1, ur: 1, ps: 1, sd: 1, yi: 1, dv: 1, ug: 1, ckb: 1, mzn: 1, nqo: 1 };
   var BASE_LANG = "en";
   var currentLang = BASE_LANG;
   var pluralCache = {};
 
   function i18nDict() { return I18N[currentLang] || null; }
+
+  // The language the interface text is really written in: the chosen language when it has
+  // a dictionary, otherwise the English base. The chosen language is kept separately for
+  // direction, Intl formatting and names, so choosing an untranslated language never
+  // mislabels the page's text (W3C: declare the language the text is written in).
+  function uiTextLang() { return I18N[currentLang] ? currentLang : BASE_LANG; }
 
   function t(key, fallback, vars) {
     var d = i18nDict();
@@ -6544,10 +8163,13 @@
     var r = box.getBoundingClientRect();
     var w = Math.min(360, window.innerWidth - 16);
     aboutPop.style.width = w + "px";
-    var left = Math.min(r.left, window.innerWidth - w - 8);
-    if (left < 8) left = 8;
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
     aboutPop.style.left = left + "px";
-    aboutPop.style.top = (r.bottom + 6) + "px";
+    var top = Math.max(8, r.bottom + 6);
+    aboutPop.style.top = top + "px";
+    // Show the whole panel whenever the window has the room for it; cap it to the
+    // remaining height (and let the body scroll) only when the window is too short.
+    aboutPop.style.maxHeight = isMobileView() ? "" : Math.max(120, window.innerHeight - top - 8) + "px";
   }
   function openAbout() {
     if (!aboutPop || !aboutPop.hidden) return;
@@ -6602,20 +8224,20 @@
     document.addEventListener("pointerdown", function (e) {
       if (aboutPop.hidden) return;
       var t = e.target;
-      if (t.closest && (t.closest("#aboutPop") || t.closest("#titleBtn"))) return;
+      if (t.closest && (t.closest("#aboutPop") || t.closest("#titleBtn") || t.closest("#langPop"))) return;
       closeAbout();
     }, true);
     window.addEventListener("wheel", function (e) {
       if (aboutPop.hidden) return;
       var t = e.target;
-      if (t && t.closest && t.closest("#aboutPop")) return;
+      if (t && t.closest && (t.closest("#aboutPop") || t.closest("#langPop"))) return;
       closeAbout();
     }, { passive: true });
     document.addEventListener("keydown", function (e) {
       if (aboutPop.hidden) return;
-      if (e.key === "Escape") { closeAbout(); return; }
+      if (e.key === "Escape") { if (langPop && langPop.isOpen()) return; closeAbout(); return; }
       var t = e.target;
-      if (t && t.closest && t.closest("#aboutPop")) return;
+      if (t && t.closest && (t.closest("#aboutPop") || t.closest("#langPop"))) return;
       closeAbout();
     });
   }
@@ -8822,8 +10444,8 @@
 
   // ---------------------------------------------------------------- init
   // ---------------------------------------------------------------- language
-  // Resolve the UI language from ?lang, a saved choice, then the browser's own
-  // preferences, using BCP 47 tags canonicalised with Intl. English is the base.
+  // Resolve the UI language from the choice saved in the browser, then the browser's own
+  // preferred languages, using BCP 47 tags canonicalised with Intl. English is the base.
   function canonicalTag(tag) {
     if (!tag) return "";
     try {
@@ -8837,16 +10459,14 @@
   function supportedLang(tag) {
     var canon = canonicalTag(tag);
     if (!canon) return "";
-    if (I18N[canon]) return canon;
+    if (LANG_SET[canon]) return canon;
     var base = canon.split("-")[0].toLowerCase();
-    if (I18N[base]) return base;
-    if (base === "zh") return I18N["zh-Hans"] ? "zh-Hans" : (I18N["zh"] ? "zh" : "");
+    if (LANG_SET[base]) return base;
+    if (base === "zh") return "zh-Hans";
     return "";
   }
   function resolveLang() {
     var cands = [];
-    var q = urlParam("lang");
-    if (q) cands = cands.concat(String(q).split(","));
     try { var saved = localStorage.getItem("grokf.lang"); if (saved) cands.push(saved); } catch (e) {}
     if (navigator.languages && navigator.languages.length) cands = cands.concat(Array.prototype.slice.call(navigator.languages));
     else if (navigator.language) cands.push(navigator.language);
@@ -8879,61 +10499,168 @@
   var NATIVE_NAMES = {
     en: "English", es: "Espa\u00f1ol", fr: "Fran\u00e7ais", de: "Deutsch", pt: "Portugu\u00eas",
     it: "Italiano", nl: "Nederlands", pl: "Polski", ru: "\u0420\u0443\u0441\u0441\u043a\u0438\u0439", tr: "T\u00fcrk\u00e7e",
+    id: "Bahasa Indonesia", vi: "Ti\u1ebfng Vi\u1ec7t", fa: "\u0641\u0627\u0631\u0633\u06cc", ur: "\u0627\u0631\u062f\u0648", bn: "\u09ac\u09be\u0982\u09b2\u09be",
     hi: "\u0939\u093f\u0928\u094d\u0926\u0940", "zh-Hans": "\u7b80\u4f53\u4e2d\u6587", ja: "\u65e5\u672c\u8a9e", ko: "\ud55c\uad6d\uc5b4", ar: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629", he: "\u05e2\u05d1\u05e8\u05d9\u05ea"
   };
+  var dnCache = Object.create(null);
+  function displayNamesFor(locale) {
+    if (locale in dnCache) return dnCache[locale];
+    var dn = null;
+    try { if (typeof Intl !== "undefined" && Intl.DisplayNames) dn = new Intl.DisplayNames([locale], { type: "language" }); } catch (e) { dn = null; }
+    dnCache[locale] = dn;
+    return dn;
+  }
+  // Names are shown in the interface language when it has a dictionary, else in English.
+  function nameLocale() { return uiTextLang(); }
+  // The language's name in the interface language…
   function languageName(tag) {
-    try {
-      if (typeof Intl !== "undefined" && Intl.DisplayNames) {
-        var dn = new Intl.DisplayNames([currentLang], { type: "language" });
-        var name = dn.of(tag);
-        if (name && name !== tag) return name;
-      }
-    } catch (e) {}
+    var dn = displayNamesFor(nameLocale());
+    if (dn) { try { var n = dn.of(tag); if (n && n !== tag) return n; } catch (e) {} }
     return NATIVE_NAMES[tag] || tag;
   }
-  var langSelect = document.getElementById("langSelect");
-  function langKeys() {
-    var keys = Object.keys(I18N).sort();
-    if (keys.indexOf("en") < 0) keys.unshift("en");
-    return keys;
+  // …and the language's own name (autonym), used for the label and to widen the search.
+  function nativeName(tag) {
+    var dn = displayNamesFor(tag);
+    if (dn) { try { var n = dn.of(tag); if (n && n !== tag) return n; } catch (e) {} }
+    return NATIVE_NAMES[tag] || "";
   }
-  function buildLangSelect() {
-    if (!langSelect) return;
-    langSelect.textContent = "";
-    langKeys().forEach(function (tag) {
-      var o = document.createElement("option");
-      o.value = tag;
-      o.textContent = languageName(tag);
-      langSelect.appendChild(o);
+  // The English name, independent of the interface language.
+  function englishName(tag) {
+    var dn = displayNamesFor("en");
+    if (dn) { try { var n = dn.of(tag); if (n && n !== tag) return n; } catch (e) {} }
+    return NATIVE_NAMES[tag] || tag;
+  }
+  // What the picker shows: the English name, with the language's own name (autonym) in
+  // parentheses when it adds something, so the list reads the same whatever the interface
+  // language is (e.g. "Spanish (español)"). The autonym is left off when the English name
+  // already has parentheses ("Serbian (Latin)"), so the label never nests parentheses.
+  function langLabel(tag) {
+    var en = englishName(tag), own = nativeName(tag);
+    return own && own !== en && own !== tag && en.indexOf("(") < 0 ? en + " (" + own + ")" : en;
+  }
+  // ---- language picker: a searchable dialog grouped by geographic region ----
+  var langOpen = document.getElementById("langOpen");
+  var langPopEl = document.getElementById("langPop");
+  var langSearch = document.getElementById("langSearch");
+  var langListEl = document.getElementById("langList");
+  var langCurrentEl = document.getElementById("langCurrent");
+  // Case- and accent-fold for a forgiving search. Plain NFD plus marking-strip would
+  // also turn distinct Cyrillic letters into others (й→и, ё→е), so only Latin letters
+  // lose their combining marks; other scripts are left as written (W3C cyrl-lreq).
+  function langFold(s) { return String(s).toLowerCase().normalize("NFD").replace(/([a-z\u00c0-\u024f])\p{M}+/gu, "$1"); }
+  function langMatch(tag, q) {
+    if (!q) return true;
+    return langFold(langLabel(tag) + " " + languageName(tag) + " " + tag).indexOf(q) >= 0;
+  }
+  // Region names come from the dictionaries ("region.<UN M.49 code>"), not from Intl:
+  // Chromium's Intl.DisplayNames leaves the continent codes unresolved ("150" stays
+  // "150"), so headings would otherwise never translate. A locale without a row keeps English.
+  function regionName(code, fallback) { return t("region." + code, fallback); }
+  // A heading is the English region name (the LANG_REGIONS fallback), with the interface
+  // language's name in parentheses when it differs ("Europe (Europa)"), like the language
+  // labels. The comparison ignores case, so "World" is not shown as "World (world)".
+  function regionLabel(code, fallback) {
+    var tr = regionName(code, fallback);
+    return tr && tr.toLowerCase() !== fallback.toLowerCase() ? fallback + " (" + tr + ")" : fallback;
+  }
+  // Regions are listed alphabetically by their English name, so the order is stable
+  // whatever the interface language is.
+  var REGION_ORDER = LANG_REGIONS.slice().sort(function (a, b) {
+    return (a.fallback < b.fallback) ? -1 : (a.fallback > b.fallback) ? 1 : 0;
+  });
+  function renderLangList() {
+    if (!langListEl) return;
+    var q = langFold(langSearch ? langSearch.value : "");
+    var html = "";
+    REGION_ORDER.forEach(function (region) {
+      var rows = "";
+      region.tags.forEach(function (tag) {
+        if (!langMatch(tag, q)) return;
+        var sel = tag === currentLang;
+        rows += '<button type="button" role="option" aria-selected="' + (sel ? "true" : "false") +
+          '" class="lang-row' + (sel ? " current" : "") + '" data-tag="' + esc(tag) + '">' + esc(langLabel(tag)) + "</button>";
+      });
+      if (rows) html += '<div class="pop-sec">' + esc(regionLabel(region.code, region.fallback)) + "</div>" + rows;
     });
-    syncLangSelect();
+    if (!html) html = '<div class="pop-empty">Nothing to show.</div>';
+    langListEl.innerHTML = html;
   }
-  function syncLangSelect() { if (langSelect) langSelect.value = I18N[currentLang] ? currentLang : "en"; }
+  // Place the dialog inside the window: open on the roomier side of the trigger, cap
+  // its height to that room, and clamp its top so it never crosses a window edge.
+  function positionLangPop() {
+    if (!langOpen || !langPopEl) return;
+    var margin = 8, gap = 6;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var r = langOpen.getBoundingClientRect();
+    var w = Math.max(200, Math.min(340, vw - margin * 2));
+    langPopEl.style.width = w + "px";
+    langPopEl.style.left = Math.max(margin, Math.min(r.left, vw - w - margin)) + "px";
+    var spaceBelow = vh - (r.bottom + gap) - margin;
+    var spaceAbove = r.top - gap - margin;
+    var below = spaceBelow >= spaceAbove;
+    langPopEl.style.maxHeight = Math.min(vh - margin * 2, Math.max(160, below ? spaceBelow : spaceAbove)) + "px";
+    var h = langPopEl.offsetHeight;
+    var top = below ? r.bottom + gap : r.top - gap - h;
+    langPopEl.style.top = Math.max(margin, Math.min(top, vh - margin - h)) + "px";
+  }
+  function openLangPop() {
+    if (!langPopEl) return;
+    if (langSearch) langSearch.value = "";
+    renderLangList();
+    langPopEl.hidden = false;
+    if (langOpen) langOpen.setAttribute("aria-expanded", "true");
+    positionLangPop();
+    if (langSearch) langSearch.focus();
+  }
+  function closeLangPop() {
+    if (!langPopEl) return;
+    langPopEl.hidden = true;
+    if (langOpen) langOpen.setAttribute("aria-expanded", "false");
+  }
+  function pickLanguage(tag) {
+    if (!tag) return;
+    try { localStorage.setItem("grokf.lang", tag); } catch (e) {}
+    closeLangPop();
+    applyLang(tag);
+    if (aboutPop && !aboutPop.hidden) positionAbout();   // a direction change moves the panel's anchor
+  }
+  if (langOpen) langOpen.addEventListener("click", function () { if (langPopEl.hidden) openLangPop(); else closeLangPop(); });
+  if (langSearch) langSearch.addEventListener("input", renderLangList);
+  if (langListEl) langListEl.addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest(".lang-row") : null;
+    if (b) pickLanguage(b.getAttribute("data-tag"));
+  });
+  window.addEventListener("resize", function () { if (langPopEl && !langPopEl.hidden) positionLangPop(); });
+  var langPop = { isOpen: function () { return !!(langPopEl && !langPopEl.hidden); }, popEl: langPopEl, openEl: langOpen, close: closeLangPop };
+  popovers.push(langPop);   // outside-click and Escape close it like the other pickers
   function applyLang(lang) {
-    currentLang = I18N[lang] ? lang : BASE_LANG;
-    document.documentElement.lang = currentLang;
+    currentLang = canonicalTag(lang) || BASE_LANG;   // any language; a missing dictionary falls back to English
+    // Declare the language the interface text is actually written in (the chosen one only
+    // when it has a dictionary, otherwise English); the writing direction still follows the
+    // chosen language's script, and Intl formatting and names follow the chosen language.
+    document.documentElement.lang = uiTextLang();
     document.documentElement.dir = dirFor(currentLang);
+    if (langCurrentEl) langCurrentEl.textContent = langLabel(currentLang);
     applyStaticI18n();
     updateFilterSummary();
     if (bundleFiles) updateStats();
-    syncLangSelect();
+    if (langPopEl && !langPopEl.hidden) renderLangList();   // names and selection follow the new language
   }
-  if (langSelect) langSelect.addEventListener("change", function () {
-    var v = langSelect.value;
-    try { localStorage.setItem("grokf.lang", v); } catch (e) {}
-    applyLang(v);
-    try { var u = new URL(location.href); u.searchParams.set("lang", v); history.replaceState(history.state, "", u.href); } catch (e) {}
-    // The selector now lives in the About panel, which is anchored to the title; a
-    // direction change moves that anchor, so re-place the panel.
-    if (aboutPop && !aboutPop.hidden) positionAbout();
-  });
 
   resize();
   view.x = W / 2; view.y = H / 2;
   initMascot();
   initDeck();
-  buildLangSelect();
   applyLang(resolveLang());
+  // A leftover ?lang in the URL (from before the parameter was removed) is dropped, so an
+  // old link is cleaned up rather than leaving an inert parameter in the address bar.
+  try {
+    var langUrl = new URL(location.href);
+    if (langUrl.searchParams.has("lang")) {
+      langUrl.searchParams.delete("lang");
+      history.replaceState(history.state, "", langUrl.href);
+    }
+  } catch (e) {}
   // Start on the About panel instead of the bundle dialog. It stays until the
   // user interacts with the interface, while auto-loading runs underneath.
   openAbout();
