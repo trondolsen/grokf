@@ -9760,6 +9760,13 @@
   }
   function stackForDeck(i) { return deckBodyEl.querySelector(':scope > .deck-stack[data-deck="' + i + '"]'); }
   function activeStack() { return deckBodyEl.querySelector(":scope > .deck-stack.active"); }
+  // Bring a deck into the column's view, and remember where that leaves the scroll so a
+  // re-render keeps it. Used when a drop starts a new deck, which lands below the others.
+  function revealStack(stack) {
+    if (!stack || !stack.scrollIntoView) return;
+    stack.scrollIntoView({ block: "nearest" });
+    deckScrollOffset = deckBodyEl.scrollTop - deckRoomPx;
+  }
 
   function renderDeck() {
     if (!deckEl) return;
@@ -9942,16 +9949,10 @@
       }
     }
     // Nothing under the pointer: fill the active deck while it is still empty, else start
-    // a fresh one — unless the panel is already full and a deck would not fit.
+    // a fresh one. The column scrolls, so a new deck always has room; only the cap blocks it.
     if (!deck.length) return { kind: "deck", deck: activeDeck, slot: 0 };
-    if (deckPanelFull() || decks.length >= MAX_DECKS) return null;
+    if (decks.length >= MAX_DECKS) return null;
     return { kind: "new" };
-  }
-  // The panel is full when the decks already fill its scroll area, so a new deck has no
-  // room and a card dropped clear of the decks will not start one. The scroll room above
-  // and below (#deckBody::before/::after) is not part of the decks, so it is discounted.
-  function deckPanelFull() {
-    return (deckBodyEl.scrollHeight - 2 * deckRoomPx) > deckBodyEl.clientHeight + 1;
   }
   // Slot at which a page released at this y belongs in the given stack (0 = top).
   function deckSlotAt(stack, y, h) {
@@ -10115,7 +10116,8 @@
     cancelCardDrag();
     if (!node || !target) { renderDeck(); return; }
     if (target.kind === "new") {
-      // Released clear of every deck: start a new deck holding just this page.
+      // Released clear of every deck: start a new deck holding just this page. The column
+      // scrolls, so a new deck always has room; it is brought into view below.
       createDeck();
       if (!deckHas(node.path)) deck.push({ path: node.path, sub: null, open: false });
     } else {
@@ -10126,6 +10128,7 @@
       useDeck(target.deck);
     }
     renderDeck();
+    if (target.kind === "new") revealStack(activeStack());
     flashDeckCard(node.path);
   }
 

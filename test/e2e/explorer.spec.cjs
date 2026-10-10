@@ -554,3 +554,42 @@ test('fjerner et foreldet ?lang fra adressen', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 });
+
+test('starter en ny kortstokk når panelet er fullt', async ({ page }) => {
+  // The project bundle declares decks (Tour, Model). In a short window they fill the
+  // column, and a card released clear of them must still start a new deck.
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await page.goto(`${explorer}?bundle=index.md&depth=all`);
+  await expect(page.locator('#spinner')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await page.clock.runFor(2000);
+  const before = await page.locator('#deckBody > .deck-stack').count();
+  expect(before).toBeGreaterThan(0);
+  // Precondition: the decks already fill the column's visible area.
+  const full = await page.evaluate(() => {
+    const b = document.getElementById('deckBody');
+    const room = parseFloat(b.style.getPropertyValue('--deck-room')) || 0;
+    return (b.scrollHeight - 2 * room) > b.clientHeight + 1;
+  });
+  expect(full).toBe(true);
+  // Pick a concept node clear of the docked panel.
+  const label = await page.evaluate(() => {
+    const g = window.graphLabels;
+    return Object.keys(g).find(k => !k.endsWith('/') && g[k].x < 700 && g[k].y > 80);
+  });
+  expect(label).toBeTruthy();
+  const p = await page.evaluate(l => window.graphLabels[l], label);
+  const cv = await page.locator('#c').boundingBox();
+  await page.mouse.move(cv.x + p.x, cv.y + p.y);
+  await page.mouse.down();
+  await page.clock.runFor(600);                       // the press-hold starts the card drag
+  const deck = await page.locator('#deck').boundingBox();
+  await page.mouse.move(deck.x + deck.width / 2, deck.y + 30, { steps: 8 });
+  await page.clock.runFor(50);
+  // Clear of every stack the drop site turns dashed…
+  await expect(page.locator('#deck')).toHaveClass(/\bnewdeck\b/);
+  await page.mouse.up();
+  await page.clock.runFor(50);
+  // …and the release starts a new deck even though the column was full.
+  await expect(page.locator('#deckBody > .deck-stack')).toHaveCount(before + 1);
+});
