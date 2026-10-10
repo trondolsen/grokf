@@ -267,6 +267,52 @@ test('viser mobilmeny og filtre ved 390 × 844', async ({ page }) => {
   await expect(page.locator('#search')).not.toBeInViewport();
 });
 
+test('åpner .runtime fra Om-panelet og oppdaterer siden mens den leses', async ({ page }) => {
+  await loadBundle(page);
+  await page.locator('#titleBtn').click();
+  await expect(page.locator('#aboutPop')).toBeVisible();
+  await expect(page.locator('#aboutRuntime')).toBeVisible();
+  await expect(page.locator('#aboutRuntime')).toHaveCSS('color', 'rgb(201, 162, 77)');
+  const sourceBox = await page.locator('#aboutPop .about-links a').first().boundingBox();
+  const runtimeBox = await page.locator('#aboutRuntime').boundingBox();
+  expect(runtimeBox.x).toBeGreaterThan(sourceBox.x + sourceBox.width - 1);
+  await page.locator('#aboutRuntime').click();
+  await expect(page.locator('#aboutPop')).toBeHidden();
+  await expect(page.locator('#graphPath')).toHaveText('.runtime/');
+  await expect(page.locator('#preview')).toHaveClass(/\bshow\b/);
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/index.md');
+  await expect(page.locator('#pvTitle')).toHaveText('Runtime');
+  await expect(page.locator('#pvBody')).toContainText('Loaded');
+
+  // The performance page reports the browser's own measurements.
+  await page.locator('#pvBody').getByRole('link', { name: 'Performance', exact: true }).click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/performance.md');
+  await expect(page.locator('#pvBody')).toContainText('CPU threads');
+  await expect(page.locator('#pvBody')).toContainText('Frame rate');
+  // The trends are vector charts, collected one sample per second.
+  await expect(page.locator('#pvBody .pv-charts')).toContainText('Collecting samples');
+  await page.clock.runFor(3000);
+  await expect(page.locator('#pvBody .pv-charts svg').first()).toBeVisible();
+  await expect(page.locator('#pvBody .pv-chart-head').first()).toContainText('Frame rate');
+  await page.locator('#pvBack').click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/index.md');
+
+  // The bundle page lists statistics for the URL hosts the files reference.
+  await page.locator('#pvBody').getByRole('link', { name: 'Bundle files', exact: true }).click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/bundle.md');
+  await expect(page.locator('#pvBody')).toContainText('Domains');
+  await expect(page.locator('#pvBody')).toContainText('No external links');
+  await page.locator('#pvBack').click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/index.md');
+
+  // Follow a generated link, then watch the page update while it is read.
+  await page.locator('#pvBody').getByRole('link', { name: 'Status', exact: true }).click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/status.md');
+  await expect(page.locator('#pvBody')).toContainText('Search: (none)');
+  await page.locator('#search').fill('guide');
+  await expect(page.locator('#pvBody')).toContainText('Search: guide');
+});
+
 test('laster prosjektets kunnskapsindeks som en separat røykprøve', async ({ page }) => {
   await page.goto(`${explorer}?bundle=index.md&depth=all`);
   await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);

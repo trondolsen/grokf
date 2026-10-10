@@ -332,7 +332,8 @@
   #aboutPop code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
   #aboutPop a { color: var(--accent); text-decoration: none; }
   #aboutPop a:hover { text-decoration: underline; }
-  #aboutPop .about-links { margin: 10px 0 0; }
+  #aboutPop .about-links { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 10px 0 0; }
+  #aboutPop a.about-runtime { color: #c9a24d; }   /* the File node colour (FILE_COLOR) */
   #aboutPop .about-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-rev { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-toggle {
@@ -485,6 +486,19 @@
   #pvBody .pv-fields dt { color: var(--muted); font-size: 12px; line-height: 1.5; }
   #pvBody .pv-fields dd { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
   #pvBody .pv-attach-note { margin-top: 4px; }
+  #pvBody .pv-charts { margin: 6px 0 14px; }
+  #pvBody .pv-charts h2 { margin: 14px 0 6px; }
+  #pvBody .pv-chart { margin: 8px 0; }
+  #pvBody .pv-chart-head {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 12px; color: var(--muted); margin-bottom: 3px;
+  }
+  #pvBody .pv-chart svg { display: block; width: 100%; height: 40px; }
+  #pvBody .pv-chart .pv-line {
+    fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  #pvBody .pv-chart .pv-area { stroke: none; opacity: .16; }
   #pvBody .pv-sec { margin: 18px 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   #pvBody .pv-sec:first-of-type { margin-top: 4px; }
 
@@ -1006,6 +1020,7 @@
       <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
       <p class="about-links">
         <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener">Source on GitHub</a>
+        <a href="#" id="aboutRuntime" class="about-runtime">Runtime internals</a>
       </p>
     </div>
   </div>
@@ -1128,6 +1143,13 @@
   var bundleKnown = null;      // Map(path->file) of locally loaded files not yet shown
   var attemptedUrls = new Set();
   var prefetchLimited = false;  // true when ?depth limited the crawl (deeper markdown loads on demand)
+
+  // The synthetic ".runtime/" directory: generated pages that describe the app.
+  // `runtimeOn` flips on when the user opens it from the About panel; afterwards
+  // every bundle rebuild re-inserts the directory so the pages stay reachable.
+  var RUNTIME_DIR = ".runtime";
+  var runtimeOn = false;
+  var runtimeNodes = [];       // injected runtime concept nodes (regenerated while read)
 
   // Loads surfaced in the toolbar spinner. `fetchCount` is work in flight;
   // `queuedCount` is work already discovered but not started. Counting both
@@ -2047,6 +2069,8 @@
     var f = graphFocus, prefix = f ? f + "/" : "";
     nodes = allNodes.filter(function (n) {
       if (n.kind === "tag" && !showTags && !tagInclude.size && !tagExclude.size) return false;
+      // Runtime internals stay out of the way until the user opens .runtime.
+      if (n.runtime && f !== RUNTIME_DIR && f.indexOf(RUNTIME_DIR + "/") !== 0) return false;
       if (!matchesAttrFilters(n)) return false;
       if (f === "") return true;
       if (n.kind === "dir") return (n.path === f) || n.path.indexOf(prefix) === 0;
@@ -2095,6 +2119,7 @@
     relayout(true);
     updateStats();
     buildLegend();
+    refreshRuntime();
   }
 
   function setFocus(path) {
@@ -2105,6 +2130,7 @@
     updateGraphNav();
     updateStats();
     buildLegend();
+    refreshRuntime();
   }
 
   function enterDir(path) {
@@ -2465,7 +2491,7 @@
   // Frontmatter types present among concepts, sorted.
   function presentTypes() {
     var set = new Set();
-    allNodes.forEach(function (n) { if (n.kind === "concept") set.add(n.type || "(untyped)"); });
+    allNodes.forEach(function (n) { if (n.runtime || n.kind !== "concept") return; set.add(n.type || "(untyped)"); });
     return Array.from(set).sort();
   }
 
@@ -2764,6 +2790,7 @@
       if (alpha <= 0.15) autoFit = false;
     }
     draw();
+    perfTick();
     raf = requestAnimationFrame(loop);
   }
 
@@ -3948,6 +3975,557 @@
     return node.fileInfoPromise;
   }
 
+  // ------------------------------------------------------------ runtime
+  //
+  // A synthetic ".runtime/" directory that exposes the viewer's own state as
+  // generated Markdown pages. It is not part of the bundle: the path lives in a
+  // dot-directory, which validBundlePath() rejects, so it can never collide with
+  // a bundle file and is never fetched. Each page is regenerated at render time,
+  // so an open page updates while it is read as the state it describes changes.
+  var RUNTIME_PAGES = [
+    { id: "index.md", title: "Runtime",
+      description: "Generated pages that describe the running viewer." },
+    { id: "status.md", title: "Runtime status",
+      description: "The current load, navigation and filters." },
+    { id: "bundle.md", title: "Bundle files",
+      description: "Every file the viewer has loaded from the bundle." },
+    { id: "graph.md", title: "Graph",
+      description: "How the graph is composed from the bundle." },
+    { id: "performance.md", title: "Performance",
+      description: "CPU, GPU, memory and timing data the browser exposes." },
+    { id: "limits.md", title: "Limits",
+      description: "The bounds the viewer enforces, and the budget in use." }
+  ];
+
+  // Values can come from the bundle, which is untrusted, so each is flattened
+  // and wrapped in a code span; a backtick in a value cannot break out of it.
+  function rtText(v) {
+    var s = v == null ? "" : String(v);
+    s = s.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").replace(/\s+/g, " ").trim();
+    return s.length > 300 ? s.slice(0, 299) + "\u2026" : s;
+  }
+  function rtCode(v) { return "`" + rtText(v).replace(/`/g, "'") + "`"; }
+  function rtLine(label, value) { return "- " + label + ": " + rtCode(value) + "\n"; }
+  function rtRefLinks() { return allLinks.filter(function (l) { return l.kind === "ref" && !l.dup; }).length; }
+  function rtFilterCount() {
+    return tagInclude.size + tagExclude.size + kindInclude.size + kindExclude.size +
+      typeInclude.size + typeExclude.size + statusInclude.size + statusExclude.size;
+  }
+  function rtViewFiles() { return nodes.filter(function (n) { return n.kind !== "dir"; }).length; }
+  function rtViewLinks() { return links.filter(function (l) { return l.kind === "ref" && !l.dup; }).length; }
+
+  // ---- domains: the hosts of the http/https URLs in the loaded files ----
+  var RT_DOMAIN_URL_MAX = 2000;             // stop after this many URLs
+  var RT_DOMAIN_SCAN_MAX = 4 * 1024 * 1024; // stop after this many characters
+  var RT_DOMAIN_SHOW_MAX = 50;              // rows shown in the table
+  var rtDomainCache = {};
+
+  function rtHostOf(url) {
+    try {
+      var h = new URL(url).hostname;
+      return h ? String(h).replace(/\.$/, "").toLowerCase() : "";
+    } catch (e) { return ""; }
+  }
+
+  // Counts the URL hosts in the loaded files (body text and frontmatter alike).
+  // Bounded: only the first RT_DOMAIN_SCAN_MAX characters and the first
+  // RT_DOMAIN_URL_MAX URLs are read, and the result is cached per file set.
+  function rtDomains() {
+    if (!bundleFiles) return { domains: [], links: 0, files: 0, truncated: false };
+    if (rtDomainCache.gen === bundleGeneration && rtDomainCache.files === bundleFiles) return rtDomainCache.out;
+    var byHost = Object.create(null), fileSet = Object.create(null);
+    var totalLinks = 0, seenFiles = 0, scanned = 0, truncated = false;
+    var urlRe = /https?:\/\/[^\s<>"'`)\]}]+/gi;
+    for (var i = 0; i < bundleFiles.length; i++) {
+      var f = bundleFiles[i];
+      var text = f && typeof f.text === "string" ? f.text : "";
+      if (!text) continue;
+      if (scanned >= RT_DOMAIN_SCAN_MAX) { truncated = true; break; }
+      if (scanned + text.length > RT_DOMAIN_SCAN_MAX) { text = text.slice(0, RT_DOMAIN_SCAN_MAX - scanned); truncated = true; }
+      scanned += text.length;
+      urlRe.lastIndex = 0;
+      var m;
+      while ((m = urlRe.exec(text))) {
+        if (totalLinks >= RT_DOMAIN_URL_MAX) { truncated = true; break; }
+        var host = rtHostOf(m[0].replace(/[.,;:!?]+$/, ""));
+        if (!host) continue;
+        totalLinks++;
+        var e = byHost[host] || (byHost[host] = { linkCount: 0, fileCount: 0, files: Object.create(null) });
+        e.linkCount++;
+        if (!e.files[f.path]) { e.files[f.path] = 1; e.fileCount++; }
+        if (!fileSet[f.path]) { fileSet[f.path] = 1; seenFiles++; }
+      }
+    }
+    var list = Object.keys(byHost).map(function (h) { return { host: h, n: byHost[h].linkCount, files: byHost[h].fileCount }; });
+    list.sort(function (a, b) { return b.n - a.n || (a.host < b.host ? -1 : a.host > b.host ? 1 : 0); });
+    var out = { domains: list, links: totalLinks, files: seenFiles, truncated: truncated };
+    rtDomainCache = { gen: bundleGeneration, files: bundleFiles, out: out };
+    return out;
+  }
+
+  // ---- performance probes: only what the browser actually exposes ----
+  // Browsers hide most CPU and GPU accounting, so the performance page reports
+  // the closest proxy (thread count, frame rate, long tasks, renderer string)
+  // and says plainly when a value is unavailable.
+  var perfState = {
+    frames: 0, frameStart: 0, fps: 0, refreshAt: 0,
+    longTasks: 0, blockingMs: 0, observers: false, longTaskSupported: false,
+    gpu: null, storage: null, storageProbed: false, storagePending: false
+  };
+
+  function perfNow() {
+    if (window.performance && typeof performance.now === "function") return performance.now();
+    return Date.now();
+  }
+
+  function initPerfObservers() {
+    if (perfState.observers) return;
+    perfState.observers = true;
+    if (typeof PerformanceObserver !== "function") return;
+    try {
+      var obs = new PerformanceObserver(function (list) {
+        list.getEntries().forEach(function (e) {
+          perfState.longTasks++;
+          perfState.blockingMs += e.duration || 0;
+        });
+      });
+      obs.observe({ entryTypes: ["longtask"] });
+      perfState.longTaskSupported = true;
+    } catch (e) {}
+  }
+
+  // GPU is only described, never measured: the renderer/vendor string via a
+  // throwaway WebGL context, cached after the first read.
+  function perfGpu() {
+    if (perfState.gpu) return perfState.gpu;
+    var info = { webgl: false, renderer: "", vendor: "" };
+    try {
+      var c = document.createElement("canvas");
+      var gl = c.getContext("webgl2") || c.getContext("webgl");
+      if (gl) {
+        info.webgl = true;
+        var ext = gl.getExtension("WEBGL_debug_renderer_info");
+        if (ext) {
+          info.renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || "";
+          info.vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || "";
+        } else {
+          info.renderer = gl.getParameter(gl.RENDERER) || "";
+          info.vendor = gl.getParameter(gl.VENDOR) || "";
+        }
+      }
+    } catch (e) {}
+    perfState.gpu = info;
+    return info;
+  }
+
+  function perfStorage() {
+    if (!perfState.storageProbed) {
+      perfState.storageProbed = true;
+      try {
+        if (navigator.storage && typeof navigator.storage.estimate === "function") {
+          perfState.storagePending = true;
+          navigator.storage.estimate().then(
+            function (e) { perfState.storage = e; perfState.storagePending = false; },
+            function () { perfState.storagePending = false; });
+        }
+      } catch (e) {}
+    }
+    return perfState.storage;
+  }
+
+  // Sampled once per animation frame by loop(): a rolling frame rate, a time
+  // series of a few metrics, and a throttled refresh of the open performance
+  // page so its vector charts and values keep moving.
+  function perfTick() {
+    var now = perfNow();
+    perfState.frames++;
+    var fpsUpdated = false;
+    if (!perfState.frameStart) {
+      perfState.frameStart = now;
+    } else if (now - perfState.frameStart >= 1000) {
+      perfState.fps = perfState.frames * 1000 / (now - perfState.frameStart);
+      perfState.frames = 0;
+      perfState.frameStart = now;
+      fpsUpdated = true;
+    }
+    if (runtimeOn && pvCurrent && pvCurrent.runtimePage === "performance.md") {
+      if (fpsUpdated) perfSeriesSample();
+      if (now - perfState.refreshAt >= 1000) {
+        perfState.refreshAt = now;
+        refreshRuntime();
+      }
+    }
+  }
+
+  // A bounded ring of one sample per second, collected only while the
+  // performance page is open. fps is measured here; heap (Blink only) and
+  // blocking time (only where long tasks are reported) may stay empty.
+  var PERF_SERIES_MAX = 60;   // about a minute
+  var perfSeries = { fps: [], heap: [], block: [] };
+  var perfSeriesPath = null;  // the page the current series belongs to
+
+  function perfSeriesReset() { perfSeries.fps = []; perfSeries.heap = []; perfSeries.block = []; }
+
+  function perfSeriesSample() {
+    var mem = (window.performance && performance.memory) || null;
+    perfSeries.fps.push(perfState.fps);
+    perfSeries.heap.push(mem ? mem.usedJSHeapSize : null);
+    perfSeries.block.push(perfState.longTaskSupported ? perfState.blockingMs : null);
+    ["fps", "heap", "block"].forEach(function (k) {
+      if (perfSeries[k].length > PERF_SERIES_MAX) perfSeries[k].shift();
+    });
+  }
+
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  // A vector sparkline: a line with a soft area under it, scaled to this
+  // window's own min and max. Built through the DOM (never from a string), so
+  // nothing here can inject markup.
+  function perfSparkSvg(values, color) {
+    if (!values.some(isNum)) return null;
+    var W = 300, H = 40, P = 3;
+    var nums = values.filter(isNum);
+    var min = Math.min.apply(null, nums), max = Math.max.apply(null, nums);
+    var span = (max - min) || 1;
+    var n = values.length;
+    function px(i) { return n <= 1 ? W / 2 : P + (W - 2 * P) * (i / (n - 1)); }
+    function py(v) { return H - P - (H - 2 * P) * ((v - min) / span); }
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("role", "img");
+    var segs = [], cur = [];
+    for (var i = 0; i < n; i++) {
+      if (isNum(values[i])) cur.push([px(i), py(values[i])]);
+      else if (cur.length) { segs.push(cur); cur = []; }
+    }
+    if (cur.length) segs.push(cur);
+    segs.forEach(function (seg) {
+      if (seg.length === 1) {
+        var dot = document.createElementNS(SVG_NS, "circle");
+        dot.setAttribute("cx", seg[0][0].toFixed(2));
+        dot.setAttribute("cy", seg[0][1].toFixed(2));
+        dot.setAttribute("r", "2.4");
+        dot.setAttribute("fill", color);
+        svg.appendChild(dot);
+        return;
+      }
+      var area = document.createElementNS(SVG_NS, "path");
+      area.setAttribute("class", "pv-area");
+      area.setAttribute("fill", color);
+      area.setAttribute("d", "M " + seg[0][0].toFixed(2) + " " + H + " " +
+        seg.map(function (p) { return "L " + p[0].toFixed(2) + " " + p[1].toFixed(2); }).join(" ") +
+        " L " + seg[seg.length - 1][0].toFixed(2) + " " + H + " Z");
+      svg.appendChild(area);
+      var line = document.createElementNS(SVG_NS, "polyline");
+      line.setAttribute("class", "pv-line");
+      line.setAttribute("stroke", color);
+      line.setAttribute("points", seg.map(function (p) { return p[0].toFixed(2) + "," + p[1].toFixed(2); }).join(" "));
+      svg.appendChild(line);
+    });
+    return svg;
+  }
+
+  function perfChartRow(label, values, color, fmt) {
+    var nums = values.filter(isNum);
+    if (!nums.length) return null;
+    var row = document.createElement("div");
+    row.className = "pv-chart";
+    var head = document.createElement("div");
+    head.className = "pv-chart-head";
+    var name = document.createElement("span");
+    name.textContent = label;
+    var stat = document.createElement("span");
+    stat.textContent = "now " + fmt(nums[nums.length - 1]) +
+      " \u00b7 min " + fmt(Math.min.apply(null, nums)) +
+      " \u00b7 max " + fmt(Math.max.apply(null, nums));
+    head.appendChild(name);
+    head.appendChild(stat);
+    row.appendChild(head);
+    var svg = perfSparkSvg(values, color);
+    if (svg) row.appendChild(svg);
+    return row;
+  }
+
+  // Mount the vector trend charts into the open preview, under the page title.
+  function mountPerfCharts() {
+    if (!pvBody) return;
+    var old = pvBody.querySelector(".pv-charts");
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var box = document.createElement("div");
+    box.className = "pv-charts";
+    var h = document.createElement("h2");
+    h.textContent = "Trends";
+    box.appendChild(h);
+    var n = perfSeries.fps.length;
+    if (!n) {
+      var p = document.createElement("p");
+      p.className = "pv-note";
+      p.textContent = "Collecting samples\u2026 the charts build up while this page is open, one sample per second.";
+      box.appendChild(p);
+    } else {
+      [
+        perfChartRow("Frame rate", perfSeries.fps, "#5b8def", function (v) { return v.toFixed(1) + " fps"; }),
+        perfChartRow("JS heap used", perfSeries.heap, "#3fb98a", formatBytes),
+        perfChartRow("Blocking time", perfSeries.block, "#c06a5b", function (v) { return v.toFixed(0) + " ms"; })
+      ].forEach(function (r) { if (r) box.appendChild(r); });
+      var note = document.createElement("p");
+      note.className = "pv-note";
+      note.textContent = n + " sample" + (n === 1 ? "" : "s") + ", one per second, oldest to newest.";
+      box.appendChild(note);
+    }
+    var h1 = pvBody.querySelector("h1");
+    if (h1 && h1.parentNode === pvBody) pvBody.insertBefore(box, h1.nextSibling);
+    else pvBody.insertBefore(box, pvBody.firstChild);
+  }
+
+  function runtimeBody(page) {
+    var out = "";
+    if (page === "index.md") {
+      out += "# Runtime\n\n";
+      out += "The viewer generated this directory while you read it. `.runtime/` is a " +
+        "synthetic directory, not part of the bundle, and its pages describe the running app.\n\n";
+      out += "- [Status](status.md) \u2014 the current load, navigation and filters\n";
+      out += "- [Bundle files](bundle.md) \u2014 every file the viewer has loaded\n";
+      out += "- [Graph](graph.md) \u2014 how the graph is composed\n";
+      out += "- [Performance](performance.md) \u2014 CPU, GPU, memory and timing\n";
+      out += "- [Limits](limits.md) \u2014 the bounds the viewer enforces\n\n";
+      out += rtLine("Loaded", (bundleFiles ? bundleFiles.length : 0) + " files");
+      out += rtLine("Links", rtRefLinks() + "");
+      return out;
+    }
+    if (page === "status.md") {
+      out += "# Runtime status\n\n";
+      out += rtLine("Revision", typeof REVISION === "undefined" ? "" : REVISION);
+      out += rtLine("Generation", bundleGeneration + "");
+      out += rtLine("Source", bundleRootUrl ? "web server" : "local folder");
+      out += rtLine("Bundle root", bundleRootUrl || "opened folder");
+      out += rtLine("Depth limit", urlDepth() === Infinity ? "all" : String(urlDepth()));
+      out += rtLine("Prefetch limited", prefetchLimited ? "yes" : "no");
+      out += rtLine("Graph focus", graphFocus === "" ? "/" : graphFocus + "/");
+      out += rtLine("Preview", previewPath || "(none)");
+      out += "- Search: " + (query ? rtCode(query) + " in " + rtCode(searchField || "all fields") : "(none)") + "\n";
+      out += rtLine("Show tags", showTags ? "on" : "off");
+      out += rtLine("Active filters", rtFilterCount() + "");
+      out += "\n## Focused graph\n\n";
+      out += rtLine("Files in view", rtViewFiles() + "");
+      out += rtLine("Links in view", rtViewLinks() + "");
+      return out;
+    }
+    if (page === "bundle.md") {
+      out += "# Bundle files\n\n";
+      var files = (bundleFiles || []).slice();
+      out += rtLine("Total", files.length + "");
+      out += rtLine("Markdown", files.filter(function (f) { return isMarkdownPath(f.path); }).length + "");
+      out += "\n";
+      var shown = files.slice(0, 200);
+      shown.sort(function (a, b) { return a.path < b.path ? -1 : a.path > b.path ? 1 : 0; });
+      shown.forEach(function (f) {
+        var n = fileMap && fileMap.get(f.path);
+        var line = "- " + rtCode(f.path);
+        if (n) {
+          if (n.type) line += " \u2014 " + rtCode(n.type);
+          if (n.status) line += " \u00b7 " + rtCode(n.status);
+          (n.tags || []).forEach(function (t) { line += " \u00b7 " + rtCode("#" + t); });
+        }
+        out += line + "\n";
+      });
+      if (files.length > shown.length) out += "\n" + rtLine("Not shown", (files.length - shown.length) + " more files");
+      var dom = rtDomains();
+      out += "\n## Domains\n\n";
+      out += "Hosts of the http and https URLs found in the loaded files (body text and frontmatter).\n\n";
+      if (!dom.links) {
+        out += "No external links found.\n";
+      } else {
+        out += rtLine("External links", dom.links + "");
+        out += rtLine("Distinct domains", dom.domains.length + "");
+        out += rtLine("Files with links", dom.files + "");
+        out += "\n| Domain | Links | Files |\n| --- | ---: | ---: |\n";
+        dom.domains.slice(0, RT_DOMAIN_SHOW_MAX).forEach(function (d) {
+          out += "| " + rtCode(d.host) + " | " + d.n + " | " + d.files + " |\n";
+        });
+        if (dom.domains.length > RT_DOMAIN_SHOW_MAX) out += "\n" + rtLine("Not shown", (dom.domains.length - RT_DOMAIN_SHOW_MAX) + " more domains");
+        if (dom.truncated) out += "- Scan: truncated at the cap\n";
+      }
+      return out;
+    }
+    if (page === "graph.md") {
+      out += "# Graph\n\n";
+      var byKind = Object.create(null), byType = Object.create(null);
+      allNodes.forEach(function (x) {
+        if (x.runtime || x.kind === "tag") return;
+        byKind[x.kind] = (byKind[x.kind] || 0) + 1;
+        if (x.kind === "concept") { var t = x.type || "(untyped)"; byType[t] = (byType[t] || 0) + 1; }
+      });
+      out += rtLine("Nodes", allNodes.length + "");
+      out += rtLine("Links", allLinks.length + "");
+      out += "\n## By kind\n\n";
+      Object.keys(byKind).sort().forEach(function (k) { out += rtLine(k, byKind[k] + ""); });
+      var types = Object.keys(byType).sort();
+      if (types.length) {
+        out += "\n## Concepts by type\n\n";
+        types.forEach(function (t) { out += rtLine(t, byType[t] + ""); });
+      }
+      out += "\n## Runtime\n\n";
+      out += rtLine("Generated pages", runtimeNodes.length + "");
+      return out;
+    }
+    if (page === "performance.md") {
+      initPerfObservers();
+      out += "# Performance\n\n";
+      out += "Values the browser exposes. Browsers hide most CPU and GPU accounting, so " +
+        "some rows give the closest proxy instead, and others state that the value is unavailable.\n\n";
+      out += "## Device\n\n";
+      out += rtLine("CPU threads", (navigator.hardwareConcurrency || "unknown") + "");
+      out += rtLine("Device memory", navigator.deviceMemory ? navigator.deviceMemory + " GB" : "not exposed");
+      out += rtLine("Platform", navigator.platform || "unknown");
+      out += rtLine("User agent", navigator.userAgent || "");
+      var gpu = perfGpu();
+      out += rtLine("WebGL", gpu.webgl ? "available" : "unavailable");
+      if (gpu.renderer) out += rtLine("GPU renderer", gpu.renderer);
+      if (gpu.vendor) out += rtLine("GPU vendor", gpu.vendor);
+      out += rtLine("WebGPU", navigator.gpu ? "available" : "unavailable");
+      out += "\n## Memory\n\n";
+      var mem = (window.performance && performance.memory) || null;
+      if (mem) {
+        out += rtLine("JS heap used", formatBytes(mem.usedJSHeapSize));
+        out += rtLine("JS heap total", formatBytes(mem.totalJSHeapSize));
+        out += rtLine("JS heap limit", formatBytes(mem.jsHeapSizeLimit));
+      } else {
+        out += "- JS heap: not exposed by this browser\n";
+      }
+      var st = perfStorage();
+      if (st && typeof st.usage === "number") {
+        out += rtLine("Storage used", formatBytes(st.usage));
+        out += rtLine("Storage quota", formatBytes(st.quota));
+      } else {
+        out += "- Storage estimate: " + (perfState.storagePending ? "reading\u2026" : "not available") + "\n";
+      }
+      out += "\n## Main thread\n\n";
+      out += rtLine("Frame rate", perfState.fps ? perfState.fps.toFixed(1) + " fps" : "measuring\u2026");
+      out += rtLine("Long tasks", String(perfState.longTasks));
+      out += rtLine("Blocking time", perfState.blockingMs.toFixed(0) + " ms");
+      out += rtLine("Time since load", (perfNow() / 1000).toFixed(1) + " s");
+      out += "\n## Timing\n\n";
+      var nav = null, resCount = 0, transfer = 0;
+      try {
+        var navs = performance.getEntriesByType("navigation");
+        nav = (navs && navs[0]) || null;
+        var res = performance.getEntriesByType("resource") || [];
+        resCount = res.length;
+        for (var ri = 0; ri < res.length; ri++) transfer += res[ri].transferSize || 0;
+      } catch (e) {}
+      if (nav) {
+        out += rtLine("DOM interactive", nav.domInteractive.toFixed(0) + " ms");
+        out += rtLine("DOM complete", nav.domComplete.toFixed(0) + " ms");
+        out += rtLine("Load complete", nav.loadEventEnd.toFixed(0) + " ms");
+      } else {
+        out += "- Navigation timing: not available\n";
+      }
+      out += rtLine("Resource entries", String(resCount));
+      out += rtLine("Resource transfer", formatBytes(transfer));
+      out += "\n## Entry types\n\n";
+      ["resource", "navigation", "paint", "mark", "measure", "longtask", "largest-contentful-paint", "layout-shift", "event"].forEach(function (t) {
+        var c = 0;
+        try { c = (performance.getEntriesByType(t) || []).length; } catch (e) {}
+        out += rtLine(t, String(c));
+      });
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn) {
+        out += "\n## Network\n\n";
+        if (conn.effectiveType) out += rtLine("Effective type", conn.effectiveType);
+        if (typeof conn.downlink === "number") out += rtLine("Downlink", conn.downlink + " Mb/s");
+        if (typeof conn.rtt === "number") out += rtLine("Round-trip time", conn.rtt + " ms");
+        if (typeof conn.saveData === "boolean") out += rtLine("Save data", conn.saveData ? "on" : "off");
+      }
+      return out;
+    }
+    // limits.md
+    out += "# Limits\n\n";
+    out += rtLine("Bundle files", MAX_BUNDLE_FILES + "");
+    out += rtLine("Bundle bytes", formatBytes(MAX_BUNDLE_BYTES));
+    out += rtLine("File bytes", formatBytes(MAX_FILE_BYTES));
+    out += rtLine("Graph nodes", MAX_GRAPH_NODES + "");
+    out += rtLine("Graph links", MAX_GRAPH_LINKS + "");
+    out += rtLine("References per file", MAX_REFERENCES_PER_FILE + "");
+    out += rtLine("Image bytes", formatBytes(MAX_IMAGE_BYTES));
+    out += rtLine("Image bytes total", formatBytes(MAX_IMAGE_TOTAL_BYTES));
+    out += rtLine("Preview images", MAX_PREVIEW_IMAGES + "");
+    out += rtLine("Markdown characters", MAX_MARKDOWN_CHARS + "");
+    out += rtLine("Rendered characters", MAX_RENDERED_CHARS + "");
+    out += rtLine("Markdown depth", MAX_MARKDOWN_DEPTH + "");
+    out += rtLine("Concurrent fetches", MAX_CONCURRENT_FETCHES + "");
+    out += rtLine("Pending fetches", MAX_PENDING_FETCHES + "");
+    out += rtLine("Fetch timeout", (FETCH_TIMEOUT_MS / 1000) + " s");
+    if (bundleBudget) {
+      out += "\n## Budget in use\n\n";
+      out += rtLine("Bytes charged", formatBytes(bundleBudget.bytes) + " of " + formatBytes(MAX_BUNDLE_BYTES));
+      out += rtLine("Paths charged", bundleBudget.paths.size + " of " + MAX_BUNDLE_FILES);
+    }
+    return out;
+  }
+
+  // Add the runtime directory and its pages to a graph. Safe to call with either
+  // the freshly built graph or the installed globals; it is idempotent.
+  function injectRuntimeInto(g) {
+    if (!g || !g.nodes || !g.links || !g.dirs || !g.files) return false;
+    if (g.files.has(RUNTIME_DIR + "/index.md")) return true;
+    if (g.nodes.length + RUNTIME_PAGES.length + 1 > MAX_GRAPH_NODES) return false;
+    if (g.links.length + RUNTIME_PAGES.length + 1 > MAX_GRAPH_LINKS) return false;
+    var dir = {
+      id: "dir:" + RUNTIME_DIR, path: RUNTIME_DIR, kind: "dir", label: RUNTIME_DIR,
+      type: "", title: "", description: "", children: [], runtime: true,
+      depth: 0, angle: 0, targetR: 0, x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+    };
+    g.nodes.push(dir);
+    g.dirs.set(RUNTIME_DIR, dir);
+    var root = g.dirs.get("");
+    if (root) { root.children.push(dir); g.links.push({ source: root, target: dir, kind: "tree" }); }
+    runtimeNodes = [];
+    RUNTIME_PAGES.forEach(function (spec) {
+      var path = RUNTIME_DIR + "/" + spec.id;
+      var n = {
+        id: path, path: path, kind: "concept", type: "Runtime",
+        title: spec.title, description: spec.description, tags: [], status: "",
+        fm: {}, body: "", src: null, pdfMeta: null, metaPromise: null, runtime: true, runtimePage: spec.id,
+        children: [], depth: 0, angle: 0, targetR: 0, x: 0, y: 0, vx: 0, vy: 0, fx: null, fy: null, degree: 0
+      };
+      g.nodes.push(n);
+      g.files.set(path, n);
+      runtimeNodes.push(n);
+      dir.children.push(n);
+      g.links.push({ source: dir, target: n, kind: "tree" });
+    });
+    return true;
+  }
+
+  // Open the runtime directory from the About panel: inject it on first use,
+  // enter it, and preview its index page.
+  function openRuntime() {
+    closeAbout();
+    if (!fileMap || !dirNodes) return;
+    runtimeOn = true;
+    if (!fileMap.has(RUNTIME_DIR + "/index.md") &&
+        !injectRuntimeInto({ nodes: allNodes, links: allLinks, dirs: dirNodes, files: fileMap })) return;
+    enterDir(RUNTIME_DIR);
+    var index = fileMap.get(RUNTIME_DIR + "/index.md");
+    if (index) openPreview(index);
+  }
+
+  // Regenerate the open runtime page when the state it describes changes, so it
+  // updates while it is read. Scroll position is preserved across the refresh.
+  function refreshRuntime() {
+    if (!runtimeOn || typeof pvCurrent === "undefined" || !pvCurrent || !pvCurrent.runtime) return;
+    if (!preview || !preview.classList.contains("show")) return;
+    if (typeof deckReading === "function" && deckReading()) return;
+    var node = (fileMap && fileMap.get(pvCurrent.path)) || pvCurrent;
+    var scroll = pvBody.scrollTop;
+    renderPreviewEntry(node);
+    pvBody.scrollTop = scroll;
+  }
+
   // ------------------------------------------------------------ preview
   var previewPath = null;
   var pvStack = [], pvIndex = -1, pvSuppress = false, pvPushed = false;
@@ -3965,6 +4543,14 @@
     pvCurrent = node;
     pvTitle.textContent = displayLabel(node);
     pvPath.textContent = node.path || "";
+    if (node.runtime) node.body = runtimeBody(node.runtimePage);
+    // A freshly opened performance page starts a new time series; refreshing the
+    // same page keeps the series it has collected.
+    if (node.runtime && node.runtimePage === "performance.md") {
+      if (perfSeriesPath !== node.path) { perfSeriesReset(); perfSeriesPath = node.path; }
+    } else {
+      perfSeriesPath = null;
+    }
     if (node.kind === "attachment") {
       if (imageKind(node.path)) renderImagePreview(node);
       else renderAttachmentPreview(node);
@@ -3982,6 +4568,7 @@
       pvBody.innerHTML = (metaHtml ? '<div class="md-meta">' + metaHtml + "</div>" : "") +
         renderMarkdown(node.body || "");
     }
+    if (node.runtime && node.runtimePage === "performance.md") mountPerfCharts();
     hydratePreviewImages();
     preview.classList.add("show");
     // The preview reuses one scroll container across entries; reset it once the
@@ -4542,9 +5129,9 @@
   graphBackBtn.addEventListener("click", graphBack);
   graphFwdBtn.addEventListener("click", graphForward);
   graphTopBtn.addEventListener("click", graphTop);
-  searchEl.addEventListener("input", function () { query = searchEl.value.trim(); updateFilterSummary(); });
+  searchEl.addEventListener("input", function () { query = searchEl.value.trim(); updateFilterSummary(); refreshRuntime(); });
   var searchFieldEl = document.getElementById("searchField");
-  searchFieldEl.addEventListener("change", function () { searchField = searchFieldEl.value; });
+  searchFieldEl.addEventListener("change", function () { searchField = searchFieldEl.value; refreshRuntime(); });
 
   // ---------------------------------------------------------------- install
   // A PWA install affordance and the optional service worker. Both are
@@ -4784,6 +5371,11 @@
         aboutPop.classList.remove("collapsible");
       });
     }
+    // "Runtime internals" opens the synthetic .runtime directory in the graph.
+    var aboutRuntimeLink = document.getElementById("aboutRuntime");
+    if (aboutRuntimeLink) {
+      aboutRuntimeLink.addEventListener("click", function (e) { e.preventDefault(); openRuntime(); });
+    }
     // The panel is the startup screen: it stays until the user interacts with the
     // interface outside it. Its own controls (the title toggle, the expand toggle and
     // the scrolling body) are not a dismissal.
@@ -4993,6 +5585,7 @@
     }
     try {
       var graph = buildGraph(files);
+      if (runtimeOn) injectRuntimeInto(graph);
       if (!preserve) { bundleGeneration++; resetBundleResources(); legendFilter.clear(); }
       bundleBudget = nextBudget;
       bundleFiles = files;
@@ -5042,6 +5635,7 @@
       computeAllTags();
       updateStats();
       updateGraphNav();
+      refreshRuntime();
       if (!raf) loop();
     } catch (e) {
       overlay.classList.add("show");
@@ -5996,7 +6590,7 @@
 
   // Only a concept can be carded into a deck; a directory, index file, plaintext file,
   // attachment or tag is not a concept.
-  function cardable(n) { return !!n && n.kind === "concept"; }
+  function cardable(n) { return !!n && n.kind === "concept" && !n.runtime; }
   function addCard(node, atTop) {
     if (!cardable(node)) return;
     if (deckHas(node.path)) { flashDeckCard(node.path); return; }

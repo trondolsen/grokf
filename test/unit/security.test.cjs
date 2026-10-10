@@ -426,6 +426,26 @@ test('multi-line list items keep indented continuations inside the item', t => {
   assertInert(bullet);
 });
 
+test('runtime domain statistics count URL hosts across the loaded files', t => {
+  const { api } = harness(t);
+  api.bundleGeneration = 1;
+  api.bundleFiles = [
+    { path: 'a.md', text: 'See [x](https://Example.com/a) and https://example.com/b.' },
+    { path: 'b.md', text: 'Mail https://other.example.org/x' }
+  ];
+  const d = api.rtDomains();
+  assert.equal(d.links, 3);
+  assert.equal(d.files, 2);
+  assert.equal(d.domains.map(x => x.host).join(','), 'example.com,other.example.org');
+  const byHost = Object.fromEntries(d.domains.map(x => [x.host, x]));
+  assert.equal(byHost['example.com'].n, 2);
+  assert.equal(byHost['example.com'].files, 1);
+  assert.equal(byHost['other.example.org'].n, 1);
+  const md = api.runtimeBody('bundle.md');
+  assert.ok(md.indexOf('| Domain | Links | Files |') >= 0, 'domain table header');
+  assert.ok(md.indexOf('`example.com` | 2 | 1') >= 0, 'example.com row');
+});
+
 test('dangerous Markdown URL schemes cannot become active hrefs', t => {
   const { api } = harness(t);
   for (const target of ['javascript:alert(1)', 'data:text/html,evil', 'vbscript:evil', '//evil.test/note.md', 'https://user:pass@example.test/', 'https://example.test/%0aevil']) {
