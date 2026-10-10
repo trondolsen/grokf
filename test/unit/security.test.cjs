@@ -446,6 +446,22 @@ test('runtime domain statistics count URL hosts across the loaded files', t => {
   assert.ok(md.indexOf('`example.com` | 2 | 1') >= 0, 'example.com row');
 });
 
+test('bidi base direction follows the first strong character', t => {
+  const { api } = harness(t);
+  assert.equal(api.bidiBaseDir('docs/x.md'), 'ltr');
+  assert.equal(api.bidiBaseDir('nested/'), 'ltr');
+  assert.equal(api.bidiBaseDir('123/'), 'ltr');      // no strong character
+  assert.equal(api.bidiBaseDir('دليل'), 'rtl');      // Arabic
+  assert.equal(api.bidiBaseDir('שלום'), 'rtl');      // Hebrew
+  assert.equal(api.bidiBaseDir('abc دليل'), 'ltr');  // first strong is Latin
+});
+
+test('translated messages isolate interpolated values with bdi', t => {
+  const { api } = harness(t);
+  const html = api.tHtml('msg.sameOrigin', 'Bundle must be a same-origin path: {0}', { 0: 'https://x/<b>&' });
+  assert.equal(html, 'Bundle must be a same-origin path: <bdi dir="auto">https://x/&lt;b&gt;&amp;</bdi>');
+});
+
 test('dangerous Markdown URL schemes cannot become active hrefs', t => {
   const { api } = harness(t);
   for (const target of ['javascript:alert(1)', 'data:text/html,evil', 'vbscript:evil', '//evil.test/note.md', 'https://user:pass@example.test/', 'https://example.test/%0aevil']) {

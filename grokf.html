@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -76,6 +76,10 @@
 
   /* The top nav sits above the docked deck (z-index 19) so an open nav or a long
      deck cannot cover it, but below the docked panels (z-index 21). */
+  /* Panel slide directions follow the writing direction: `--panel-off-end` moves a
+     panel off its inline-end edge, `--panel-off-start` off its inline-start edge. */
+  :root { --panel-off-end: 100%; --panel-off-start: -100%; --dir-flip: 1; }
+  [dir="rtl"] { --panel-off-end: -100%; --panel-off-start: 100%; --dir-flip: -1; }
   .bar {
     position: fixed; top: 12px; left: 12px; right: 12px; z-index: 20;
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -112,7 +116,7 @@
      filter menu). z-index is above the loading overlay so it stays visible
      during local folder reads. */
   #spinner {
-    position: fixed; top: 12px; right: 12px; z-index: 31; pointer-events: none;
+    position: fixed; top: 12px; inset-inline-end: 12px; z-index: 31; pointer-events: none;
     color: var(--muted); font-variant-numeric: tabular-nums;
   }
   #spinner[hidden] { display: none; }
@@ -124,7 +128,7 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #spinner .spin { animation-duration: 1.8s; } }
   /* Desktop: sit just left of the docked filter sidebar when it is open. */
-  @media (min-width: 761px) { body:not(.hide-side) #spinner { right: 324px; } }
+  @media (min-width: 761px) { body:not(.hide-side) #spinner { inset-inline-end: 324px; } }
   button, label.btn {
     appearance: none; border: 1px solid var(--line); background: var(--panel-2);
     color: var(--text); border-radius: 8px; padding: 6px 10px; cursor: pointer;
@@ -142,7 +146,7 @@
   input[type="search"]:focus { outline: none; border-color: var(--accent); }
 
   #legend {
-    position: fixed; left: 12px; bottom: 12px;
+    position: fixed; inset-inline-start: 12px; bottom: 12px;
     background: var(--panel);
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
@@ -155,23 +159,23 @@
   .lg:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .lg.off { opacity: .4; }
   .lg .sw, .sw { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-  .lg .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .lg .n { margin-inline-start: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-  body:not(.hide-side) .bar { right: 324px; }
+  body:not(.hide-side) .bar { inset-inline-end: 324px; }
 
   #sidebar {
     /* Above the docked deck (z-index 19) so the filter panel is never covered. */
-    position: fixed; top: 0; right: 0; bottom: 0; width: 312px; z-index: 21;
+    position: fixed; top: 0; inset-inline-end: 0; bottom: 0; width: 312px; z-index: 21;
     display: flex; flex-direction: column;
-    background: var(--panel); border-left: 1px solid var(--line);
+    background: var(--panel); border-inline-start: 1px solid var(--line);
     transform: translateX(0); transition: transform .18s ease;
   }
-  body.hide-side #sidebar { transform: translateX(100%); }
+  body.hide-side #sidebar { transform: translateX(var(--panel-off-end)); }
   .side-head {
     padding: 12px 14px; border-bottom: 1px solid var(--line);
     display: flex; align-items: baseline; gap: 8px; font-weight: 600;
   }
-  .side-head .meta { margin-left: auto; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .side-head .meta { margin-inline-start: auto; font-weight: 400; font-size: 12px; color: var(--muted); }
   .side-body { padding: 12px 14px 20px; overflow: auto; }
   .fld { display: block; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
   .fld input, .fld select {
@@ -191,7 +195,7 @@
   }
   .facet .row:hover { background: var(--panel-2); }
   .facet .row.on { background: var(--active); background: color-mix(in srgb, var(--accent) 24%, transparent); }
-  .facet .row .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .facet .row .n { margin-inline-start: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
   #clearFilters { width: 100%; margin-top: 8px; }
 
   .tagbox, .searchfld { margin-bottom: 12px; }
@@ -240,7 +244,7 @@
   .chip .cx { padding: 3px 8px 3px 4px; color: var(--muted); }
   .chip .cx:hover { background: rgba(255,255,255,.12); color: #fff; }
   .tagopen {
-    width: 100%; text-align: left; background: var(--panel-2);
+    width: 100%; text-align: start; background: var(--panel-2);
     border: 1px solid var(--line); color: var(--text); border-radius: 8px;
     padding: 6px 8px; font: inherit; cursor: pointer;
   }
@@ -264,7 +268,7 @@
     display: flex; align-items: center; gap: 8px;
     padding: 8px; border-top: 1px solid var(--line);
   }
-  .pop-foot .meta { color: var(--muted); font-size: 12px; margin-right: auto; }
+  .pop-foot .meta { color: var(--muted); font-size: 12px; margin-inline-end: auto; }
   .tg {
     border: 1px solid var(--line); background: transparent; color: var(--text);
     border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
@@ -309,7 +313,7 @@
   }
   #pvTagPop .tp-expand:hover { text-decoration: underline; }
   #pvTagPop .tp-item {
-    display: block; width: 100%; text-align: left; background: transparent;
+    display: block; width: 100%; text-align: start; background: transparent;
     border: 0; color: var(--text); font: inherit; padding: 6px 8px;
     border-radius: 8px; cursor: pointer;
   }
@@ -325,15 +329,24 @@
   /* "About" panel revealed by clicking the title. */
   #aboutPop { z-index: 45; width: auto; overflow: hidden; }
   #aboutPop .about-body { flex: 1 1 auto; min-height: 0; padding: 12px 14px; overflow: auto; line-height: 1.5; }
-  #aboutPop .about-logo { float: right; margin: 0 0 8px 12px; }
+  #aboutPop .about-logo { float: inline-end; margin: 0 0 8px 12px; }
   #aboutPop p { margin: 0 0 8px; }
-  #aboutPop ul { margin: 0 0 8px; padding-left: 18px; }
+  #aboutPop ul { margin: 0 0 8px; padding-inline-start: 18px; }
   #aboutPop li { margin: 4px 0; }
   #aboutPop code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
   #aboutPop a { color: var(--accent); text-decoration: none; }
   #aboutPop a:hover { text-decoration: underline; }
   #aboutPop .about-links { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 10px 0 0; }
   #aboutPop a.about-runtime { color: #c9a24d; }   /* the File node colour (FILE_COLOR) */
+  /* The language selector sits with the About panel's links and uses the Index node
+     colour (INDEX_COLOR), the way the runtime link uses the File colour. */
+  #aboutPop .about-lang { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
+  #aboutPop .about-lang label { flex: none; color: var(--index); }
+  #aboutPop .about-lang select {
+    flex: 1 1 auto; min-width: 0; padding: 6px 8px; border-radius: 8px; font: inherit; font-size: 13px;
+    background: var(--panel-2); color: var(--index); border: 1px solid var(--index);
+  }
+  #aboutPop .about-lang select:focus { outline: none; border-color: var(--index); }
   #aboutPop .about-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-rev { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   #aboutPop .about-toggle {
@@ -374,9 +387,9 @@
     box-shadow: 0 20px 60px rgba(0,0,0,.5);
   }
   #card h1 { margin: 0 0 6px; font-size: 19px; }
-  #card .card-logo { float: right; margin: 0 0 8px 12px; }
+  #card .card-logo { float: inline-end; margin: 0 0 8px 12px; }
   #card p { color: var(--muted); margin: 0 0 12px; }
-  #card ul { margin: 0 0 16px; padding-left: 20px; color: var(--text); }
+  #card ul { margin: 0 0 16px; padding-inline-start: 20px; color: var(--text); }
   #card li { margin: 5px 0; }
   #card code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
   #card .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -420,7 +433,7 @@
   /* The add-to-deck handle sits just left of Close, the pair pushed to the right edge. It
      is a small glyph that opens the deck menu, with the action named in its tooltip. */
   #pvHead #pvDeck {
-    margin-left: auto; padding: 3px 9px; font-size: 15px; line-height: 1;
+    margin-inline-start: auto; padding: 3px 9px; font-size: 15px; line-height: 1;
     background: transparent; border-color: transparent; color: var(--muted);
   }
   #pvHead #pvDeck:hover {
@@ -434,7 +447,7 @@
     border-radius: 999px; color: var(--muted);
   }
   .md-meta .pv-view {
-    margin-left: auto; font: inherit; font-size: 11px;
+    margin-inline-start: auto; font: inherit; font-size: 11px;
     padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px;
     background: transparent; color: var(--text); cursor: pointer;
   }
@@ -459,14 +472,14 @@
   }
   #pvBody pre.md-pre code { background: none; padding: 0; }
   #pvBody pre.plain { white-space: pre-wrap; word-break: break-word; }
-  #pvBody ul, #pvBody ol { margin: .5em 0; padding-left: 1.6em; }
+  #pvBody ul, #pvBody ol { margin: .5em 0; padding-inline-start: 1.6em; }
   #pvBody li { margin: .18em 0; }
   #pvBody blockquote {
     margin: .6em 0; padding: .2em 1em;
     border-left: 3px solid var(--line); color: var(--muted);
   }
   #pvBody table { border-collapse: collapse; margin: .8em 0; width: 100%; font-size: .94em; }
-  #pvBody th, #pvBody td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  #pvBody th, #pvBody td { border: 1px solid var(--line); padding: 6px 9px; text-align: start; vertical-align: top; }
   #pvBody th { background: var(--panel-2); }
   #pvBody hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
   #pvBody img { max-width: 100%; }
@@ -481,7 +494,7 @@
   #pvBody .pv-hide { display: none; }
   #pvBody .pv-fields {
     display: grid; grid-template-columns: max-content 1fr; gap: 5px 18px;
-    margin: 0 0 14px; padding-left: 12px; border-left: 2px solid var(--line);
+    margin: 0 0 14px; padding-inline-start: 12px; border-inline-start: 2px solid var(--line);
   }
   #pvBody .pv-fields dt { color: var(--muted); font-size: 12px; line-height: 1.5; }
   #pvBody .pv-fields dd { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
@@ -514,18 +527,30 @@
     box-shadow: 0 8px 30px rgba(0,0,0,.45); backdrop-filter: blur(6px);
   }
   .panel-handle:hover { border-color: var(--accent); }
-  /* Filters tab: attached to the sidebar's inner (left) edge, near the top. */
+  /* Filters tab: attached to the sidebar's inner edge, near the top. The tab is
+     rotated (vertical writing mode), so its inline axis is vertical and the logical
+     inset/border/radius properties would map to that axis, not the horizontal one we
+     mean. It therefore uses physical properties, mirrored for right-to-left with an
+     explicit override (not a logical one). The border on the inner side (against the
+     panel) stays transparent in every state, so the tab blends into the panel and the
+     hover accent never draws along the edge where it meets the panel. */
   #sideHandle {
     display: block; position: absolute; right: 100%; top: 84px;
-    border-right: 0; border-radius: 10px 0 0 10px;
+    border-right-color: transparent; border-radius: 10px 0 0 10px;
   }
+  [dir="rtl"] #sideHandle {
+    right: auto; left: 100%;
+    border-right-color: var(--line); border-left-color: transparent;
+    border-radius: 0 10px 10px 0;
+  }
+  [dir="rtl"] #sideHandle:hover { border-right-color: var(--accent); }
 
   @media (max-width: 760px) {
     /* Compact screens. The hamburger and title share the top line; the directory
        nav and the rest sit flush-left underneath. The extra groups expand
        vertically behind the hamburger. Both panels dock to a screen edge and
        slide out behind a tab attached to the panel's inner edge. */
-    body:not(.hide-side) .bar { right: 12px; }
+    body:not(.hide-side) .bar { inset-inline-end: 12px; }
     .bar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
     .bar-head { display: flex; flex-direction: row; align-items: center; gap: 8px; }
     .nav-toggle { display: inline-flex; align-items: center; justify-content: center; align-self: stretch; padding: 6px 12px; font-size: 17px; line-height: 1; }
@@ -546,26 +571,32 @@
 
     /* Filters: right-docked panel, closed by default on small screens (opened
        via body.side-open). On desktop the sidebar is open unless body.hide-side. */
-    #sidebar { width: min(312px, 86vw); transform: translateX(100%); }
+    #sidebar { width: min(312px, 86vw); transform: translateX(var(--panel-off-end)); }
     body.side-open #sidebar { transform: translateX(0); }
 
     /* Legend: left-docked panel (mirrors filters); tab attached to its right
        edge, near the bottom. Like the filter sidebar it sits above the docked
        deck (z-index 19), so the deck never covers it. */
     #legend {
-      top: 0; left: 0; bottom: 0; right: auto; z-index: 21;
+      top: 0; inset-inline-start: 0; bottom: 0; inset-inline-end: auto; z-index: 21;
       width: min(280px, 80vw); max-width: none;
       display: flex; flex-direction: column;
-      border: 0; border-right: 1px solid var(--line); border-radius: 0;
+      border: 0; border-inline-end: 1px solid var(--line); border-radius: 0;
       padding: 14px; overflow: visible;
-      transform: translateX(-100%); transition: transform .18s ease;
+      transform: translateX(var(--panel-off-start)); transition: transform .18s ease;
     }
     body.m-open-legend #legend { transform: translateX(0); }
     #legendBody { flex: 1 1 auto; overflow: auto; }
     #legendHandle {
       position: absolute; left: 100%; bottom: 84px; transform: none;
-      border-left: 0; border-radius: 0 10px 10px 0;
+      border-left-color: transparent; border-radius: 0 10px 10px 0;
     }
+    [dir="rtl"] #legendHandle {
+      left: auto; right: 100%;
+      border-left-color: var(--line); border-right-color: transparent;
+      border-radius: 10px 0 0 10px;
+    }
+    [dir="rtl"] #legendHandle:hover { border-left-color: var(--accent); }
 
     /* The preview header wraps on small screens: the path drops onto its own line
        below the title when the pair no longer fits side by side. */
@@ -579,17 +610,18 @@
      in the preview). */
   :root { --deck-w: 100px; --dc-w: 74px; --dc-h: 105px; --dc-step: 28px; --deck-inset: 4px; }
   #deck {
-    position: fixed; top: 64px; right: var(--deck-inset); width: var(--deck-w);
+    position: fixed; top: 64px; inset-inline-end: var(--deck-inset); width: var(--deck-w);
     z-index: 19; display: none; flex-direction: column;
-    max-height: calc(100vh - 76px); transition: right .18s ease;
+    max-height: calc(100vh - 76px); transition: inset-inline-end .18s ease;
   }
   /* The drop site is a separate, fixed-size rectangle, not tied to the deck's own
      size: it spans the column from near the top of the window down near its bottom,
      marks where a dragged card lands, and is shown for the whole drag. It hugs the
-     right side, covering the deck column and reaching the window's right edge (the
-     deck's own inset), rather than overhanging the graph to its left. */
+     inline-end side, covering the deck column and reaching the window's inline-end
+     edge (the deck's own inset), rather than overhanging the graph toward the
+     inline-start. */
   #deck::after {
-    content: ""; position: absolute; left: 0; right: calc(-1 * var(--deck-inset)); top: var(--deck-aura-top, 16px);
+    content: ""; position: absolute; inset-inline-start: 0; inset-inline-end: calc(-1 * var(--deck-inset)); top: var(--deck-aura-top, 16px);
     height: var(--deck-aura-h, 50vh);
     z-index: -1; pointer-events: none; display: none;
     background: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -639,7 +671,7 @@
      on the top or bottom edge, pointing to the hidden decks and counting them. It is a
      plain cue, not a control, so it never takes the pointer. */
   .deck-more {
-    position: absolute; left: 50%; transform: translateX(-50%); z-index: 30;
+    position: absolute; inset-inline-start: 50%; transform: translateX(calc(-50% * var(--dir-flip, 1))); z-index: 30;
     padding: 1px 6px; border-radius: 999px; pointer-events: none;
     font-size: 9px; font-weight: 600; line-height: 12px; letter-spacing: .04em;
     white-space: nowrap; background: var(--accent); color: #fff;
@@ -762,22 +794,22 @@
     display: flex; align-items: center; justify-content: center;
     font: inherit; font-size: 11px; line-height: 1;
     background: transparent; color: #fff; cursor: pointer;
-    opacity: 0; transform: scale(.7);
+    opacity: 0; transform: scaleX(var(--dir-flip, 1)) scale(.7);
     text-shadow: 0 1px 3px rgba(0,0,0,.85);
     transition: opacity .12s ease, transform .12s ease, background .12s ease;
   }
-  .dc-x { right: 4px; }
-  .dc-chev { left: 4px; font-size: 9px; }
-  .deck-card:hover .dc-x, .deck-card:hover .dc-chev, .deck-card.open .dc-chev { opacity: 1; transform: scale(1); }
+  .dc-x { inset-inline-end: 4px; }
+  .dc-chev { inset-inline-start: 4px; font-size: 9px; }
+  .deck-card:hover .dc-x, .deck-card:hover .dc-chev, .deck-card.open .dc-chev { opacity: 1; transform: scaleX(var(--dir-flip, 1)) scale(1); }
   /* A touch press-drag over the deck moves a hover-like pointer: the card under the
      finger shows its actions, the way :hover does for the mouse, and its × reddens
      when the finger is over it. */
-  .deck-card.hovered .dc-x, .deck-card.hovered .dc-chev { opacity: 1; transform: scale(1); }
+  .deck-card.hovered .dc-x, .deck-card.hovered .dc-chev { opacity: 1; transform: scaleX(var(--dir-flip, 1)) scale(1); }
   .dc-x.armed { color: #e0575b; }
   .dc-x:hover { color: #e0575b; }
   .dc-chev:hover { background: var(--accent); text-shadow: none; }
   .dc-x:focus-visible, .dc-chev:focus-visible {
-    opacity: 1; transform: scale(1);
+    opacity: 1; transform: scaleX(var(--dir-flip, 1)) scale(1);
     outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px;
   }
   .deck-card.has-sub.open { height: auto; max-height: 260px; }
@@ -852,6 +884,18 @@
        width is narrower, clear of the stacked toolbar. */
     #deck { width: min(var(--deck-w), 74vw); }
   }
+
+  /* Language orientation. Setting dir="rtl" on the root flips inline flow and
+     start/end alignment automatically; direction-sensitive layout uses logical
+     properties (inset-inline, margin-inline, padding-inline, text-align: start,
+     float: inline-end) so the docked panels, toolbar and deck mirror to the other
+     edge. `--dir-flip` is 1 in left-to-right and -1 in right-to-left; directional
+     glyphs and centering transforms multiply by it so they mirror too. Values that
+     stay left-to-right inside right-to-left text are isolated, so they neither
+     reorder nor disturb the text around them (W3C bidi guidance). */
+  #graphPath, #pvPath { unicode-bidi: isolate; }
+  #pvBody code, #pvBody pre.md-pre { direction: ltr; unicode-bidi: isolate; }
+  #graphBack, #graphFwd, #pvBack, #pvFwd { transform: scaleX(var(--dir-flip, 1)); }
 </style>
 </head>
 <body>
@@ -859,133 +903,133 @@
 
 <div class="bar">
   <div class="bar-head">
-    <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar">☰</button>
+    <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar" data-i18n-title="nav.toggleToolbar">☰</button>
     <div class="group">
-      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About"><span class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></span><span class="caret">▾</span></button>
+      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About" data-i18n-title="nav.about"><span class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></span><span class="caret">▾</span></button>
       <span id="stats" class="meta" style="color:var(--muted)"></span>
     </div>
   </div>
   <div id="navGroups" class="nav-groups">
     <div id="navMore" class="nav-more">
       <div class="group">
-        <button id="open">Open folder…</button>
-        <button id="reload">Reload</button>
+        <button id="open" data-i18n="nav.open">Open folder…</button>
+        <button id="reload" data-i18n="nav.reload">Reload</button>
       </div>
       <div class="group">
-        <button id="resetView">Reset view</button>
-        <button id="resetLayout">Reset layout</button>
-        <button id="labels" aria-pressed="true">Labels</button>
-        <button id="tags" aria-pressed="false" title="Tag links">Tags</button>
-        <button id="install" type="button" title="Install grokf as an app" hidden>Install</button>
+        <button id="resetView" data-i18n="nav.resetView">Reset view</button>
+        <button id="resetLayout" data-i18n="nav.resetLayout">Reset layout</button>
+        <button id="labels" aria-pressed="true" data-i18n="nav.labels">Labels</button>
+        <button id="tags" aria-pressed="false" title="Tag links" data-i18n="nav.tags" data-i18n-title="nav.tagsTitle">Tags</button>
+        <button id="install" type="button" title="Install grokf as an app" hidden data-i18n="nav.install" data-i18n-title="nav.installTitle">Install</button>
       </div>
     </div>
     <div class="group group-dir">
-      <button id="graphTop" title="Top level" disabled>Top</button>
-      <button id="graphBack" title="Back" disabled>‹</button>
-      <button id="graphFwd" title="Forward" disabled>›</button>
-      <span id="graphPath" style="color:var(--muted)">/</span>
+      <button id="graphTop" title="Top level" disabled data-i18n="nav.top" data-i18n-title="nav.topTitle">Top</button>
+      <button id="graphBack" title="Back" disabled data-i18n-title="nav.back">‹</button>
+      <button id="graphFwd" title="Forward" disabled data-i18n-title="nav.forward">›</button>
+      <span id="graphPath" style="color:var(--muted)" dir="ltr">/</span>
     </div>
   </div>
 </div>
 
-<div id="spinner" class="group" hidden title="Loading">
+<div id="spinner" class="group" hidden title="Loading" data-i18n-title="spinner.loading">
   <span class="spin" aria-hidden="true"></span>
   <span id="fetchCount">0</span>
 </div>
 
 <aside id="sidebar">
-  <button id="sideHandle" class="panel-handle" type="button" aria-controls="sidebar" aria-expanded="false" title="Toggle filters">Filters</button>
+  <button id="sideHandle" class="panel-handle" type="button" aria-controls="sidebar" aria-expanded="false" title="Toggle filters" data-i18n="side.handle" data-i18n-title="side.toggleFilters">Filters</button>
   <div class="side-head">
-    <span>Search &amp; filter</span>
+    <span data-i18n="side.head">Search &amp; filter</span>
     <span id="filterSummary" class="meta"></span>
   </div>
   <div class="side-body">
     <div class="searchfld">
-      <div class="lbl">Search</div>
+      <div class="lbl" data-i18n="search.label">Search</div>
       <div class="searchbox">
-        <input id="search" type="search" placeholder="e.g. json, guide, nsm…" autocomplete="off" spellcheck="false">
-        <label class="scope">in
+        <input id="search" type="search" placeholder="e.g. json, guide, nsm…" data-i18n-placeholder="search.placeholder" autocomplete="off" spellcheck="false">
+        <label class="scope"><span data-i18n="search.in">in</span>
           <select id="searchField">
-            <option value="">All fields</option>
-            <option value="title">Title</option>
-            <option value="description">Description</option>
-            <option value="type">Type</option>
-            <option value="tags">Tags</option>
-            <option value="path">Path</option>
+            <option value="" data-i18n="field.all">All fields</option>
+            <option value="title" data-i18n="field.title">Title</option>
+            <option value="description" data-i18n="field.description">Description</option>
+            <option value="type" data-i18n="field.type">Type</option>
+            <option value="tags" data-i18n="field.tags">Tags</option>
+            <option value="path" data-i18n="field.path">Path</option>
           </select>
         </label>
       </div>
     </div>
     <div class="tagbox">
-      <div class="lbl">Kinds</div>
+      <div class="lbl" data-i18n="facet.kinds">Kinds</div>
       <div id="kindChips" class="chips"></div>
-      <button id="kindOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select kinds…</button>
+      <button id="kindOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false" data-i18n="facet.selectKinds">Select kinds…</button>
     </div>
     <div class="tagbox">
-      <div class="lbl">Types</div>
+      <div class="lbl" data-i18n="facet.types">Types</div>
       <div id="typeChips" class="chips"></div>
-      <button id="typeOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select types…</button>
+      <button id="typeOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false" data-i18n="facet.selectTypes">Select types…</button>
     </div>
     <div class="tagbox">
-      <div class="lbl">Tags</div>
+      <div class="lbl" data-i18n="facet.tags">Tags</div>
       <div id="tagChips" class="chips"></div>
-      <button id="tagOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select tags…</button>
+      <button id="tagOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false" data-i18n="facet.selectTags">Select tags…</button>
     </div>
     <div class="tagbox">
-      <div class="lbl">Status</div>
+      <div class="lbl" data-i18n="facet.status">Status</div>
       <div id="statusChips" class="chips"></div>
-      <button id="statusOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false">Select status…</button>
+      <button id="statusOpen" class="tagopen" type="button" aria-haspopup="true" aria-expanded="false" data-i18n="facet.selectStatus">Select status…</button>
     </div>
-    <button id="clearFilters">Clear filters</button>
+    <button id="clearFilters" data-i18n="btn.clearFilters">Clear filters</button>
   </div>
 </aside>
 
 <div id="tagPop" class="pop" hidden>
   <div class="pop-search">
-    <input id="tagSearch" type="search" placeholder="Search tags…" autocomplete="off" spellcheck="false">
+    <input id="tagSearch" type="search" placeholder="Search tags…" data-i18n-placeholder="facet.searchTags" autocomplete="off" spellcheck="false">
   </div>
   <div id="tagList" class="pop-list"></div>
   <div class="pop-foot">
     <span id="tagCount" class="meta"></span>
-    <button id="tagClear" type="button">Clear</button>
+    <button id="tagClear" type="button" data-i18n="btn.clear">Clear</button>
   </div>
 </div>
 
 <div id="kindPop" class="pop" hidden>
   <div class="pop-search">
-    <input id="kindSearch" type="search" placeholder="Search kinds…" autocomplete="off" spellcheck="false">
+    <input id="kindSearch" type="search" placeholder="Search kinds…" data-i18n-placeholder="facet.searchKinds" autocomplete="off" spellcheck="false">
   </div>
   <div id="kindList" class="pop-list"></div>
   <div class="pop-foot">
     <span id="kindCount" class="meta"></span>
-    <button id="kindClear" type="button">Clear</button>
+    <button id="kindClear" type="button" data-i18n="btn.clear">Clear</button>
   </div>
 </div>
 
 <div id="typePop" class="pop" hidden>
   <div class="pop-search">
-    <input id="typeSearch" type="search" placeholder="Search types…" autocomplete="off" spellcheck="false">
+    <input id="typeSearch" type="search" placeholder="Search types…" data-i18n-placeholder="facet.searchTypes" autocomplete="off" spellcheck="false">
   </div>
   <div id="typeList" class="pop-list"></div>
   <div class="pop-foot">
     <span id="typeCount" class="meta"></span>
-    <button id="typeClear" type="button">Clear</button>
+    <button id="typeClear" type="button" data-i18n="btn.clear">Clear</button>
   </div>
 </div>
 
 <div id="statusPop" class="pop" hidden>
   <div class="pop-search">
-    <input id="statusSearch" type="search" placeholder="Search statuses…" autocomplete="off" spellcheck="false">
+    <input id="statusSearch" type="search" placeholder="Search statuses…" data-i18n-placeholder="facet.searchStatuses" autocomplete="off" spellcheck="false">
   </div>
   <div id="statusList" class="pop-list"></div>
   <div class="pop-foot">
     <span id="statusCount" class="meta"></span>
-    <button id="statusClear" type="button">Clear</button>
+    <button id="statusClear" type="button" data-i18n="btn.clear">Clear</button>
   </div>
 </div>
 
 <div id="legend">
-  <button id="legendHandle" class="panel-handle" type="button" aria-controls="legend" aria-expanded="false" title="Toggle legend">Legend</button>
+  <button id="legendHandle" class="panel-handle" type="button" aria-controls="legend" aria-expanded="false" title="Toggle legend" data-i18n="legend.handle" data-i18n-title="legend.toggle">Legend</button>
   <div id="legendBody"></div>
 </div>
 <div id="tip"></div>
@@ -1007,20 +1051,24 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <p><b class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></b> — a single-file, dependency-free viewer for Open Knowledge Format bundles.</p>
-    <p class="about-rev">Revision <span id="aboutRev"></span></p>
+    <p><b class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></b> <span data-i18n="about.tagline">— a single-file, dependency-free viewer for Open Knowledge Format bundles.</span></p>
+    <p class="about-rev"><span data-i18n="about.rev">Revision</span> <span id="aboutRev"></span></p>
     <div class="about-more" id="aboutMore">
-      <p>It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
+      <p data-i18n="about.desc">It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
       <ul>
-        <li>Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
-        <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
-        <li>Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
-        <li>Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
+        <li data-i18n-html="about.li1">Open a folder, or drag one onto the window. On a web server it auto-loads <code>bundles/</code>.</li>
+        <li data-i18n="about.li2">Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
+        <li data-i18n="about.li3">Desktop: click a node to preview, double-click a directory to enter, scroll to zoom.</li>
+        <li data-i18n="about.li4">Touch: tap to preview or enter, drag to pan, pinch to zoom.</li>
       </ul>
-      <p class="about-note">This tool was generated with AI assistance. Review it before relying on it.</p>
+      <p class="about-note" data-i18n="about.note">This tool was generated with AI assistance. Review it before relying on it.</p>
+      <p class="about-lang">
+        <label for="langSelect" data-i18n="lang.label">Language</label>
+        <select id="langSelect" aria-label="Language" data-i18n-aria-label="lang.label"></select>
+      </p>
       <p class="about-links">
-        <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener">Source on GitHub</a>
-        <a href="#" id="aboutRuntime" class="about-runtime">Runtime internals</a>
+        <a href="https://github.com/trondolsen/grokf" target="_blank" rel="noopener" data-i18n="about.source">Source on GitHub</a>
+        <a href="#" id="aboutRuntime" class="about-runtime" data-i18n="about.runtime">Runtime internals</a>
       </p>
     </div>
   </div>
@@ -1044,19 +1092,19 @@
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
     <h1 class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></h1>
-    <p>Single-file, dependency-free viewer for this knowledge bundle.</p>
+    <p data-i18n="card.desc">Single-file, dependency-free viewer for this knowledge bundle.</p>
     <ul>
-      <li>Served: on a static server (including GitHub Pages) it loads <code>bundles/</code> automatically from <code>bundles/index.md</code>.</li>
-      <li>Pick a bundle with a URL parameter, for example <code>?bundle=acme_retail</code> (a name, a folder path, or a start <code>.md</code> file).</li>
-      <li>Limit prefetch depth with <code>?depth=N</code> (default: all levels); click a dotted node to load its next level, click again to preview.</li>
-      <li>Local file: click Open folder and choose a bundle directory, or drag it onto this window.</li>
-      <li>Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
+      <li data-i18n-html="card.li1">Served: on a static server (including GitHub Pages) it loads <code>bundles/</code> automatically from <code>bundles/index.md</code>.</li>
+      <li data-i18n-html="card.li2">Pick a bundle with a URL parameter, for example <code>?bundle=acme_retail</code> (a name, a folder path, or a start <code>.md</code> file).</li>
+      <li data-i18n-html="card.li3">Limit prefetch depth with <code>?depth=N</code> (default: all levels); click a dotted node to load its next level, click again to preview.</li>
+      <li data-i18n="card.li4">Local file: click Open folder and choose a bundle directory, or drag it onto this window.</li>
+      <li data-i18n="card.li5">Press and hold a node, then drag the card to the right edge to build a deck; add pages from the preview with Add to deck.</li>
     </ul>
     <div class="row">
-      <button id="pick">Open folder…</button>
-      <button id="retry">Retry auto-load</button>
+      <button id="pick" data-i18n="nav.open">Open folder…</button>
+      <button id="retry" data-i18n="card.retry">Retry auto-load</button>
     </div>
-    <div class="hint" id="overlayMsg"></div>
+    <div class="hint" id="overlayMsg" dir="auto"></div>
     <input id="dirinput" type="file" webkitdirectory multiple hidden>
   </div>
 </div>
@@ -1064,14 +1112,14 @@
 <div id="preview">
   <div id="pvCard">
     <div id="pvHead">
-      <button id="pvBack" type="button" title="Back" disabled>‹</button>
-      <button id="pvFwd" type="button" title="Forward" disabled>›</button>
+      <button id="pvBack" type="button" title="Back" data-i18n-title="pv.back" disabled>‹</button>
+      <button id="pvFwd" type="button" title="Forward" data-i18n-title="pv.forward" disabled>›</button>
       <span class="head-text">
-        <span class="t" id="pvTitle"></span>
-        <span class="p" id="pvPath"></span>
+        <span class="t" id="pvTitle" dir="auto"></span>
+        <span class="p" id="pvPath" dir="ltr"></span>
       </span>
-      <button id="pvDeck" type="button" title="Add this page to the deck" aria-label="Add this page to the deck">⋮</button>
-      <button id="pvClose" type="button">Close</button>
+      <button id="pvDeck" type="button" title="Add this page to the deck" aria-label="Add this page to the deck" data-i18n-title="pv.addDeck" data-i18n-aria-label="pv.addDeck">⋮</button>
+      <button id="pvClose" type="button" data-i18n="pv.close">Close</button>
     </div>
     <div id="pvBody"></div>
     <button id="dsHandle" type="button" aria-label="Drag down to close reading" title="Drag down to close reading"><span></span></button>
@@ -1325,6 +1373,1162 @@
   var popovers = [];
   var allTags = [];
   var dragging = false, moved = false;
+
+  // ---------------------------------------------------------------- i18n
+  //
+  // UI strings live in per-locale dictionaries keyed by a BCP 47 tag. English is
+  // the base: every lookup passes the English default as its fallback, so a
+  // missing translation never leaves an empty control. Tags are canonicalised
+  // with Intl, the writing direction is derived from the base language, and
+  // counts use Intl.PluralRules with CLDR plural categories.
+  var I18N = {
+    "es": {
+      "nav.toggleToolbar": "Alternar barra de herramientas",
+      "nav.about": "Acerca de",
+      "nav.open": "Abrir carpeta…",
+      "nav.reload": "Recargar",
+      "nav.resetView": "Restablecer vista",
+      "nav.resetLayout": "Restablecer diseño",
+      "nav.labels": "Rótulos",
+      "nav.tags": "Etiquetas",
+      "nav.tagsTitle": "Enlaces de etiquetas",
+      "nav.install": "Instalar",
+      "nav.installTitle": "Instalar grokf como aplicación",
+      "nav.top": "Inicio",
+      "nav.topTitle": "Nivel superior",
+      "nav.back": "Atrás",
+      "nav.forward": "Adelante",
+      "spinner.loading": "Cargando",
+      "side.handle": "Filtros",
+      "side.toggleFilters": "Alternar filtros",
+      "side.head": "Buscar y filtrar",
+      "search.label": "Buscar",
+      "search.placeholder": "p. ej. json, guide, nsm…",
+      "search.in": "en",
+      "field.all": "Todos los campos",
+      "field.title": "Título",
+      "field.description": "Descripción",
+      "field.type": "Tipo",
+      "field.tags": "Etiquetas",
+      "field.path": "Ruta",
+      "facet.kinds": "Clases",
+      "facet.types": "Tipos",
+      "facet.tags": "Etiquetas",
+      "facet.status": "Estado",
+      "facet.selectKinds": "Seleccionar clases…",
+      "facet.selectTypes": "Seleccionar tipos…",
+      "facet.selectTags": "Seleccionar etiquetas…",
+      "facet.selectStatus": "Seleccionar estado…",
+      "facet.searchTags": "Buscar etiquetas…",
+      "facet.searchKinds": "Buscar clases…",
+      "facet.searchTypes": "Buscar tipos…",
+      "facet.searchStatuses": "Buscar estados…",
+      "btn.clear": "Borrar",
+      "btn.clearFilters": "Borrar filtros",
+      "legend.handle": "Leyenda",
+      "legend.toggle": "Alternar leyenda",
+      "lang.label": "Idioma",
+      "about.tagline": "— un visor de archivo único y sin dependencias para paquetes de Open Knowledge Format.",
+      "about.rev": "Revisión",
+      "about.desc": "Representa conceptos de Markdown, su frontmatter (type, tags, status, description) y enlaces de referencia como un grafo interactivo que puedes filtrar, desplazar y ampliar.",
+      "about.li1": "Abre una carpeta o arrastra una a la ventana. En un servidor web, carga <code>bundles/</code> automáticamente.",
+      "about.li2": "Mantén pulsado un nodo y arrastra la tarjeta hasta el borde derecho para crear un mazo; añade páginas desde la vista previa con Añadir al mazo.",
+      "about.li3": "Escritorio: haz clic en un nodo para previsualizar, doble clic en un directorio para entrar, desplázate para ampliar.",
+      "about.li4": "Táctil: toca para previsualizar o entrar, arrastra para desplazar, pellizca para ampliar.",
+      "about.note": "Esta herramienta se generó con ayuda de IA. Revísala antes de confiar en ella.",
+      "about.source": "Código fuente en GitHub",
+      "about.runtime": "Funcionamiento interno",
+      "about.showDetails": "Mostrar detalles",
+      "about.hideDetails": "Ocultar detalles",
+      "card.desc": "Visor de archivo único y sin dependencias para este paquete de conocimiento.",
+      "card.li1": "Servido: en un servidor estático (incluido GitHub Pages) carga <code>bundles/</code> automáticamente desde <code>bundles/index.md</code>.",
+      "card.li2": "Elige un paquete con un parámetro de URL, por ejemplo <code>?bundle=acme_retail</code> (un nombre, una ruta de carpeta o un archivo <code>.md</code> inicial).",
+      "card.li3": "Limita la profundidad de precarga con <code>?depth=N</code> (predeterminado: todos los niveles); haz clic en un nodo punteado para cargar su siguiente nivel y otra vez para previsualizar.",
+      "card.li4": "Archivo local: haz clic en Abrir carpeta y elige un directorio de paquete, o arrástralo a esta ventana.",
+      "card.li5": "Mantén pulsado un nodo y arrastra la tarjeta hasta el borde derecho para crear un mazo; añade páginas desde la vista previa con Añadir al mazo.",
+      "card.retry": "Reintentar carga automática",
+      "pv.back": "Atrás",
+      "pv.forward": "Adelante",
+      "pv.close": "Cerrar",
+      "pv.addDeck": "Añadir esta página al mazo",
+      "filter.active": "{n} activos",
+      "filter.search": "búsqueda",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Error al elegir la carpeta: {0}",
+      "msg.noMdFolder": "No se encontraron archivos Markdown en la carpeta elegida.",
+      "msg.readFolderFailed": "No se pudo leer la carpeta: {0}",
+      "msg.noMdDropped": "No se encontraron archivos Markdown en la carpeta soltada.",
+      "msg.readDroppedFailed": "No se pudo leer la carpeta soltada: {0}",
+      "msg.unexpected": "Error inesperado",
+      "msg.needsServer": "La carga automática necesita un servidor web; abre la carpeta.",
+      "msg.loading": "Cargando paquete…",
+      "msg.sameOrigin": "El paquete debe ser una ruta del mismo origen: {0}",
+      "msg.noBundleAt": "No hay ningún paquete en ?bundle={0} (sin index.md).",
+      "msg.nothingToLoad": "Nada que cargar: añade bundles/index.md o pasa ?bundle=<name>.",
+      "msg.autoLoadFailed": "Error en la carga automática: {0}",
+      "msg.buildFailed": "No se pudo construir el grafo: {0}",
+      "stats.files": { "one": "archivo", "other": "archivos" },
+      "stats.links": { "one": "enlace", "other": "enlaces" }
+    },
+    "fr": {
+      "nav.toggleToolbar": "Afficher/masquer la barre d'outils",
+      "nav.about": "À propos",
+      "nav.open": "Ouvrir un dossier…",
+      "nav.reload": "Recharger",
+      "nav.resetView": "Réinitialiser la vue",
+      "nav.resetLayout": "Réinitialiser la disposition",
+      "nav.labels": "Libellés",
+      "nav.tags": "Étiquettes",
+      "nav.tagsTitle": "Liens des étiquettes",
+      "nav.install": "Installer",
+      "nav.installTitle": "Installer grokf comme application",
+      "nav.top": "Haut",
+      "nav.topTitle": "Niveau supérieur",
+      "nav.back": "Retour",
+      "nav.forward": "Suivant",
+      "spinner.loading": "Chargement",
+      "side.handle": "Filtres",
+      "side.toggleFilters": "Afficher/masquer les filtres",
+      "side.head": "Rechercher et filtrer",
+      "search.label": "Rechercher",
+      "search.placeholder": "ex. json, guide, nsm…",
+      "search.in": "dans",
+      "field.all": "Tous les champs",
+      "field.title": "Titre",
+      "field.description": "Description",
+      "field.type": "Type",
+      "field.tags": "Étiquettes",
+      "field.path": "Chemin",
+      "facet.kinds": "Genres",
+      "facet.types": "Types",
+      "facet.tags": "Étiquettes",
+      "facet.status": "Statut",
+      "facet.selectKinds": "Sélectionner des genres…",
+      "facet.selectTypes": "Sélectionner des types…",
+      "facet.selectTags": "Sélectionner des étiquettes…",
+      "facet.selectStatus": "Sélectionner un statut…",
+      "facet.searchTags": "Rechercher des étiquettes…",
+      "facet.searchKinds": "Rechercher des genres…",
+      "facet.searchTypes": "Rechercher des types…",
+      "facet.searchStatuses": "Rechercher des statuts…",
+      "btn.clear": "Effacer",
+      "btn.clearFilters": "Effacer les filtres",
+      "legend.handle": "Légende",
+      "legend.toggle": "Afficher/masquer la légende",
+      "lang.label": "Langue",
+      "about.tagline": "— une visionneuse monofichier, sans dépendances, pour les paquets Open Knowledge Format.",
+      "about.rev": "Révision",
+      "about.desc": "Elle affiche les concepts Markdown, leur frontmatter (type, tags, status, description) et les liens de référence sous forme de graphe interactif que vous pouvez filtrer, déplacer et zoomer.",
+      "about.li1": "Ouvrez un dossier ou glissez-en un sur la fenêtre. Sur un serveur web, elle charge <code>bundles/</code> automatiquement.",
+      "about.li2": "Maintenez un nœud enfoncé, puis faites glisser la carte vers le bord droit pour créer un paquet ; ajoutez des pages depuis l'aperçu avec Ajouter au paquet.",
+      "about.li3": "Ordinateur : cliquez sur un nœud pour l'aperçu, double-cliquez sur un dossier pour y entrer, faites défiler pour zoomer.",
+      "about.li4": "Tactile : touchez pour l'aperçu ou pour entrer, faites glisser pour déplacer, pincez pour zoomer.",
+      "about.note": "Cet outil a été généré avec l'aide de l'IA. Vérifiez-le avant de vous y fier.",
+      "about.source": "Code source sur GitHub",
+      "about.runtime": "Fonctionnement interne",
+      "about.showDetails": "Afficher les détails",
+      "about.hideDetails": "Masquer les détails",
+      "card.desc": "Visionneuse monofichier, sans dépendances, pour ce paquet de connaissances.",
+      "card.li1": "Servi : sur un serveur statique (y compris GitHub Pages), elle charge <code>bundles/</code> automatiquement depuis <code>bundles/index.md</code>.",
+      "card.li2": "Choisissez un paquet avec un paramètre d'URL, par exemple <code>?bundle=acme_retail</code> (un nom, un chemin de dossier ou un fichier <code>.md</code> de départ).",
+      "card.li3": "Limitez la profondeur de préchargement avec <code>?depth=N</code> (par défaut : tous les niveaux) ; cliquez sur un nœud en pointillé pour charger le niveau suivant, cliquez à nouveau pour l'aperçu.",
+      "card.li4": "Fichier local : cliquez sur Ouvrir un dossier et choisissez un dossier de paquet, ou glissez-le sur cette fenêtre.",
+      "card.li5": "Maintenez un nœud enfoncé, puis faites glisser la carte vers le bord droit pour créer un paquet ; ajoutez des pages depuis l'aperçu avec Ajouter au paquet.",
+      "card.retry": "Réessayer le chargement auto",
+      "pv.back": "Retour",
+      "pv.forward": "Suivant",
+      "pv.close": "Fermer",
+      "pv.addDeck": "Ajouter cette page au paquet",
+      "filter.active": "{n} actifs",
+      "filter.search": "recherche",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Échec du sélecteur de dossier : {0}",
+      "msg.noMdFolder": "Aucun fichier Markdown trouvé dans le dossier choisi.",
+      "msg.readFolderFailed": "Impossible de lire le dossier : {0}",
+      "msg.noMdDropped": "Aucun fichier Markdown trouvé dans le dossier déposé.",
+      "msg.readDroppedFailed": "Impossible de lire le dossier déposé : {0}",
+      "msg.unexpected": "Erreur inattendue",
+      "msg.needsServer": "Le chargement auto nécessite un serveur web ; ouvrez plutôt le dossier.",
+      "msg.loading": "Chargement du paquet…",
+      "msg.sameOrigin": "Le paquet doit être un chemin de même origine : {0}",
+      "msg.noBundleAt": "Aucun paquet à ?bundle={0} (pas d'index.md).",
+      "msg.nothingToLoad": "Rien à charger : ajoutez bundles/index.md ou passez ?bundle=<name>.",
+      "msg.autoLoadFailed": "Échec du chargement auto : {0}",
+      "msg.buildFailed": "Impossible de construire le graphe : {0}",
+      "stats.files": { "one": "fichier", "other": "fichiers" },
+      "stats.links": { "one": "lien", "other": "liens" }
+    },
+    "de": {
+      "nav.toggleToolbar": "Symbolleiste ein-/ausblenden",
+      "nav.about": "Über",
+      "nav.open": "Ordner öffnen…",
+      "nav.reload": "Neu laden",
+      "nav.resetView": "Ansicht zurücksetzen",
+      "nav.resetLayout": "Layout zurücksetzen",
+      "nav.labels": "Beschriftungen",
+      "nav.tags": "Tags",
+      "nav.tagsTitle": "Tag-Links",
+      "nav.install": "Installieren",
+      "nav.installTitle": "grokf als App installieren",
+      "nav.top": "Oben",
+      "nav.topTitle": "Oberste Ebene",
+      "nav.back": "Zurück",
+      "nav.forward": "Vor",
+      "spinner.loading": "Lädt",
+      "side.handle": "Filter",
+      "side.toggleFilters": "Filter ein-/ausblenden",
+      "side.head": "Suchen & filtern",
+      "search.label": "Suchen",
+      "search.placeholder": "z. B. json, guide, nsm…",
+      "search.in": "in",
+      "field.all": "Alle Felder",
+      "field.title": "Titel",
+      "field.description": "Beschreibung",
+      "field.type": "Typ",
+      "field.tags": "Tags",
+      "field.path": "Pfad",
+      "facet.kinds": "Arten",
+      "facet.types": "Typen",
+      "facet.tags": "Tags",
+      "facet.status": "Status",
+      "facet.selectKinds": "Arten auswählen…",
+      "facet.selectTypes": "Typen auswählen…",
+      "facet.selectTags": "Tags auswählen…",
+      "facet.selectStatus": "Status auswählen…",
+      "facet.searchTags": "Tags suchen…",
+      "facet.searchKinds": "Arten suchen…",
+      "facet.searchTypes": "Typen suchen…",
+      "facet.searchStatuses": "Status suchen…",
+      "btn.clear": "Leeren",
+      "btn.clearFilters": "Filter leeren",
+      "legend.handle": "Legende",
+      "legend.toggle": "Legende ein-/ausblenden",
+      "lang.label": "Sprache",
+      "about.tagline": "— ein einzelfileiger, abhängigkeitsfreier Viewer für Open Knowledge Format-Pakete.",
+      "about.rev": "Revision",
+      "about.desc": "Er stellt Markdown-Konzepte, deren Frontmatter (type, tags, status, description) und Referenzlinks als interaktiven Graphen dar, den Sie filtern, verschieben und zoomen können.",
+      "about.li1": "Öffnen Sie einen Ordner oder ziehen Sie einen ins Fenster. Auf einem Webserver lädt er <code>bundles/</code> automatisch.",
+      "about.li2": "Halten Sie einen Knoten gedrückt und ziehen Sie die Karte an den rechten Rand, um ein Deck zu erstellen; fügen Sie Seiten aus der Vorschau mit Zum Deck hinzufügen hinzu.",
+      "about.li3": "Desktop: Klicken Sie auf einen Knoten für die Vorschau, doppelklicken Sie auf ein Verzeichnis zum Öffnen, scrollen Sie zum Zoomen.",
+      "about.li4": "Touch: Tippen für Vorschau oder Öffnen, ziehen zum Verschieben, aufziehen zum Zoomen.",
+      "about.note": "Dieses Tool wurde mit KI-Unterstützung erstellt. Prüfen Sie es, bevor Sie sich darauf verlassen.",
+      "about.source": "Quellcode auf GitHub",
+      "about.runtime": "Interne Abläufe",
+      "about.showDetails": "Details anzeigen",
+      "about.hideDetails": "Details ausblenden",
+      "card.desc": "Einzelfileiger, abhängigkeitsfreier Viewer für dieses Wissenspaket.",
+      "card.li1": "Bereitgestellt: Auf einem statischen Server (einschließlich GitHub Pages) lädt er <code>bundles/</code> automatisch aus <code>bundles/index.md</code>.",
+      "card.li2": "Wählen Sie ein Paket über einen URL-Parameter, zum Beispiel <code>?bundle=acme_retail</code> (ein Name, ein Ordnerpfad oder eine Start-<code>.md</code>-Datei).",
+      "card.li3": "Begrenzen Sie die Vorablade-Tiefe mit <code>?depth=N</code> (Standard: alle Ebenen); klicken Sie auf einen gepunkteten Knoten, um die nächste Ebene zu laden, und erneut, um die Vorschau zu öffnen.",
+      "card.li4": "Lokale Datei: Klicken Sie auf Ordner öffnen und wählen Sie ein Paketverzeichnis, oder ziehen Sie es in dieses Fenster.",
+      "card.li5": "Halten Sie einen Knoten gedrückt und ziehen Sie die Karte an den rechten Rand, um ein Deck zu erstellen; fügen Sie Seiten aus der Vorschau mit Zum Deck hinzufügen hinzu.",
+      "card.retry": "Auto-Laden erneut versuchen",
+      "pv.back": "Zurück",
+      "pv.forward": "Vor",
+      "pv.close": "Schließen",
+      "pv.addDeck": "Diese Seite zum Deck hinzufügen",
+      "filter.active": "{n} aktiv",
+      "filter.search": "Suche",
+      "stats.line": "{files} · {links}",
+      "msg.folderFailed": "Ordnerauswahl fehlgeschlagen: {0}",
+      "msg.noMdFolder": "Im gewählten Ordner wurden keine Markdown-Dateien gefunden.",
+      "msg.readFolderFailed": "Der Ordner konnte nicht gelesen werden: {0}",
+      "msg.noMdDropped": "Im abgelegten Ordner wurden keine Markdown-Dateien gefunden.",
+      "msg.readDroppedFailed": "Der abgelegte Ordner konnte nicht gelesen werden: {0}",
+      "msg.unexpected": "Unerwarteter Fehler",
+      "msg.needsServer": "Auto-Laden benötigt einen Webserver; öffnen Sie stattdessen den Ordner.",
+      "msg.loading": "Paket wird geladen…",
+      "msg.sameOrigin": "Das Paket muss ein Pfad gleicher Herkunft sein: {0}",
+      "msg.noBundleAt": "Kein Paket unter ?bundle={0} (keine index.md).",
+      "msg.nothingToLoad": "Nichts zu laden: Fügen Sie bundles/index.md hinzu oder übergeben Sie ?bundle=<name>.",
+      "msg.autoLoadFailed": "Auto-Laden fehlgeschlagen: {0}",
+      "msg.buildFailed": "Der Graph konnte nicht erstellt werden: {0}",
+      "stats.files": { "one": "Datei", "other": "Dateien" },
+      "stats.links": { "one": "Link", "other": "Links" }
+    },
+    "pt": {
+      "nav.toggleToolbar": "Alternar barra de ferramentas",
+      "nav.about": "Sobre",
+      "nav.open": "Abrir pasta…",
+      "nav.reload": "Recarregar",
+      "nav.resetView": "Redefinir vista",
+      "nav.resetLayout": "Redefinir layout",
+      "nav.labels": "Rótulos",
+      "nav.tags": "Etiquetas",
+      "nav.tagsTitle": "Ligações de etiquetas",
+      "nav.install": "Instalar",
+      "nav.installTitle": "Instalar o grokf como aplicativo",
+      "nav.top": "Topo",
+      "nav.topTitle": "Nível superior",
+      "nav.back": "Voltar",
+      "nav.forward": "Avançar",
+      "spinner.loading": "Carregando",
+      "side.handle": "Filtros",
+      "side.toggleFilters": "Alternar filtros",
+      "side.head": "Pesquisar e filtrar",
+      "search.label": "Pesquisar",
+      "search.placeholder": "ex.: json, guide, nsm…",
+      "search.in": "em",
+      "field.all": "Todos os campos",
+      "field.title": "Título",
+      "field.description": "Descrição",
+      "field.type": "Tipo",
+      "field.tags": "Etiquetas",
+      "field.path": "Caminho",
+      "facet.kinds": "Categorias",
+      "facet.types": "Tipos",
+      "facet.tags": "Etiquetas",
+      "facet.status": "Estado",
+      "facet.selectKinds": "Selecionar categorias…",
+      "facet.selectTypes": "Selecionar tipos…",
+      "facet.selectTags": "Selecionar etiquetas…",
+      "facet.selectStatus": "Selecionar estado…",
+      "facet.searchTags": "Pesquisar etiquetas…",
+      "facet.searchKinds": "Pesquisar categorias…",
+      "facet.searchTypes": "Pesquisar tipos…",
+      "facet.searchStatuses": "Pesquisar estados…",
+      "btn.clear": "Limpar",
+      "btn.clearFilters": "Limpar filtros",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Alternar legenda",
+      "lang.label": "Idioma",
+      "about.tagline": "— um visualizador de arquivo único, sem dependências, para pacotes Open Knowledge Format.",
+      "about.rev": "Revisão",
+      "about.desc": "Ele renderiza conceitos Markdown, seu frontmatter (tipo, etiquetas, estado, descrição) e ligações de referência como um grafo interativo que você pode filtrar, arrastar e ampliar.",
+      "about.li1": "Abra uma pasta ou arraste uma para a janela. Em um servidor web, ele carrega <code>bundles/</code> automaticamente.",
+      "about.li2": "Mantenha um nó pressionado e arraste o cartão até a borda direita para montar um baralho; adicione páginas da pré-visualização com Adicionar ao baralho.",
+      "about.li3": "Desktop: clique em um nó para pré-visualizar, clique duas vezes em um diretório para entrar, role para ampliar.",
+      "about.li4": "Toque: toque para pré-visualizar ou entrar, arraste para mover, faça pinça para ampliar.",
+      "about.note": "Esta ferramenta foi gerada com assistência de IA. Revise-a antes de confiar nela.",
+      "about.source": "Código-fonte no GitHub",
+      "about.runtime": "Detalhes internos de execução",
+      "about.showDetails": "Mostrar detalhes",
+      "about.hideDetails": "Ocultar detalhes",
+      "card.desc": "Visualizador de arquivo único, sem dependências, para este pacote de conhecimento.",
+      "card.li1": "Servido: em um servidor estático (incluindo GitHub Pages), ele carrega <code>bundles/</code> automaticamente de <code>bundles/index.md</code>.",
+      "card.li2": "Escolha um pacote com um parâmetro de URL, por exemplo <code>?bundle=acme_retail</code> (um nome, um caminho de pasta ou um arquivo inicial <code>.md</code>).",
+      "card.li3": "Limite a profundidade de pré-carregamento com <code>?depth=N</code> (padrão: todos os níveis); clique em um nó pontilhado para carregar o próximo nível, clique de novo para pré-visualizar.",
+      "card.li4": "Arquivo local: clique em Abrir pasta e escolha um diretório de pacote, ou arraste-o para esta janela.",
+      "card.li5": "Mantenha um nó pressionado e arraste o cartão até a borda direita para montar um baralho; adicione páginas da pré-visualização com Adicionar ao baralho.",
+      "card.retry": "Tentar carregar novamente",
+      "pv.back": "Voltar",
+      "pv.forward": "Avançar",
+      "pv.close": "Fechar",
+      "pv.addDeck": "Adicionar esta página ao baralho",
+      "filter.active": "{n} ativos",
+      "filter.search": "pesquisar",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "one": "arquivo", "other": "arquivos" },
+      "stats.links": { "one": "ligação", "other": "ligações" },
+      "msg.folderFailed": "Falha ao escolher a pasta: {0}",
+      "msg.noMdFolder": "Nenhum arquivo Markdown encontrado na pasta escolhida.",
+      "msg.readFolderFailed": "Não foi possível ler a pasta: {0}",
+      "msg.noMdDropped": "Nenhum arquivo Markdown encontrado na pasta arrastada.",
+      "msg.readDroppedFailed": "Não foi possível ler a pasta arrastada: {0}",
+      "msg.unexpected": "Erro inesperado",
+      "msg.needsServer": "O carregamento automático precisa de um web server; abra a pasta em vez disso.",
+      "msg.loading": "Carregando pacote…",
+      "msg.sameOrigin": "O pacote deve ser um caminho de mesma origem: {0}",
+      "msg.noBundleAt": "Nenhum pacote em ?bundle={0} (sem index.md).",
+      "msg.nothingToLoad": "Nada para carregar: adicione bundles/index.md ou passe ?bundle=<name>.",
+      "msg.autoLoadFailed": "Falha no carregamento automático: {0}",
+      "msg.buildFailed": "Não foi possível construir o grafo: {0}"
+    },
+    "it": {
+      "nav.toggleToolbar": "Mostra/nascondi barra degli strumenti",
+      "nav.about": "Informazioni",
+      "nav.open": "Apri cartella…",
+      "nav.reload": "Ricarica",
+      "nav.resetView": "Reimposta vista",
+      "nav.resetLayout": "Reimposta layout",
+      "nav.labels": "Etichette",
+      "nav.tags": "Tag",
+      "nav.tagsTitle": "Collegamenti dei tag",
+      "nav.install": "Installa",
+      "nav.installTitle": "Installa grokf come app",
+      "nav.top": "Inizio",
+      "nav.topTitle": "Livello superiore",
+      "nav.back": "Indietro",
+      "nav.forward": "Avanti",
+      "spinner.loading": "Caricamento",
+      "side.handle": "Filtri",
+      "side.toggleFilters": "Mostra/nascondi filtri",
+      "side.head": "Cerca e filtra",
+      "search.label": "Cerca",
+      "search.placeholder": "es. json, guide, nsm…",
+      "search.in": "in",
+      "field.all": "Tutti i campi",
+      "field.title": "Titolo",
+      "field.description": "Descrizione",
+      "field.type": "Tipo",
+      "field.tags": "Tag",
+      "field.path": "Percorso",
+      "facet.kinds": "Categorie",
+      "facet.types": "Tipi",
+      "facet.tags": "Tag",
+      "facet.status": "Stato",
+      "facet.selectKinds": "Seleziona categorie…",
+      "facet.selectTypes": "Seleziona tipi…",
+      "facet.selectTags": "Seleziona tag…",
+      "facet.selectStatus": "Seleziona stato…",
+      "facet.searchTags": "Cerca tag…",
+      "facet.searchKinds": "Cerca categorie…",
+      "facet.searchTypes": "Cerca tipi…",
+      "facet.searchStatuses": "Cerca stati…",
+      "btn.clear": "Cancella",
+      "btn.clearFilters": "Cancella filtri",
+      "legend.handle": "Legenda",
+      "legend.toggle": "Mostra/nascondi legenda",
+      "lang.label": "Lingua",
+      "about.tagline": "— un visualizzatore in un unico file, senza dipendenze, per bundle Open Knowledge Format.",
+      "about.rev": "Revisione",
+      "about.desc": "Renderizza i concetti Markdown, il loro frontmatter (tipo, tag, stato, descrizione) e i collegamenti di riferimento come un grafo interattivo che puoi filtrare, spostare e ingrandire.",
+      "about.li1": "Apri una cartella o trascinane una sulla finestra. Su un server web carica automaticamente <code>bundles/</code>.",
+      "about.li2": "Tieni premuto su un nodo, poi trascina la scheda verso il bordo destro per creare un mazzo; aggiungi pagine dall'anteprima con Aggiungi al mazzo.",
+      "about.li3": "Desktop: fai clic su un nodo per l'anteprima, doppio clic su una cartella per entrare, scorri per ingrandire.",
+      "about.li4": "Touch: tocca per l'anteprima o per entrare, trascina per spostare, pizzica per ingrandire.",
+      "about.note": "Questo strumento è stato generato con l'assistenza dell'IA. Esaminalo prima di farvi affidamento.",
+      "about.source": "Codice sorgente su GitHub",
+      "about.runtime": "Dettagli interni di runtime",
+      "about.showDetails": "Mostra dettagli",
+      "about.hideDetails": "Nascondi dettagli",
+      "card.desc": "Visualizzatore in un unico file, senza dipendenze, per questo bundle di conoscenza.",
+      "card.li1": "Servito: su un server statico (inclusi GitHub Pages) carica <code>bundles/</code> automaticamente da <code>bundles/index.md</code>.",
+      "card.li2": "Scegli un bundle con un parametro URL, ad esempio <code>?bundle=acme_retail</code> (un nome, un percorso di cartella o un file iniziale <code>.md</code>).",
+      "card.li3": "Limita la profondità di precaricamento con <code>?depth=N</code> (predefinito: tutti i livelli); fai clic su un nodo tratteggiato per caricare il livello successivo, fai clic di nuovo per l'anteprima.",
+      "card.li4": "File locale: fai clic su Apri cartella e scegli una cartella di bundle, oppure trascinala su questa finestra.",
+      "card.li5": "Tieni premuto su un nodo, poi trascina la scheda verso il bordo destro per creare un mazzo; aggiungi pagine dall'anteprima con Aggiungi al mazzo.",
+      "card.retry": "Riprova caricamento automatico",
+      "pv.back": "Indietro",
+      "pv.forward": "Avanti",
+      "pv.close": "Chiudi",
+      "pv.addDeck": "Aggiungi questa pagina al mazzo",
+      "filter.active": "{n} attivi",
+      "filter.search": "cerca",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "one": "file", "other": "file" },
+      "stats.links": { "one": "collegamento", "other": "collegamenti" },
+      "msg.folderFailed": "Selezione della cartella non riuscita: {0}",
+      "msg.noMdFolder": "Nessun file Markdown trovato nella cartella scelta.",
+      "msg.readFolderFailed": "Impossibile leggere la cartella: {0}",
+      "msg.noMdDropped": "Nessun file Markdown trovato nella cartella trascinata.",
+      "msg.readDroppedFailed": "Impossibile leggere la cartella trascinata: {0}",
+      "msg.unexpected": "Errore imprevisto",
+      "msg.needsServer": "Il caricamento automatico richiede un server web; apri invece la cartella.",
+      "msg.loading": "Caricamento del bundle…",
+      "msg.sameOrigin": "Il bundle deve essere un percorso con la stessa origine: {0}",
+      "msg.noBundleAt": "Nessun bundle in ?bundle={0} (nessun index.md).",
+      "msg.nothingToLoad": "Niente da caricare: aggiungi bundles/index.md oppure passa ?bundle=<name>.",
+      "msg.autoLoadFailed": "Caricamento automatico non riuscito: {0}",
+      "msg.buildFailed": "Impossibile costruire il grafo: {0}"
+    },
+    "ru": {
+      "nav.toggleToolbar": "Показать/скрыть панель инструментов",
+      "nav.about": "О программе",
+      "nav.open": "Открыть папку…",
+      "nav.reload": "Обновить",
+      "nav.resetView": "Сбросить вид",
+      "nav.resetLayout": "Сбросить раскладку",
+      "nav.labels": "Подписи",
+      "nav.tags": "Теги",
+      "nav.tagsTitle": "Связи по тегам",
+      "nav.install": "Установить",
+      "nav.installTitle": "Установить grokf как приложение",
+      "nav.top": "Вверх",
+      "nav.topTitle": "Верхний уровень",
+      "nav.back": "Назад",
+      "nav.forward": "Вперёд",
+      "spinner.loading": "Загрузка",
+      "side.handle": "Фильтры",
+      "side.toggleFilters": "Показать/скрыть фильтры",
+      "side.head": "Поиск и фильтр",
+      "search.label": "Поиск",
+      "search.placeholder": "напр. json, guide, nsm…",
+      "search.in": "в",
+      "field.all": "Все поля",
+      "field.title": "Заголовок",
+      "field.description": "Описание",
+      "field.type": "Тип",
+      "field.tags": "Теги",
+      "field.path": "Путь",
+      "facet.kinds": "Категории",
+      "facet.types": "Типы",
+      "facet.tags": "Теги",
+      "facet.status": "Статус",
+      "facet.selectKinds": "Выбрать категории…",
+      "facet.selectTypes": "Выбрать типы…",
+      "facet.selectTags": "Выбрать теги…",
+      "facet.selectStatus": "Выбрать статус…",
+      "facet.searchTags": "Поиск тегов…",
+      "facet.searchKinds": "Поиск категорий…",
+      "facet.searchTypes": "Поиск типов…",
+      "facet.searchStatuses": "Поиск статусов…",
+      "btn.clear": "Очистить",
+      "btn.clearFilters": "Очистить фильтры",
+      "legend.handle": "Легенда",
+      "legend.toggle": "Показать/скрыть легенду",
+      "lang.label": "Язык",
+      "about.tagline": "— одностраничный просмотрщик без зависимостей для пакетов Open Knowledge Format.",
+      "about.rev": "Ревизия",
+      "about.desc": "Он отображает концепции Markdown, их frontmatter (тип, теги, статус, описание) и ссылки как интерактивный граф, который можно фильтровать, перемещать и масштабировать.",
+      "about.li1": "Откройте папку или перетащите её в окно. На веб-сервере <code>bundles/</code> загружается автоматически.",
+      "about.li2": "Нажмите и удерживайте узел, затем перетащите карточку к правому краю, чтобы собрать колоду; добавляйте страницы из предпросмотра кнопкой «Добавить в колоду».",
+      "about.li3": "Компьютер: щёлкните узел для предпросмотра, дважды щёлкните папку для входа, прокрутите для масштабирования.",
+      "about.li4": "Сенсор: коснитесь для предпросмотра или входа, перетащите для перемещения, сведите пальцы для масштабирования.",
+      "about.note": "Этот инструмент создан с помощью ИИ. Проверьте его, прежде чем полагаться на него.",
+      "about.source": "Исходный код на GitHub",
+      "about.runtime": "Внутреннее устройство",
+      "about.showDetails": "Показать подробности",
+      "about.hideDetails": "Скрыть подробности",
+      "card.desc": "Одностраничный просмотрщик без зависимостей для этого пакета знаний.",
+      "card.li1": "С сервера: на статическом сервере (включая GitHub Pages) <code>bundles/</code> загружается автоматически из <code>bundles/index.md</code>.",
+      "card.li2": "Выберите пакет параметром URL, например <code>?bundle=acme_retail</code> (имя, путь к папке или начальный файл <code>.md</code>).",
+      "card.li3": "Ограничьте глубину предзагрузки через <code>?depth=N</code> (по умолчанию: все уровни); щёлкните пунктирный узел, чтобы загрузить следующий уровень, щёлкните ещё раз для предпросмотра.",
+      "card.li4": "Локальный файл: нажмите «Открыть папку» и выберите папку пакета или перетащите её в это окно.",
+      "card.li5": "Нажмите и удерживайте узел, затем перетащите карточку к правому краю, чтобы собрать колоду; добавляйте страницы из предпросмотра кнопкой «Добавить в колоду».",
+      "card.retry": "Повторить автозагрузку",
+      "pv.back": "Назад",
+      "pv.forward": "Вперёд",
+      "pv.close": "Закрыть",
+      "pv.addDeck": "Добавить эту страницу в колоду",
+      "filter.active": "{n} активно",
+      "filter.search": "поиск",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "one": "файл", "few": "файла", "many": "файлов", "other": "файла" },
+      "stats.links": { "one": "ссылка", "few": "ссылки", "many": "ссылок", "other": "ссылки" },
+      "msg.folderFailed": "Не удалось выбрать папку: {0}",
+      "msg.noMdFolder": "В выбранной папке не найдено файлов Markdown.",
+      "msg.readFolderFailed": "Не удалось прочитать папку: {0}",
+      "msg.noMdDropped": "В перетащенной папке не найдено файлов Markdown.",
+      "msg.readDroppedFailed": "Не удалось прочитать перетащенную папку: {0}",
+      "msg.unexpected": "Неожиданная ошибка",
+      "msg.needsServer": "Для автозагрузки нужен веб-сервер; откройте папку вручную.",
+      "msg.loading": "Загрузка пакета…",
+      "msg.sameOrigin": "Пакет должен находиться по пути того же источника: {0}",
+      "msg.noBundleAt": "Нет пакета по адресу ?bundle={0} (нет index.md).",
+      "msg.nothingToLoad": "Нечего загружать: добавьте bundles/index.md или передайте ?bundle=<name>.",
+      "msg.autoLoadFailed": "Не удалось выполнить автозагрузку: {0}",
+      "msg.buildFailed": "Не удалось построить граф: {0}"
+    },
+    "tr": {
+      "nav.toggleToolbar": "Araç çubuğunu aç/kapat",
+      "nav.about": "Hakkında",
+      "nav.open": "Klasör aç…",
+      "nav.reload": "Yenile",
+      "nav.resetView": "Görünümü sıfırla",
+      "nav.resetLayout": "Yerleşimi sıfırla",
+      "nav.labels": "Adlar",
+      "nav.tags": "Etiketler",
+      "nav.tagsTitle": "Etiket bağlantıları",
+      "nav.install": "Yükle",
+      "nav.installTitle": "grokf'u uygulama olarak yükle",
+      "nav.top": "Üst",
+      "nav.topTitle": "Üst düzey",
+      "nav.back": "Geri",
+      "nav.forward": "İleri",
+      "spinner.loading": "Yükleniyor",
+      "side.handle": "Filtreler",
+      "side.toggleFilters": "Filtreleri aç/kapat",
+      "side.head": "Ara ve filtrele",
+      "search.label": "Ara",
+      "search.placeholder": "örn. json, guide, nsm…",
+      "search.in": "içinde",
+      "field.all": "Tüm alanlar",
+      "field.title": "Başlık",
+      "field.description": "Açıklama",
+      "field.type": "Tür",
+      "field.tags": "Etiketler",
+      "field.path": "Yol",
+      "facet.kinds": "Çeşitler",
+      "facet.types": "Türler",
+      "facet.tags": "Etiketler",
+      "facet.status": "Durum",
+      "facet.selectKinds": "Çeşit seç…",
+      "facet.selectTypes": "Tür seç…",
+      "facet.selectTags": "Etiket seç…",
+      "facet.selectStatus": "Durum seç…",
+      "facet.searchTags": "Etiket ara…",
+      "facet.searchKinds": "Çeşit ara…",
+      "facet.searchTypes": "Tür ara…",
+      "facet.searchStatuses": "Durum ara…",
+      "btn.clear": "Temizle",
+      "btn.clearFilters": "Filtreleri temizle",
+      "legend.handle": "Gösterge",
+      "legend.toggle": "Göstergeyi aç/kapat",
+      "lang.label": "Dil",
+      "about.tagline": "— Open Knowledge Format paketleri için tek dosyalık, bağımlılıksız bir görüntüleyici.",
+      "about.rev": "Revizyon",
+      "about.desc": "Markdown kavramlarını, frontmatter'ını (tür, etiketler, durum, açıklama) ve referans bağlantılarını; filtreleyebileceğiniz, kaydırabileceğiniz ve yakınlaştırabileceğiniz etkileşimli bir grafik olarak işler.",
+      "about.li1": "Bir klasör açın veya pencereye sürükleyin. Bir web sunucusunda <code>bundles/</code> otomatik yüklenir.",
+      "about.li2": "Bir düğümü basılı tutun, ardından deste oluşturmak için kartı sağ kenara sürükleyin; önizlemeden Desteye ekle ile sayfa ekleyin.",
+      "about.li3": "Masaüstü: önizlemek için bir düğüme tıklayın, girmek için bir dizine çift tıklayın, yakınlaştırmak için kaydırın.",
+      "about.li4": "Dokunmatik: önizlemek veya girmek için dokunun, kaydırmak için sürükleyin, yakınlaştırmak için iki parmakla daraltın.",
+      "about.note": "Bu araç yapay zekâ desteğiyle oluşturulmuştur. Güvenmeden önce inceleyin.",
+      "about.source": "GitHub'da kaynak",
+      "about.runtime": "Çalışma zamanı iç işleyişi",
+      "about.showDetails": "Ayrıntıları göster",
+      "about.hideDetails": "Ayrıntıları gizle",
+      "card.desc": "Bu bilgi paketi için tek dosyalık, bağımlılıksız görüntüleyici.",
+      "card.li1": "Sunulduğunda: statik bir sunucuda (GitHub Pages dahil) <code>bundles/index.md</code> üzerinden <code>bundles/</code> otomatik yüklenir.",
+      "card.li2": "Bir paketi URL parametresiyle seçin, örneğin <code>?bundle=acme_retail</code> (bir ad, bir klasör yolu veya başlangıç <code>.md</code> dosyası).",
+      "card.li3": "Ön yükleme derinliğini <code>?depth=N</code> ile sınırlayın (varsayılan: tüm düzeyler); sonraki düzeyi yüklemek için noktalı bir düğüme tıklayın, önizlemek için tekrar tıklayın.",
+      "card.li4": "Yerel dosya: Klasör aç'a tıklayıp bir paket dizini seçin veya bu pencereye sürükleyin.",
+      "card.li5": "Bir düğümü basılı tutun, ardından deste oluşturmak için kartı sağ kenara sürükleyin; önizlemeden Desteye ekle ile sayfa ekleyin.",
+      "card.retry": "Otomatik yüklemeyi yeniden dene",
+      "pv.back": "Geri",
+      "pv.forward": "İleri",
+      "pv.close": "Kapat",
+      "pv.addDeck": "Bu sayfayı desteye ekle",
+      "filter.active": "{n} etkin",
+      "filter.search": "arama",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "one": "dosya", "other": "dosya" },
+      "stats.links": { "one": "bağlantı", "other": "bağlantı" },
+      "msg.folderFailed": "Klasör seçici başarısız oldu: {0}",
+      "msg.noMdFolder": "Seçilen klasörde Markdown dosyası bulunamadı.",
+      "msg.readFolderFailed": "Klasör okunamadı: {0}",
+      "msg.noMdDropped": "Bırakılan klasörde Markdown dosyası bulunamadı.",
+      "msg.readDroppedFailed": "Bırakılan klasör okunamadı: {0}",
+      "msg.unexpected": "Beklenmeyen hata",
+      "msg.needsServer": "Otomatik yükleme için bir web sunucusu gerekir; bunun yerine klasörü açın.",
+      "msg.loading": "Paket yükleniyor…",
+      "msg.sameOrigin": "Paket aynı kaynaklı bir yol olmalı: {0}",
+      "msg.noBundleAt": "?bundle={0} konumunda paket yok (index.md yok).",
+      "msg.nothingToLoad": "Yüklenecek bir şey yok: bundles/index.md ekleyin veya ?bundle=<name> geçin.",
+      "msg.autoLoadFailed": "Otomatik yükleme başarısız oldu: {0}",
+      "msg.buildFailed": "Grafik oluşturulamadı: {0}"
+    },
+    "hi": {
+      "nav.toggleToolbar": "टूलबार टॉगल करें",
+      "nav.about": "परिचय",
+      "nav.open": "फ़ोल्डर खोलें…",
+      "nav.reload": "पुनः लोड करें",
+      "nav.resetView": "दृश्य रीसेट करें",
+      "nav.resetLayout": "लेआउट रीसेट करें",
+      "nav.labels": "लेबल",
+      "nav.tags": "टैग",
+      "nav.tagsTitle": "टैग लिंक",
+      "nav.install": "इंस्टॉल करें",
+      "nav.installTitle": "grokf को ऐप के रूप में इंस्टॉल करें",
+      "nav.top": "शीर्ष",
+      "nav.topTitle": "शीर्ष स्तर",
+      "nav.back": "पीछे",
+      "nav.forward": "आगे",
+      "spinner.loading": "लोड हो रहा है",
+      "side.handle": "फ़िल्टर",
+      "side.toggleFilters": "फ़िल्टर टॉगल करें",
+      "side.head": "खोजें और फ़िल्टर करें",
+      "search.label": "खोजें",
+      "search.placeholder": "जैसे json, guide, nsm…",
+      "search.in": "में",
+      "field.all": "सभी फ़ील्ड",
+      "field.title": "शीर्षक",
+      "field.description": "विवरण",
+      "field.type": "प्रकार",
+      "field.tags": "टैग",
+      "field.path": "पथ",
+      "facet.kinds": "किस्में",
+      "facet.types": "प्रकार",
+      "facet.tags": "टैग",
+      "facet.status": "स्थिति",
+      "facet.selectKinds": "किस्में चुनें…",
+      "facet.selectTypes": "प्रकार चुनें…",
+      "facet.selectTags": "टैग चुनें…",
+      "facet.selectStatus": "स्थिति चुनें…",
+      "facet.searchTags": "टैग खोजें…",
+      "facet.searchKinds": "किस्में खोजें…",
+      "facet.searchTypes": "प्रकार खोजें…",
+      "facet.searchStatuses": "स्थितियाँ खोजें…",
+      "btn.clear": "साफ़ करें",
+      "btn.clearFilters": "फ़िल्टर साफ़ करें",
+      "legend.handle": "लेजेंड",
+      "legend.toggle": "लेजेंड टॉगल करें",
+      "lang.label": "भाषा",
+      "about.tagline": "— Open Knowledge Format बंडलों के लिए एकल-फ़ाइल, निर्भरता-रहित व्यूअर।",
+      "about.rev": "संशोधन",
+      "about.desc": "यह Markdown अवधारणाओं, उनके frontmatter (प्रकार, टैग, स्थिति, विवरण) और संदर्भ लिंक को एक इंटरैक्टिव ग्राफ़ के रूप में प्रस्तुत करता है, जिसे आप फ़िल्टर, पैन और ज़ूम कर सकते हैं।",
+      "about.li1": "एक फ़ोल्डर खोलें, या उसे विंडो पर खींचें। वेब सर्वर पर यह <code>bundles/</code> को स्वतः लोड करता है।",
+      "about.li2": "किसी नोड को दबाकर रखें, फिर डेक बनाने के लिए कार्ड को दाएँ किनारे तक खींचें; पूर्वावलोकन से डेक में जोड़ें के साथ पृष्ठ जोड़ें।",
+      "about.li3": "डेस्कटॉप: पूर्वावलोकन के लिए किसी नोड पर क्लिक करें, प्रवेश के लिए किसी निर्देशिका पर डबल-क्लिक करें, ज़ूम के लिए स्क्रॉल करें।",
+      "about.li4": "टच: पूर्वावलोकन या प्रवेश के लिए टैप करें, पैन के लिए खींचें, ज़ूम के लिए पिंच करें।",
+      "about.note": "यह उपकरण AI की सहायता से बनाया गया है। इस पर भरोसा करने से पहले इसकी समीक्षा करें।",
+      "about.source": "GitHub पर स्रोत",
+      "about.runtime": "रनटाइम आंतरिक विवरण",
+      "about.showDetails": "विवरण दिखाएँ",
+      "about.hideDetails": "विवरण छिपाएँ",
+      "card.desc": "इस ज्ञान बंडल के लिए एकल-फ़ाइल, निर्भरता-रहित व्यूअर।",
+      "card.li1": "सर्व होने पर: किसी स्थिर सर्वर पर (GitHub Pages सहित) यह <code>bundles/index.md</code> से <code>bundles/</code> को स्वतः लोड करता है।",
+      "card.li2": "URL पैरामीटर से एक बंडल चुनें, उदाहरण के लिए <code>?bundle=acme_retail</code> (एक नाम, एक फ़ोल्डर पथ, या एक आरंभिक <code>.md</code> फ़ाइल)।",
+      "card.li3": "प्रीफ़ेच गहराई को <code>?depth=N</code> से सीमित करें (डिफ़ॉल्ट: सभी स्तर); अगला स्तर लोड करने के लिए किसी बिंदुदार नोड पर क्लिक करें, पूर्वावलोकन के लिए फिर क्लिक करें।",
+      "card.li4": "स्थानीय फ़ाइल: फ़ोल्डर खोलें पर क्लिक करें और एक बंडल निर्देशिका चुनें, या उसे इस विंडो पर खींचें।",
+      "card.li5": "किसी नोड को दबाकर रखें, फिर डेक बनाने के लिए कार्ड को दाएँ किनारे तक खींचें; पूर्वावलोकन से डेक में जोड़ें के साथ पृष्ठ जोड़ें।",
+      "card.retry": "स्वतः लोड फिर से आज़माएँ",
+      "pv.back": "पीछे",
+      "pv.forward": "आगे",
+      "pv.close": "बंद करें",
+      "pv.addDeck": "इस पृष्ठ को डेक में जोड़ें",
+      "filter.active": "{n} सक्रिय",
+      "filter.search": "खोज",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "other": "फ़ाइलें" },
+      "stats.links": { "other": "लिंक" },
+      "msg.folderFailed": "फ़ोल्डर चयनकर्ता विफल रहा: {0}",
+      "msg.noMdFolder": "चुने गए फ़ोल्डर में कोई Markdown फ़ाइल नहीं मिली।",
+      "msg.readFolderFailed": "फ़ोल्डर पढ़ा नहीं जा सका: {0}",
+      "msg.noMdDropped": "छोड़े गए फ़ोल्डर में कोई Markdown फ़ाइल नहीं मिली।",
+      "msg.readDroppedFailed": "छोड़ा गया फ़ोल्डर पढ़ा नहीं जा सका: {0}",
+      "msg.unexpected": "अप्रत्याशित त्रुटि",
+      "msg.needsServer": "स्वतः लोड के लिए वेब सर्वर चाहिए; इसके बजाय फ़ोल्डर खोलें।",
+      "msg.loading": "बंडल लोड हो रहा है…",
+      "msg.sameOrigin": "बंडल एक समान-ओरिजिन पथ होना चाहिए: {0}",
+      "msg.noBundleAt": "?bundle={0} पर कोई बंडल नहीं (कोई index.md नहीं)।",
+      "msg.nothingToLoad": "लोड करने के लिए कुछ नहीं: bundles/index.md जोड़ें, या ?bundle=<name> पास करें।",
+      "msg.autoLoadFailed": "स्वतः लोड विफल रहा: {0}",
+      "msg.buildFailed": "ग्राफ़ बनाया नहीं जा सका: {0}"
+    },
+    "zh-Hans": {
+      "nav.toggleToolbar": "切换工具栏",
+      "nav.about": "关于",
+      "nav.open": "打开文件夹…",
+      "nav.reload": "重新加载",
+      "nav.resetView": "重置视图",
+      "nav.resetLayout": "重置布局",
+      "nav.labels": "标记",
+      "nav.tags": "标签",
+      "nav.tagsTitle": "标签链接",
+      "nav.install": "安装",
+      "nav.installTitle": "将 grokf 安装为应用",
+      "nav.top": "顶层",
+      "nav.topTitle": "顶层",
+      "nav.back": "后退",
+      "nav.forward": "前进",
+      "spinner.loading": "加载中",
+      "side.handle": "筛选",
+      "side.toggleFilters": "切换筛选",
+      "side.head": "搜索与筛选",
+      "search.label": "搜索",
+      "search.placeholder": "例如 json、guide、nsm…",
+      "search.in": "在",
+      "field.all": "所有字段",
+      "field.title": "标题",
+      "field.description": "描述",
+      "field.type": "类型",
+      "field.tags": "标签",
+      "field.path": "路径",
+      "facet.kinds": "种类",
+      "facet.types": "类型",
+      "facet.tags": "标签",
+      "facet.status": "状态",
+      "facet.selectKinds": "选择种类…",
+      "facet.selectTypes": "选择类型…",
+      "facet.selectTags": "选择标签…",
+      "facet.selectStatus": "选择状态…",
+      "facet.searchTags": "搜索标签…",
+      "facet.searchKinds": "搜索种类…",
+      "facet.searchTypes": "搜索类型…",
+      "facet.searchStatuses": "搜索状态…",
+      "btn.clear": "清除",
+      "btn.clearFilters": "清除筛选",
+      "legend.handle": "图例",
+      "legend.toggle": "切换图例",
+      "lang.label": "语言",
+      "about.tagline": "— 面向 Open Knowledge Format 包的单文件、零依赖查看器。",
+      "about.rev": "修订",
+      "about.desc": "它会将 Markdown 概念、其 frontmatter（类型、标签、状态、描述）以及引用链接渲染为可筛选、可平移、可缩放的交互式图谱。",
+      "about.li1": "打开文件夹，或将文件夹拖到窗口上。在 Web 服务器上，它会自动加载 <code>bundles/</code>。",
+      "about.li2": "按住节点，然后将卡片拖到右边缘以创建卡片组；在预览中通过“添加到卡片组”添加页面。",
+      "about.li3": "桌面端：单击节点进行预览，双击目录进入，滚动以缩放。",
+      "about.li4": "触屏：点按以预览或进入，拖动以平移，双指捏合以缩放。",
+      "about.note": "本工具由 AI 协助生成。在依赖它之前请先审阅。",
+      "about.source": "GitHub 上的源代码",
+      "about.runtime": "运行时内部机制",
+      "about.showDetails": "显示详情",
+      "about.hideDetails": "隐藏详情",
+      "card.desc": "面向此知识包的单文件、零依赖查看器。",
+      "card.li1": "托管时：在静态服务器上（包括 GitHub Pages）它会从 <code>bundles/index.md</code> 自动加载 <code>bundles/</code>。",
+      "card.li2": "通过 URL 参数选择一个包，例如 <code>?bundle=acme_retail</code>（一个名称、一个文件夹路径或一个起始 <code>.md</code> 文件）。",
+      "card.li3": "用 <code>?depth=N</code> 限制预取深度（默认：所有层级）；单击虚线节点以加载其下一层级，再次单击进行预览。",
+      "card.li4": "本地文件：单击“打开文件夹”并选择一个包目录，或将其拖到此窗口。",
+      "card.li5": "按住节点，然后将卡片拖到右边缘以创建卡片组；在预览中通过“添加到卡片组”添加页面。",
+      "card.retry": "重试自动加载",
+      "pv.back": "后退",
+      "pv.forward": "前进",
+      "pv.close": "关闭",
+      "pv.addDeck": "将此页面添加到卡片组",
+      "filter.active": "{n} 项生效",
+      "filter.search": "搜索",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "other": "文件" },
+      "stats.links": { "other": "链接" },
+      "msg.folderFailed": "文件夹选择器失败：{0}",
+      "msg.noMdFolder": "所选文件夹中未找到 Markdown 文件。",
+      "msg.readFolderFailed": "无法读取文件夹：{0}",
+      "msg.noMdDropped": "拖入的文件夹中未找到 Markdown 文件。",
+      "msg.readDroppedFailed": "无法读取拖入的文件夹：{0}",
+      "msg.unexpected": "意外错误",
+      "msg.needsServer": "自动加载需要 Web 服务器；请改为打开文件夹。",
+      "msg.loading": "正在加载知识包…",
+      "msg.sameOrigin": "知识包必须是同源路径：{0}",
+      "msg.noBundleAt": "?bundle={0} 处没有知识包（没有 index.md）。",
+      "msg.nothingToLoad": "没有可加载的内容：请添加 bundles/index.md，或传入 ?bundle=<name>。",
+      "msg.autoLoadFailed": "自动加载失败：{0}",
+      "msg.buildFailed": "无法构建图谱：{0}"
+    },
+    "ja": {
+      "nav.toggleToolbar": "ツールバーの表示切替",
+      "nav.about": "このアプリについて",
+      "nav.open": "フォルダを開く…",
+      "nav.reload": "再読み込み",
+      "nav.resetView": "表示をリセット",
+      "nav.resetLayout": "レイアウトをリセット",
+      "nav.labels": "ラベル",
+      "nav.tags": "タグ",
+      "nav.tagsTitle": "タグリンク",
+      "nav.install": "インストール",
+      "nav.installTitle": "grokf をアプリとしてインストール",
+      "nav.top": "最上位",
+      "nav.topTitle": "最上位レベル",
+      "nav.back": "戻る",
+      "nav.forward": "進む",
+      "spinner.loading": "読み込み中",
+      "side.handle": "フィルター",
+      "side.toggleFilters": "フィルターの表示切替",
+      "side.head": "検索とフィルター",
+      "search.label": "検索",
+      "search.placeholder": "例: json, guide, nsm…",
+      "search.in": "対象",
+      "field.all": "すべてのフィールド",
+      "field.title": "タイトル",
+      "field.description": "説明",
+      "field.type": "種類",
+      "field.tags": "タグ",
+      "field.path": "パス",
+      "facet.kinds": "種別",
+      "facet.types": "種類",
+      "facet.tags": "タグ",
+      "facet.status": "ステータス",
+      "facet.selectKinds": "種別を選択…",
+      "facet.selectTypes": "種類を選択…",
+      "facet.selectTags": "タグを選択…",
+      "facet.selectStatus": "ステータスを選択…",
+      "facet.searchTags": "タグを検索…",
+      "facet.searchKinds": "種別を検索…",
+      "facet.searchTypes": "種類を検索…",
+      "facet.searchStatuses": "ステータスを検索…",
+      "btn.clear": "クリア",
+      "btn.clearFilters": "フィルターをクリア",
+      "legend.handle": "凡例",
+      "legend.toggle": "凡例の表示切替",
+      "lang.label": "言語",
+      "about.tagline": "— Open Knowledge Format バンドル向けの、単一ファイルで依存関係のないビューア。",
+      "about.rev": "リビジョン",
+      "about.desc": "Markdown のコンセプトとそのフロントマター (type, tags, status, description)、および参照リンクを、フィルター・パン・ズームできるインタラクティブなグラフとして描画します。",
+      "about.li1": "フォルダを開くか、ウィンドウにドラッグします。ウェブサーバー上では <code>bundles/</code> を自動的に読み込みます。",
+      "about.li2": "ノードを長押しし、カードを右端までドラッグするとデッキを作成できます。プレビューから「デッキに追加」でページを追加します。",
+      "about.li3": "デスクトップ: ノードをクリックでプレビュー、ディレクトリをダブルクリックで移動、スクロールでズーム。",
+      "about.li4": "タッチ: タップでプレビューまたは移動、ドラッグでパン、ピンチでズーム。",
+      "about.note": "このツールは AI の支援を受けて生成されました。信頼する前に内容を確認してください。",
+      "about.source": "GitHub のソース",
+      "about.runtime": "ランタイムの内部",
+      "about.showDetails": "詳細を表示",
+      "about.hideDetails": "詳細を隠す",
+      "card.desc": "このナレッジバンドル向けの、単一ファイルで依存関係のないビューア。",
+      "card.li1": "配信時: 静的サーバー (GitHub Pages を含む) では <code>bundles/index.md</code> から <code>bundles/</code> を自動的に読み込みます。",
+      "card.li2": "URL パラメーターでバンドルを指定します。例: <code>?bundle=acme_retail</code> (名前、フォルダパス、または開始 <code>.md</code> ファイル)。",
+      "card.li3": "<code>?depth=N</code> で先読みの深さを制限します (既定: すべての階層)。点線のノードをクリックすると次の階層を読み込み、もう一度クリックするとプレビューします。",
+      "card.li4": "ローカルファイル: 「フォルダを開く」をクリックしてバンドルのディレクトリを選択するか、このウィンドウにドラッグします。",
+      "card.li5": "ノードを長押しし、カードを右端までドラッグするとデッキを作成できます。プレビューから「デッキに追加」でページを追加します。",
+      "card.retry": "自動読み込みを再試行",
+      "pv.back": "戻る",
+      "pv.forward": "進む",
+      "pv.close": "閉じる",
+      "pv.addDeck": "このページをデッキに追加",
+      "filter.active": "{n} 件適用中",
+      "filter.search": "検索",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "other": "ファイル" },
+      "stats.links": { "other": "リンク" },
+      "msg.folderFailed": "フォルダ選択に失敗しました: {0}",
+      "msg.noMdFolder": "選択したフォルダに Markdown ファイルが見つかりません。",
+      "msg.readFolderFailed": "フォルダを読み取れませんでした: {0}",
+      "msg.noMdDropped": "ドロップしたフォルダに Markdown ファイルが見つかりません。",
+      "msg.readDroppedFailed": "ドロップしたフォルダを読み取れませんでした: {0}",
+      "msg.unexpected": "予期しないエラー",
+      "msg.needsServer": "自動読み込みにはウェブサーバーが必要です。代わりにフォルダを開いてください。",
+      "msg.loading": "バンドルを読み込み中…",
+      "msg.sameOrigin": "バンドルは同一オリジンのパスである必要があります: {0}",
+      "msg.noBundleAt": "?bundle={0} にバンドルがありません (index.md なし)。",
+      "msg.nothingToLoad": "読み込むものがありません: bundles/index.md を追加するか、?bundle=<name> を指定してください。",
+      "msg.autoLoadFailed": "自動読み込みに失敗しました: {0}",
+      "msg.buildFailed": "グラフを構築できませんでした: {0}"
+    },
+    "ko": {
+      "nav.toggleToolbar": "툴바 표시 전환",
+      "nav.about": "정보",
+      "nav.open": "폴더 열기…",
+      "nav.reload": "새로 고침",
+      "nav.resetView": "보기 초기화",
+      "nav.resetLayout": "레이아웃 초기화",
+      "nav.labels": "레이블",
+      "nav.tags": "태그",
+      "nav.tagsTitle": "태그 링크",
+      "nav.install": "설치",
+      "nav.installTitle": "grokf를 앱으로 설치",
+      "nav.top": "최상위",
+      "nav.topTitle": "최상위 수준",
+      "nav.back": "뒤로",
+      "nav.forward": "앞으로",
+      "spinner.loading": "불러오는 중",
+      "side.handle": "필터",
+      "side.toggleFilters": "필터 표시 전환",
+      "side.head": "검색 및 필터",
+      "search.label": "검색",
+      "search.placeholder": "예: json, guide, nsm…",
+      "search.in": "대상",
+      "field.all": "모든 필드",
+      "field.title": "제목",
+      "field.description": "설명",
+      "field.type": "유형",
+      "field.tags": "태그",
+      "field.path": "경로",
+      "facet.kinds": "종류",
+      "facet.types": "유형",
+      "facet.tags": "태그",
+      "facet.status": "상태",
+      "facet.selectKinds": "종류 선택…",
+      "facet.selectTypes": "유형 선택…",
+      "facet.selectTags": "태그 선택…",
+      "facet.selectStatus": "상태 선택…",
+      "facet.searchTags": "태그 검색…",
+      "facet.searchKinds": "종류 검색…",
+      "facet.searchTypes": "유형 검색…",
+      "facet.searchStatuses": "상태 검색…",
+      "btn.clear": "지우기",
+      "btn.clearFilters": "필터 지우기",
+      "legend.handle": "범례",
+      "legend.toggle": "범례 표시 전환",
+      "lang.label": "언어",
+      "about.tagline": "— Open Knowledge Format 번들을 위한 단일 파일, 의존성 없는 뷰어.",
+      "about.rev": "리비전",
+      "about.desc": "Markdown 개념과 그 프런트매터 (type, tags, status, description), 참조 링크를 필터링·이동·확대/축소할 수 있는 대화형 그래프로 렌더링합니다.",
+      "about.li1": "폴더를 열거나 창으로 드래그하세요. 웹 서버에서는 <code>bundles/</code>를 자동으로 불러옵니다.",
+      "about.li2": "노드를 길게 누른 다음 카드를 오른쪽 가장자리로 드래그하면 덱을 만들 수 있습니다. 미리보기에서 '덱에 추가'로 페이지를 추가하세요.",
+      "about.li3": "데스크톱: 노드를 클릭하면 미리보기, 디렉터리를 더블클릭하면 진입, 스크롤하면 확대/축소.",
+      "about.li4": "터치: 탭하면 미리보기 또는 진입, 드래그하면 이동, 핀치하면 확대/축소.",
+      "about.note": "이 도구는 AI의 도움으로 생성되었습니다. 사용하기 전에 검토하세요.",
+      "about.source": "GitHub 소스",
+      "about.runtime": "런타임 내부",
+      "about.showDetails": "세부정보 표시",
+      "about.hideDetails": "세부정보 숨기기",
+      "card.desc": "이 지식 번들을 위한 단일 파일, 의존성 없는 뷰어.",
+      "card.li1": "제공 시: 정적 서버 (GitHub Pages 포함)에서는 <code>bundles/index.md</code>에서 <code>bundles/</code>를 자동으로 불러옵니다.",
+      "card.li2": "URL 매개변수로 번들을 선택하세요. 예: <code>?bundle=acme_retail</code> (이름, 폴더 경로 또는 시작 <code>.md</code> 파일).",
+      "card.li3": "<code>?depth=N</code>으로 미리 가져오기 깊이를 제한하세요 (기본: 모든 수준). 점선 노드를 클릭하면 다음 수준을 불러오고, 다시 클릭하면 미리보기합니다.",
+      "card.li4": "로컬 파일: 폴더 열기를 클릭해 번들 디렉터리를 선택하거나, 이 창으로 드래그하세요.",
+      "card.li5": "노드를 길게 누른 다음 카드를 오른쪽 가장자리로 드래그하면 덱을 만들 수 있습니다. 미리보기에서 '덱에 추가'로 페이지를 추가하세요.",
+      "card.retry": "자동 불러오기 다시 시도",
+      "pv.back": "뒤로",
+      "pv.forward": "앞으로",
+      "pv.close": "닫기",
+      "pv.addDeck": "이 페이지를 덱에 추가",
+      "filter.active": "{n}개 적용됨",
+      "filter.search": "검색",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "other": "파일" },
+      "stats.links": { "other": "링크" },
+      "msg.folderFailed": "폴더 선택 실패: {0}",
+      "msg.noMdFolder": "선택한 폴더에서 Markdown 파일을 찾지 못했습니다.",
+      "msg.readFolderFailed": "폴더를 읽을 수 없습니다: {0}",
+      "msg.noMdDropped": "드롭한 폴더에서 Markdown 파일을 찾지 못했습니다.",
+      "msg.readDroppedFailed": "드롭한 폴더를 읽을 수 없습니다: {0}",
+      "msg.unexpected": "예기치 않은 오류",
+      "msg.needsServer": "자동 불러오기에는 웹 서버가 필요합니다. 대신 폴더를 여세요.",
+      "msg.loading": "번들 불러오는 중…",
+      "msg.sameOrigin": "번들은 동일 출처 경로여야 합니다: {0}",
+      "msg.noBundleAt": "?bundle={0}에 번들이 없습니다 (index.md 없음).",
+      "msg.nothingToLoad": "불러올 항목이 없습니다: bundles/index.md를 추가하거나 ?bundle=<name>을 전달하세요.",
+      "msg.autoLoadFailed": "자동 불러오기 실패: {0}",
+      "msg.buildFailed": "그래프를 만들 수 없습니다: {0}"
+    },
+    "ar": {
+      "nav.toggleToolbar": "تبديل شريط الأدوات",
+      "nav.about": "حول",
+      "nav.open": "فتح مجلد…",
+      "nav.reload": "إعادة التحميل",
+      "nav.resetView": "إعادة ضبط العرض",
+      "nav.resetLayout": "إعادة ضبط التخطيط",
+      "nav.labels": "التسميات",
+      "nav.tags": "الوسوم",
+      "nav.tagsTitle": "روابط الوسوم",
+      "nav.install": "تثبيت",
+      "nav.installTitle": "تثبيت grokf كتطبيق",
+      "nav.top": "الأعلى",
+      "nav.topTitle": "المستوى الأعلى",
+      "nav.back": "رجوع",
+      "nav.forward": "تقدّم",
+      "spinner.loading": "جارٍ التحميل",
+      "side.handle": "عوامل التصفية",
+      "side.toggleFilters": "تبديل عوامل التصفية",
+      "side.head": "بحث وتصفية",
+      "search.label": "بحث",
+      "search.placeholder": "مثال: json, guide, nsm…",
+      "search.in": "في",
+      "field.all": "كل الحقول",
+      "field.title": "العنوان",
+      "field.description": "الوصف",
+      "field.type": "النوع",
+      "field.tags": "الوسوم",
+      "field.path": "المسار",
+      "facet.kinds": "الأصناف",
+      "facet.types": "الأنواع",
+      "facet.tags": "الوسوم",
+      "facet.status": "الحالة",
+      "facet.selectKinds": "اختر الأصناف…",
+      "facet.selectTypes": "اختر الأنواع…",
+      "facet.selectTags": "اختر الوسوم…",
+      "facet.selectStatus": "اختر الحالة…",
+      "facet.searchTags": "بحث في الوسوم…",
+      "facet.searchKinds": "بحث في الأصناف…",
+      "facet.searchTypes": "بحث في الأنواع…",
+      "facet.searchStatuses": "بحث في الحالات…",
+      "btn.clear": "مسح",
+      "btn.clearFilters": "مسح عوامل التصفية",
+      "legend.handle": "المفتاح",
+      "legend.toggle": "تبديل المفتاح",
+      "lang.label": "اللغة",
+      "about.tagline": "— عارض أحادي الملف بلا تبعيات لحزم Open Knowledge Format.",
+      "about.rev": "المراجعة",
+      "about.desc": "يعرض مفاهيم Markdown وبياناتها الأولية (type، tags، status، description) وروابط المراجع كرسم بياني تفاعلي يمكنك تصفيته وتحريكه وتكبيره.",
+      "about.li1": "افتح مجلدًا، أو اسحبه إلى النافذة. على خادم ويب يتم تحميل <code>bundles/</code> تلقائيًا.",
+      "about.li2": "اضغط مع الاستمرار على عقدة، ثم اسحب البطاقة إلى الحافة اليمنى لإنشاء مجموعة؛ أضف صفحات من المعاينة عبر «إضافة إلى المجموعة».",
+      "about.li3": "سطح المكتب: انقر على عقدة للمعاينة، وانقر نقرًا مزدوجًا على دليل للدخول، ومرّر للتكبير.",
+      "about.li4": "اللمس: انقر للمعاينة أو الدخول، واسحب للتحريك، واقرص للتكبير.",
+      "about.note": "أُنشئت هذه الأداة بمساعدة الذكاء الاصطناعي. راجعها قبل الاعتماد عليها.",
+      "about.source": "المصدر على GitHub",
+      "about.runtime": "تفاصيل التشغيل الداخلية",
+      "about.showDetails": "عرض التفاصيل",
+      "about.hideDetails": "إخفاء التفاصيل",
+      "card.desc": "عارض أحادي الملف بلا تبعيات لحزمة المعرفة هذه.",
+      "card.li1": "عند التقديم: على خادم ثابت (بما في ذلك GitHub Pages) يتم تحميل <code>bundles/</code> تلقائيًا من <code>bundles/index.md</code>.",
+      "card.li2": "اختر حزمة عبر معامل URL، مثل <code>?bundle=acme_retail</code> (اسم أو مسار مجلد أو ملف <code>.md</code> للبداية).",
+      "card.li3": "حدّد عمق التحميل المسبق عبر <code>?depth=N</code> (الافتراضي: كل المستويات)؛ انقر على عقدة منقّطة لتحميل مستواها التالي، وانقر مرة أخرى للمعاينة.",
+      "card.li4": "ملف محلي: انقر على فتح مجلد واختر دليل حزمة، أو اسحبه إلى هذه النافذة.",
+      "card.li5": "اضغط مع الاستمرار على عقدة، ثم اسحب البطاقة إلى الحافة اليمنى لإنشاء مجموعة؛ أضف صفحات من المعاينة عبر «إضافة إلى المجموعة».",
+      "card.retry": "إعادة محاولة التحميل التلقائي",
+      "pv.back": "رجوع",
+      "pv.forward": "تقدّم",
+      "pv.close": "إغلاق",
+      "pv.addDeck": "إضافة هذه الصفحة إلى المجموعة",
+      "filter.active": "{n} مفعّل",
+      "filter.search": "بحث",
+      "stats.line": "{files} · {links}",
+      "stats.files": { "zero": "ملفات", "one": "ملف", "two": "ملفان", "few": "ملفات", "many": "ملفًا", "other": "ملف" },
+      "stats.links": { "zero": "روابط", "one": "رابط", "two": "رابطان", "few": "روابط", "many": "رابطًا", "other": "رابط" },
+      "msg.folderFailed": "فشل منتقي المجلدات: {0}",
+      "msg.noMdFolder": "لم يُعثر على ملفات Markdown في المجلد المختار.",
+      "msg.readFolderFailed": "تعذّر قراءة المجلد: {0}",
+      "msg.noMdDropped": "لم يُعثر على ملفات Markdown في المجلد المسحوب.",
+      "msg.readDroppedFailed": "تعذّر قراءة المجلد المسحوب: {0}",
+      "msg.unexpected": "خطأ غير متوقع",
+      "msg.needsServer": "يتطلب التحميل التلقائي خادم ويب؛ افتح المجلد بدلاً من ذلك.",
+      "msg.loading": "جارٍ تحميل الحزمة…",
+      "msg.sameOrigin": "يجب أن تكون الحزمة مسارًا من الأصل نفسه: {0}",
+      "msg.noBundleAt": "لا توجد حزمة في ?bundle={0} (لا يوجد index.md).",
+      "msg.nothingToLoad": "لا يوجد ما يُحمّل: أضف bundles/index.md، أو مرّر ?bundle=<name>.",
+      "msg.autoLoadFailed": "فشل التحميل التلقائي: {0}",
+      "msg.buildFailed": "تعذّر إنشاء الرسم البياني: {0}"
+    }
+  };   // locale tag -> { key: string | CLDR plural forms }
+  var RTL_LANGS = { ar: 1, fa: 1, he: 1, ur: 1, ps: 1, sd: 1, yi: 1, dv: 1, ug: 1, ckb: 1, mzn: 1, nqo: 1 };
+  var BASE_LANG = "en";
+  var currentLang = BASE_LANG;
+  var pluralCache = {};
+
+  function i18nDict() { return I18N[currentLang] || null; }
+
+  function t(key, fallback, vars) {
+    var d = i18nDict();
+    var s = d && d[key] != null ? d[key] : (fallback != null ? fallback : key);
+    if (typeof s !== "string") return s;
+    if (vars) s = s.replace(/\{(\w+)\}/g, function (m, k) { return vars[k] != null ? String(vars[k]) : m; });
+    return s;
+  }
+
+  // Direction follows the script the locale is written in, which Intl.Locale
+  // reports (so e.g. az-Arab is right-to-left while az-Latn is not). The base
+  // list is only a fallback for engines without Intl.Locale.textInfo.
+  function dirFor(lang) {
+    var tag = String(lang || "");
+    try {
+      if (typeof Intl !== "undefined" && Intl.Locale) {
+        var info = new Intl.Locale(tag).textInfo;
+        if (info && (info.direction === "rtl" || info.direction === "ltr")) return info.direction;
+      }
+    } catch (e) {}
+    return RTL_LANGS[tag.split("-")[0].toLowerCase()] ? "rtl" : "ltr";
+  }
+
+  function pluralCat(n) {
+    try {
+      if (typeof Intl !== "undefined" && Intl.PluralRules) {
+        if (!pluralCache[currentLang]) pluralCache[currentLang] = new Intl.PluralRules(currentLang);
+        return pluralCache[currentLang].select(n);
+      }
+    } catch (e) {}
+    return "other";
+  }
+
+  // A counted noun: a locale may give forms for several CLDR categories; any it
+  // omits falls back to "other". English intentionally gives only "other", so
+  // its output stays "1 files · 0 links" exactly as it was before localization.
+  function tc(n, key, fallbackForms) {
+    var d = i18nDict();
+    var forms = (d && d[key]) || fallbackForms;
+    var cat = pluralCat(n);
+    return n + " " + (forms[cat] != null ? forms[cat] : forms.other);
+  }
+
+  function statsText(files, links) {
+    return t("stats.line", "{files} \u00b7 {links}", {
+      files: tc(files, "stats.files", { other: "files" }),
+      links: tc(links, "stats.links", { other: "links" })
+    });
+  }
+
+  // The base direction of a string, like dir="auto": the first strong letter
+  // decides, preferring right-to-left ranges; neutral-only text defaults to ltr.
+  // Canvas has no "auto", so the graph labels use this before each draw. Cached,
+  // because draw() revisits every label on every frame.
+  var RTL_CHAR_RE = /[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F\u0750-\u077F\u0780-\u07BF\u07C0-\u07FF\u0800-\u085F\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+  var bidiCache = Object.create(null);
+  function bidiBaseDir(text) {
+    var s = String(text == null ? "" : text);
+    var cached = bidiCache[s];
+    if (cached) return cached;
+    var dir = "ltr";
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (/\p{L}/u.test(ch)) { dir = RTL_CHAR_RE.test(ch) ? "rtl" : "ltr"; break; }
+    }
+    bidiCache[s] = dir;
+    return dir;
+  }
+
+  // Like t(), but returns HTML: the literal template text is escaped and every
+  // interpolated value is isolated in <bdi dir="auto">, so an opposite-direction
+  // value (a bundle name, a URL) cannot reorder the sentence around it.
+  function tHtml(key, fallback, vars) {
+    var s = t(key, fallback);
+    var out = "", last = 0, m, re = /\{(\w+)\}/g;
+    while ((m = re.exec(s))) {
+      out += esc(s.slice(last, m.index));
+      var v = vars ? vars[m[1]] : null;
+      out += v == null ? esc(m[0]) : '<bdi dir="auto">' + esc(String(v)) + "</bdi>";
+      last = re.lastIndex;
+    }
+    out += esc(s.slice(last));
+    return out;
+  }
 
   // ---------------------------------------------------------------- utils
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -2165,8 +3369,9 @@
 
   function updateStats() {
     if (!statsEl) return;
-    statsEl.textContent = nodes.filter(function (n) { return n.kind !== "dir"; }).length + " files · " +
-      links.filter(function (l) { return l.kind === "ref" && !l.dup; }).length + " links";
+    var files = nodes.filter(function (n) { return n.kind !== "dir"; }).length;
+    var linkCount = links.filter(function (l) { return l.kind === "ref" && !l.dup; }).length;
+    statsEl.textContent = statsText(files, linkCount);
   }
 
   // ---------------------------------------------------------------- forces
@@ -2680,6 +3885,7 @@
 
       if (showLabels && labelAlpha > 0.01) {
         var label = displayLabel(n);
+        ctx.direction = bidiBaseDir(label);   // per-label base direction, like dir="auto"
         ctx.globalAlpha = (dim ? 0.2 : 1) * labelAlpha;
         ctx.font = (n.kind === "dir" ? "600 " : "") + fontScreen.toFixed(1) + "px ui-sans-serif, system-ui, sans-serif";
         ctx.textAlign = "center";
@@ -3057,6 +4263,7 @@
     }
     Object.keys(embedUrlCache).forEach(function (path) { URL.revokeObjectURL(embedUrlCache[path].url); });
     embedUrlCache = Object.create(null);
+    bidiCache = Object.create(null);   // labels are cached by text; reset with the bundle
     embedLoads = new Map();
     previewRenderId++;
     pvStack = []; pvIndex = -1; pvPushed = false; pvSuppress = false;
@@ -4569,6 +5776,19 @@
         renderMarkdown(node.body || "");
     }
     if (node.runtime && node.runtimePage === "performance.md") mountPerfCharts();
+    // Declare the language of the content, not just the interface: a concept may
+    // carry its own language in frontmatter, and the generated runtime pages are
+    // English. Unknown content inherits the interface language.
+    var contentLang = node.runtime ? "en" : (node.fm ? (node.fm.lang != null ? node.fm.lang : node.fm.language) : null);
+    if (typeof contentLang === "string" && contentLang) {
+      var canonLang = contentLang;
+      try { canonLang = canonicalTag(contentLang) || contentLang; } catch (e) {}
+      pvBody.lang = canonLang;
+      pvBody.dir = dirFor(canonLang);
+    } else {
+      pvBody.removeAttribute("lang");
+      pvBody.removeAttribute("dir");
+    }
     hydratePreviewImages();
     preview.classList.add("show");
     // The preview reuses one scroll container across entries; reset it once the
@@ -4942,7 +6162,7 @@
     var n = tagInclude.size + tagExclude.size + kindInclude.size + kindExclude.size +
             typeInclude.size + typeExclude.size + statusInclude.size + statusExclude.size;
     var el = document.getElementById("filterSummary");
-    if (el) el.textContent = n ? n + " active" : (query ? "search" : "");
+    if (el) el.textContent = n ? t("filter.active", "{n} active", { n: n }) : (query ? t("filter.search", "search") : "");
   }
 
   // ---- tag combobox: include / exclude chips + embedded search -------------
@@ -5350,7 +6570,7 @@
     aboutPop.classList.toggle("collapsed", collapsed);
     if (aboutToggle) {
       aboutToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      aboutToggle.setAttribute("aria-label", collapsed ? "Show details" : "Hide details");
+      aboutToggle.setAttribute("aria-label", collapsed ? t("about.showDetails", "Show details") : t("about.hideDetails", "Hide details"));
     }
   }
   function closeAbout() {
@@ -5478,7 +6698,7 @@
       if (request !== bundleLoadRequest) return;
       if (e && e.name === "AbortError") return; // the user dismissed the picker
       overlay.classList.add("show");
-      overlayMsg.textContent = "Folder picker failed: " + (e && e.message ? e.message : e);
+      overlayMsg.innerHTML = tHtml("msg.folderFailed", "Folder picker failed: {0}", { 0: e && e.message ? e.message : e });
       closeAbout();
       return;
     }
@@ -5487,11 +6707,11 @@
       var files = await fromDirectoryHandle(dir);
       if (request !== bundleLoadRequest) return;
       if (files.length) { loadLocal(files); closeAbout(); }
-      else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
+      else overlayMsg.textContent = t("msg.noMdFolder", "No Markdown files found in the chosen folder.");
     } catch (e) {
       if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
-      overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
+      overlayMsg.innerHTML = tHtml("msg.readFolderFailed", "Could not read the folder: {0}", { 0: e && e.message ? e.message : e });
       if (window.console && console.error) console.error(e);
       closeAbout();
     } finally {
@@ -5507,11 +6727,11 @@
       var files = await fromFileList(dirInput.files);
       if (request !== bundleLoadRequest) return;
       if (files.length) { loadLocal(files); closeAbout(); }
-      else overlayMsg.textContent = "No Markdown files found in the chosen folder.";
+      else overlayMsg.textContent = t("msg.noMdFolder", "No Markdown files found in the chosen folder.");
     } catch (e) {
       if (request !== bundleLoadRequest) return;
       overlay.classList.add("show");
-      overlayMsg.textContent = "Could not read the folder: " + (e && e.message ? e.message : e);
+      overlayMsg.innerHTML = tHtml("msg.readFolderFailed", "Could not read the folder: {0}", { 0: e && e.message ? e.message : e });
       if (window.console && console.error) console.error(e);
       closeAbout();
     } finally {
@@ -5540,10 +6760,10 @@
       var files = await fromDataTransfer(e.dataTransfer);
       if (request !== bundleLoadRequest) return;
       if (files.length) { loadLocal(files); closeAbout(); }
-      else overlayMsg.textContent = "No Markdown files found in the dropped folder.";
+      else overlayMsg.textContent = t("msg.noMdDropped", "No Markdown files found in the dropped folder.");
     } catch (err) {
       if (request !== bundleLoadRequest) return;
-      overlayMsg.textContent = "Could not read the dropped folder: " + err.message;
+      overlayMsg.innerHTML = tHtml("msg.readDroppedFailed", "Could not read the dropped folder: {0}", { 0: err.message });
     } finally {
       busyEnd();
     }
@@ -5558,7 +6778,7 @@
   });
   window.addEventListener("unhandledrejection", function (e) {
     if (overlay && overlay.classList.contains("show")) {
-      overlayMsg.textContent = (e && e.reason && e.reason.message) || "Unexpected error";
+      overlayMsg.textContent = (e && e.reason && e.reason.message) || t("msg.unexpected", "Unexpected error");
     }
   });
 
@@ -5639,7 +6859,7 @@
       if (!raf) loop();
     } catch (e) {
       overlay.classList.add("show");
-      overlayMsg.textContent = "Could not build the graph: " + (e && e.message ? e.message : e);
+      overlayMsg.innerHTML = tHtml("msg.buildFailed", "Could not build the graph: {0}", { 0: e && e.message ? e.message : e });
       if (window.console && console.error) console.error(e);
       return false;
     }
@@ -5903,10 +7123,10 @@
   async function autoLoad(force) {
     var proto = location.protocol;
     if (proto !== "http:" && proto !== "https:") {
-      if (force) { overlayMsg.textContent = "Auto-load needs a web server; open the folder instead."; overlay.classList.add("show"); closeAbout(); }
+      if (force) { overlayMsg.textContent = t("msg.needsServer", "Auto-load needs a web server; open the folder instead."); overlay.classList.add("show"); closeAbout(); }
       return false;
     }
-    overlayMsg.textContent = "Loading bundle…";
+    overlayMsg.textContent = t("msg.loading", "Loading bundle\u2026");
     var bundle = urlParam("bundle");
     var depth = urlDepth();
     var request = ++bundleLoadRequest;
@@ -5926,13 +7146,13 @@
       var files = null, root = null;
       if (bundle && /\.md$/i.test(bundle)) {
         var bUrl = new URL(bundle, location.href);
-        if (!isAllowedUrl(bUrl)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; overlay.classList.add("show"); closeAbout(); return false; }
+        if (!isAllowedUrl(bUrl)) { overlayMsg.innerHTML = tHtml("msg.sameOrigin", "Bundle must be a same-origin path: {0}", { 0: bundle }); overlay.classList.add("show"); closeAbout(); return false; }
         root = new URL("./", bUrl).href;
         previewRoot = root;
         files = await crawlFromUrl(bUrl.href, depth, root, previewFiles);
       } else if (bundle) {
         var loc = resolveBundleLoc(bundle);
-        if (!isAllowedUrl(loc)) { overlayMsg.textContent = "Bundle must be a same-origin path: " + bundle; overlay.classList.add("show"); closeAbout(); return false; }
+        if (!isAllowedUrl(loc)) { overlayMsg.innerHTML = tHtml("msg.sameOrigin", "Bundle must be a same-origin path: {0}", { 0: bundle }); overlay.classList.add("show"); closeAbout(); return false; }
         loc.search = ""; loc.hash = "";
         if (!/\/$/.test(loc.pathname)) loc.pathname += "/";
         var folder = loc;
@@ -5941,7 +7161,7 @@
         files = await loadBundleFromFolder(folder.href, depth, previewFiles);
         if (request !== bundleLoadRequest) return false;
         if (!files) {
-          overlayMsg.textContent = "No bundle at ?bundle=" + bundle + " (no index.md).";
+          overlayMsg.innerHTML = tHtml("msg.noBundleAt", "No bundle at ?bundle={0} (no index.md).", { 0: bundle });
           overlay.classList.add("show");
           closeAbout();
           return false;
@@ -5972,13 +7192,13 @@
         }
         return ok;
       }
-      overlayMsg.textContent = "Nothing to load: add bundles/index.md, or pass ?bundle=<name>.";
+      overlayMsg.textContent = t("msg.nothingToLoad", "Nothing to load: add bundles/index.md, or pass ?bundle=<name>.");
       // A missing bundle asked for by name is an error worth showing; the plain
       // startup state keeps the About panel and leaves the bundle dialog hidden.
       if (bundle || force) { overlay.classList.add("show"); closeAbout(); }
     } catch (e) {
       if (request !== bundleLoadRequest) return false;
-      overlayMsg.textContent = "Auto-load failed: " + e.message;
+      overlayMsg.innerHTML = tHtml("msg.autoLoadFailed", "Auto-load failed: {0}", { 0: e.message });
       overlay.classList.add("show");
       closeAbout();
     }
@@ -7291,7 +8511,9 @@
   // metrics (offset*), not getBoundingClientRect, so the sidebar's slide
   // transition does not make the deck read a mid-animation position. The tab's
   // bottom stays valid while the sidebar is hidden (its handle stays visible), so
-  // the deck's vertical position is stable; only `right` follows the sidebar.
+  // the deck's vertical position is stable; only its inline-end inset follows the
+  // sidebar. The sidebar docks to the inline-end edge and the deck is measured from
+  // that same edge, so one value serves both writing directions.
   function deckTabInfo() {
     var desktop = !(window.matchMedia && window.matchMedia("(max-width: 760px)").matches);
     if (!desktop) return null;
@@ -7301,13 +8523,13 @@
     if (w <= 0) return null;
     var sidebar = tab.offsetParent, sidebarW = sidebar ? sidebar.offsetWidth : 312;
     var shown = !document.body.classList.contains("hide-side");
-    return { right: shown ? sidebarW + w + 10 : null, bottom: tab.offsetTop + tab.offsetHeight };
+    return { inset: shown ? sidebarW + w + 10 : null, bottom: tab.offsetTop + tab.offsetHeight };
   }
   // Dock clear of the filter tab. layoutDeck owns the panel's top, height and inset.
   function positionDeck() {
     if (!deckEl) return;
     var info = deckTabInfo();
-    deckEl.style.right = info && info.right != null ? info.right + "px" : "";
+    deckEl.style.insetInlineEnd = info && info.inset != null ? info.inset + "px" : "";
   }
 
   // ---- reading the deck as a continuous stream ----
@@ -7599,10 +8821,119 @@
   }
 
   // ---------------------------------------------------------------- init
+  // ---------------------------------------------------------------- language
+  // Resolve the UI language from ?lang, a saved choice, then the browser's own
+  // preferences, using BCP 47 tags canonicalised with Intl. English is the base.
+  function canonicalTag(tag) {
+    if (!tag) return "";
+    try {
+      if (typeof Intl !== "undefined" && Intl.getCanonicalLocales) {
+        var list = Intl.getCanonicalLocales(String(tag));
+        if (list && list[0]) return list[0];
+      }
+    } catch (e) {}
+    return String(tag);
+  }
+  function supportedLang(tag) {
+    var canon = canonicalTag(tag);
+    if (!canon) return "";
+    if (I18N[canon]) return canon;
+    var base = canon.split("-")[0].toLowerCase();
+    if (I18N[base]) return base;
+    if (base === "zh") return I18N["zh-Hans"] ? "zh-Hans" : (I18N["zh"] ? "zh" : "");
+    return "";
+  }
+  function resolveLang() {
+    var cands = [];
+    var q = urlParam("lang");
+    if (q) cands = cands.concat(String(q).split(","));
+    try { var saved = localStorage.getItem("grokf.lang"); if (saved) cands.push(saved); } catch (e) {}
+    if (navigator.languages && navigator.languages.length) cands = cands.concat(Array.prototype.slice.call(navigator.languages));
+    else if (navigator.language) cands.push(navigator.language);
+    for (var i = 0; i < cands.length; i++) { var s = supportedLang(String(cands[i]).trim()); if (s) return s; }
+    return BASE_LANG;
+  }
+  function attrI18n(el, dataAttr, attr) {
+    if (!el.hasAttribute(dataAttr)) return;
+    var dkey = dataAttr + "-default";
+    if (el.getAttribute(dkey) === null) el.setAttribute(dkey, el.getAttribute(attr) || "");
+    el.setAttribute(attr, t(el.getAttribute(dataAttr), el.getAttribute(dkey)));
+  }
+  function applyStaticI18n() {
+    var els = document.querySelectorAll("[data-i18n],[data-i18n-html],[data-i18n-title],[data-i18n-placeholder],[data-i18n-aria-label]");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.hasAttribute("data-i18n")) {
+        if (el.getAttribute("data-i18n-default") === null) el.setAttribute("data-i18n-default", el.textContent);
+        el.textContent = t(el.getAttribute("data-i18n"), el.getAttribute("data-i18n-default"));
+      }
+      if (el.hasAttribute("data-i18n-html")) {
+        if (el.getAttribute("data-i18n-html-default") === null) el.setAttribute("data-i18n-html-default", el.innerHTML);
+        el.innerHTML = t(el.getAttribute("data-i18n-html"), el.getAttribute("data-i18n-html-default"));
+      }
+      attrI18n(el, "data-i18n-title", "title");
+      attrI18n(el, "data-i18n-placeholder", "placeholder");
+      attrI18n(el, "data-i18n-aria-label", "aria-label");
+    }
+  }
+  var NATIVE_NAMES = {
+    en: "English", es: "Espa\u00f1ol", fr: "Fran\u00e7ais", de: "Deutsch", pt: "Portugu\u00eas",
+    it: "Italiano", nl: "Nederlands", pl: "Polski", ru: "\u0420\u0443\u0441\u0441\u043a\u0438\u0439", tr: "T\u00fcrk\u00e7e",
+    hi: "\u0939\u093f\u0928\u094d\u0926\u0940", "zh-Hans": "\u7b80\u4f53\u4e2d\u6587", ja: "\u65e5\u672c\u8a9e", ko: "\ud55c\uad6d\uc5b4", ar: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629", he: "\u05e2\u05d1\u05e8\u05d9\u05ea"
+  };
+  function languageName(tag) {
+    try {
+      if (typeof Intl !== "undefined" && Intl.DisplayNames) {
+        var dn = new Intl.DisplayNames([currentLang], { type: "language" });
+        var name = dn.of(tag);
+        if (name && name !== tag) return name;
+      }
+    } catch (e) {}
+    return NATIVE_NAMES[tag] || tag;
+  }
+  var langSelect = document.getElementById("langSelect");
+  function langKeys() {
+    var keys = Object.keys(I18N).sort();
+    if (keys.indexOf("en") < 0) keys.unshift("en");
+    return keys;
+  }
+  function buildLangSelect() {
+    if (!langSelect) return;
+    langSelect.textContent = "";
+    langKeys().forEach(function (tag) {
+      var o = document.createElement("option");
+      o.value = tag;
+      o.textContent = languageName(tag);
+      langSelect.appendChild(o);
+    });
+    syncLangSelect();
+  }
+  function syncLangSelect() { if (langSelect) langSelect.value = I18N[currentLang] ? currentLang : "en"; }
+  function applyLang(lang) {
+    currentLang = I18N[lang] ? lang : BASE_LANG;
+    document.documentElement.lang = currentLang;
+    document.documentElement.dir = dirFor(currentLang);
+    applyStaticI18n();
+    updateFilterSummary();
+    if (bundleFiles) updateStats();
+    syncLangSelect();
+  }
+  if (langSelect) langSelect.addEventListener("change", function () {
+    var v = langSelect.value;
+    try { localStorage.setItem("grokf.lang", v); } catch (e) {}
+    applyLang(v);
+    try { var u = new URL(location.href); u.searchParams.set("lang", v); history.replaceState(history.state, "", u.href); } catch (e) {}
+    // The selector now lives in the About panel, which is anchored to the title; a
+    // direction change moves that anchor, so re-place the panel.
+    if (aboutPop && !aboutPop.hidden) positionAbout();
+  });
+
   resize();
   view.x = W / 2; view.y = H / 2;
   initMascot();
   initDeck();
+  buildLangSelect();
+  applyLang(resolveLang());
   // Start on the About panel instead of the bundle dialog. It stays until the
   // user interacts with the interface, while auto-loading runs underneath.
   openAbout();

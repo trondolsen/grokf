@@ -1,7 +1,7 @@
 ---
 type: Interface
 title: URL parameters
-description: The bundle, start and depth query parameters, their values and defaults.
+description: The bundle, start, depth and lang query parameters, their values and defaults.
 tags: [interface, url, configuration]
 okfx:
   mode: reference
@@ -24,6 +24,7 @@ They are optional; append to the URL and combine as needed, for example `?bundle
 | `bundle` | name, path, or a `*.md` file | `bundles/` next to the page | Bundle to load; a bare name resolves to `bundles/<name>/`. |
 | `start` | a file inside the bundle | `index.md` | Crawl entry point. |
 | `depth` (or `levels`) | `0` to `n`, or `all` | `all` | Link levels to prefetch. Nodes with unloaded content show a dashed ring and load on click. |
+| `lang` | a BCP 47 tag, or a comma-separated list | the browser's language | Interface language; see [Languages](languages.md). |
 
 # Rules
 
@@ -32,11 +33,13 @@ They are optional; append to the URL and combine as needed, for example `?bundle
 - `start` is only honoured while it stays inside the bundle folder; otherwise the tool falls back to `index.md`.[^source]
 - With no parameters on a web server, the tool tries `bundles/index.md`, then `index.md` beside the page. On `file://` it does not auto-load; the About panel is shown and **Open folder…** in the toolbar opens a local folder instead.[^readme]
 - The graph fills in as the crawl loads files, growing in place rather than appearing all at once; see [crawling](../algorithms/crawling.md).
+- `lang` sets the interface language and is canonicalised as a BCP 47 tag; a value with no matching dictionary falls back to English, and right-to-left languages flip the page direction. See [Languages](languages.md).
 
 # Connections
 
 - [Publishing](publishing.md)
 - [Local folders](local-folders.md)
+- [Languages](languages.md)
 - [Crawling](../algorithms/crawling.md)
 
 [^readme]: Project README, "URL parameters".

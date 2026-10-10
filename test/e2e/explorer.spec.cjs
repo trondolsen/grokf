@@ -313,6 +313,97 @@ test('åpner .runtime fra Om-panelet og oppdaterer siden mens den leses', async 
   await expect(page.locator('#pvBody')).toContainText('Search: guide');
 });
 
+test('oversetter grensesnittet og støtter høyre-til-venstre', async ({ page }) => {
+  // Arabic: right-to-left orientation, translated controls and Arabic plurals.
+  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all&lang=ar`);
+  await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);
+  await expect(page.locator('#spinner')).toBeHidden();
+  await expect(page.locator('#stats')).toHaveText(/\S/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('#resetView')).toHaveText('إعادة ضبط العرض');
+  await expect(page.locator('#search')).toHaveAttribute('placeholder', 'مثال: json, guide, nsm…');
+  await expect(page.locator('#stats')).toContainText('ملف');
+
+  // The layout mirrors for right-to-left: the filter sidebar and the toolbar dock to
+  // the inline-start edge, and the back/forward chevrons flip.
+  const vw = page.viewportSize().width;
+  const sideAr = await page.locator('#sidebar').boundingBox();
+  expect(sideAr.x).toBeLessThan(48);
+  const barAr = await page.locator('.bar').boundingBox();
+  expect(barAr.x).toBeGreaterThan(300);
+  await expect(page.locator('#graphBack')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+  await expect(page.locator('#graphFwd')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+  // The rotated panel tab sits on-screen on the sidebar's inner edge; because its
+  // inline axis is vertical it uses a physical offset, mirrored for RTL.
+  const handleAr = await page.locator('#sideHandle').boundingBox();
+  expect(handleAr.x + handleAr.width).toBeLessThanOrEqual(vw);
+
+  // Spanish: left-to-right again, with Spanish plural nouns.
+  await page.goto(`${explorer}?bundle=${encodeURIComponent(bundle)}&depth=all&lang=es`);
+  await expect(page.locator('#spinner')).toBeHidden();
+  await expect(page.locator('#stats')).toHaveText(/\S/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  await expect(page.locator('#resetView')).toHaveText('Restablecer vista');
+  await expect(page.locator('#stats')).toContainText('archivos');
+  await expect(page.locator('#stats')).toContainText('enlaces');
+
+  // Left-to-right: the same panels dock to the opposite (inline-end) edge and the
+  // chevrons point the other way.
+  const sideEs = await page.locator('#sidebar').boundingBox();
+  expect(sideEs.x).toBeGreaterThan(vw - 360);
+  const barEs = await page.locator('.bar').boundingBox();
+  expect(barEs.x).toBeLessThan(48);
+  await expect(page.locator('#graphBack')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  const handleEs = await page.locator('#sideHandle').boundingBox();
+  expect(handleEs.x).toBeGreaterThanOrEqual(0);
+
+  // The language selector now lives in the About panel: open it to switch language,
+  // which flips the interface (including the panel's own anchor) in place.
+  await expect(page.locator('#aboutPop #langSelect')).toHaveCount(1);
+  await expect(page.locator('#sidebar #langSelect')).toHaveCount(0);
+  await page.locator('#titleBtn').click();
+  await expect(page.locator('#langSelect')).toHaveValue('es');
+  // The selector carries the Index node colour (#37b6c4), like the runtime link and File colour.
+  await expect(page.locator('#aboutPop .about-lang label')).toHaveCSS('color', 'rgb(55, 182, 196)');
+  await expect(page.locator('#langSelect')).toHaveCSS('border-top-color', 'rgb(55, 182, 196)');
+  await page.locator('#langSelect').selectOption('ar');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page.locator('#resetView')).toHaveText('إعادة ضبط العرض');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#aboutPop')).toBeHidden();
+
+  // Left-to-right values stay isolated in a right-to-left interface.
+  await expect(page.locator('#graphPath')).toHaveAttribute('dir', 'ltr');
+  await expect(page.locator('#graphPath')).toHaveCSS('unicode-bidi', 'isolate');
+  await expect(page.locator('#pvPath')).toHaveAttribute('dir', 'ltr');
+
+  // Generated content declares its own language and direction, not the interface's.
+  await page.locator('#titleBtn').click();
+  await page.locator('#aboutRuntime').click();
+  await expect(page.locator('#pvPath')).toHaveText('.runtime/index.md');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.locator('#pvBody')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('#pvBody')).toHaveAttribute('dir', 'ltr');
+  // The preview's own back/forward chevrons mirror with the interface direction.
+  await expect(page.locator('#pvBack')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+  await expect(page.locator('#pvFwd')).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
+});
+
+test('isolerer innskutte verdier i meldinger med bdi', async ({ page }) => {
+  await page.goto(`${explorer}?bundle=${encodeURIComponent('https://example.invalid/private/')}&lang=ar`);
+  await expect(page.locator('#overlay')).toHaveClass(/\bshow\b/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  const bdi = page.locator('#overlayMsg bdi');
+  await expect(bdi).toHaveCount(1);
+  await expect(bdi).toHaveAttribute('dir', 'auto');
+  await expect(bdi).toContainText('example.invalid');
+});
+
 test('laster prosjektets kunnskapsindeks som en separat røykprøve', async ({ page }) => {
   await page.goto(`${explorer}?bundle=index.md&depth=all`);
   await expect(page.locator('#overlay')).not.toHaveClass(/\bshow\b/);
