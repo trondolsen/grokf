@@ -3440,7 +3440,19 @@
     while (i < lines.length) {
       markdownWork(state, lines[i].length);
       var m = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i]);
-      if (!m || m[1].length < base) break;
+      if (!m) {
+        // A non-blank line indented past the marker continues the open item's
+        // paragraph; blank lines and block starts end the list instead.
+        if (!open || /^\s*$/.test(lines[i])) break;
+        if (lines[i].match(/^\s*/)[0].length <= base) break;
+        if (markdownStartsBlock(lines[i]) || isTableStart(lines, i)) break;
+        markdownAppend(state, " ");
+        var cont = lines[i].replace(/^\s+/, "");
+        writeMarkdownInline(cont, 0, cont.length, true, depth, state);
+        i++;
+        continue;
+      }
+      if (m[1].length < base) break;
       if (m[1].length > base) {
         if (!open) markdownAppend(state, "<li>");
         i = parseList(lines, i, state, depth + 1);
@@ -3462,6 +3474,11 @@
     var close = /^\s*(`{3,}|~{3,})\s*$/.exec(line);
     return close && close[1].charAt(0) === fence[1].charAt(0) && close[1].length >= fence[1].length;
   }
+  // True when a line starts a block that ends a list or paragraph: heading,
+  // fence, blockquote, horizontal rule or a new list marker.
+  function markdownStartsBlock(t) {
+    return /^\s*(#{1,6}\s|`{3,}|~{3,}|>|([-*+]|\d+\.)\s)/.test(t) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(t);
+  }
   function writeMarkdownBlocks(lines, depth, state) {
     markdownDepth(depth);
     var footnotes = Object.create(null), order = [], kept = [], activeFence = null, inlineCode = 0;
@@ -3471,7 +3488,7 @@
       if (activeFence) {
         if (markdownFenceCloses(sourceLine, activeFence)) activeFence = null;
       } else {
-        var blockStart = startsBlock(sourceLine);
+        var blockStart = markdownStartsBlock(sourceLine);
         if (blockStart || /^\s*$/.test(sourceLine)) inlineCode = 0;
         activeFence = markdownFence(sourceLine);
         var fm = activeFence || inlineCode ? null : /^\[\^([^\]]+)\]:\s*(.*)$/.exec(sourceLine);
@@ -3493,9 +3510,6 @@
       kept.push(sourceLine);
     }
     lines = kept;
-    function startsBlock(t) {
-      return /^\s*(#{1,6}\s|`{3,}|~{3,}|>|([-*+]|\d+\.)\s)/.test(t) || /^\s*([-*_])(\s*\1){2,}\s*$/.test(t);
-    }
     function inline(text) { writeMarkdownInline(text, 0, text.length, true, depth, state); }
     var i = 0;
     while (i < lines.length) {
@@ -3530,7 +3544,7 @@
       if (isTableStart(lines, i)) { i = parseTable(lines, i, state, depth); continue; }
       if (/^\s*([-*+]|\d+\.)\s+/.test(line)) { i = parseList(lines, i, state, depth + 1); continue; }
       var para = [];
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !startsBlock(lines[i]) && !isTableStart(lines, i)) {
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !markdownStartsBlock(lines[i]) && !isTableStart(lines, i)) {
         markdownWork(state, lines[i].length + 1); para.push(lines[i++]);
       }
       if (!para.length) { para.push(line); i++; }

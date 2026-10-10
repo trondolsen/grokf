@@ -412,6 +412,20 @@ test('normal emphasis, strong emphasis and strikethrough remain supported', t =>
     '<em>em</em> <strong>strong</strong> <em><strong>both</strong></em> <del>gone</del>');
 });
 
+test('multi-line list items keep indented continuations inside the item', t => {
+  const { api } = harness(t);
+  const ordered = api.renderMarkdown('1. Every concept starts with frontmatter,\n   and `type` is the only required field.\n2. Open the folder.');
+  assert.equal((ordered.match(/<p>/g) || []).length, 0);
+  assert.match(ordered, /<li>Every concept starts with frontmatter, and <code>type<\/code> is the only required field\.<\/li>/);
+  assert.match(ordered, /<li>Open the folder\.<\/li>/);
+
+  const bullet = api.renderMarkdown('- A concept may span lines,\n  like this one.\n\nA separate paragraph.');
+  assert.match(bullet, /<li>A concept may span lines, like this one\.<\/li>/);
+  assert.match(bullet, /<p>A separate paragraph\.<\/p>/);
+  assertInert(ordered);
+  assertInert(bullet);
+});
+
 test('dangerous Markdown URL schemes cannot become active hrefs', t => {
   const { api } = harness(t);
   for (const target of ['javascript:alert(1)', 'data:text/html,evil', 'vbscript:evil', '//evil.test/note.md', 'https://user:pass@example.test/', 'https://example.test/%0aevil']) {

@@ -25,7 +25,7 @@ The renderer parses raw syntax and writes escaped text to the correct context, r
 
 # What it supports
 
-Headings, paragraphs, lists, blockquotes, tables, fenced and inline code, links, footnotes, emphasis, horizontal rules and inline images. Images are attached with a `data-embed` marker first; the source is set later through the DOM only after the resolved URL is validated.
+Headings, paragraphs, lists, blockquotes, tables, fenced and inline code, links, footnotes, emphasis, horizontal rules and inline images. A list item may continue on the next line when that line is indented past the marker; the continuation stays inside the same item instead of becoming a new block. Images are attached with a `data-embed` marker first; the source is set later through the DOM only after the resolved URL is validated.
 
 # Bounds
 
