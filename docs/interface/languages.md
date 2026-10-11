@@ -64,7 +64,7 @@ A chosen language with a dictionary translates the interface (the set above); on
 
 # Scripts and Cyrillic
 
-Language tags are kept as short as the W3C's BCP 47 guidance recommends: a **script subtag** appears only where the script is not implied by the language — Chinese (Simplified and Traditional) and Serbian written in Latin, offered beside the default Cyrillic. A language strongly associated with one script, such as Russian, Ukrainian, Bulgarian or the other Cyrillic-script languages, is tagged without a script subtag, because Cyrillic is its default.[^qa-tags] Tags taken from the URL, the browser or a bundle are canonicalised with `Intl.getCanonicalLocales`, so a deprecated subtag is resolved to its preferred form and a region is kept only when it distinguishes something.[^ltli]
+Language tags are kept as short as the W3C's BCP 47 guidance recommends: a **script subtag** appears only where the script is not implied by the language — Chinese (Simplified and Traditional) and Serbian written in Latin, offered beside the default Cyrillic. A language strongly associated with one script, such as Russian, Ukrainian, Bulgarian or the other Cyrillic-script languages, is tagged without a script subtag, because Cyrillic is its default.[^qa-tags] Language tags, whether from the saved choice, the browser or a bundle, are canonicalised with `Intl.getCanonicalLocales`, so a deprecated subtag is resolved to its preferred form and a region is kept only when it distinguishes something.[^ltli]
 
 Cyrillic runs left to right in horizontal lines with spaces between words and is not cursive, so it needs none of the bidirectional handling described below.[^cyrl] Declaring the active language with `lang`, on the root and on the previewed content, is what lets the browser pick a font with the right Cyrillic coverage and apply the right styles.[^ltli] The search fold is limited to Latin letters, so a distinct Cyrillic letter such as `й` or `ё` is never folded onto `и` or `е`.[^cyrl]
 
@@ -125,7 +125,6 @@ Only the viewer's own interface is translated. Labels drawn from the bundle (con
 
 # Connections
 
-- [URL parameters](url-parameters.md)
 - [Interface](index.md)
 
 [^source]: The `I18N` dictionaries and the language selector in the tool source.
