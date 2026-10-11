@@ -271,6 +271,14 @@ test('åpner .runtime fra Om-panelet og oppdaterer siden mens den leses', async 
   await loadBundle(page);
   await page.locator('#titleBtn').click();
   await expect(page.locator('#aboutPop')).toBeVisible();
+  // The toolbar shows the dual-pill mark; the About panel prints the brand as plain text.
+  await expect(page.locator('#titleBtn svg.brand')).toBeVisible();
+  await expect(page.locator('#aboutPop .about-body')).toContainText('grokf');
+  await expect(page.locator('#aboutPop .wordmark')).toHaveCount(0);
+  // The title carries the logo and stays flat on hover: no fill and no accent ring.
+  await page.locator('#titleBtn').hover();
+  await expect(page.locator('#titleBtn')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(page.locator('#titleBtn')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
   await expect(page.locator('#aboutRuntime')).toBeVisible();
   await expect(page.locator('#aboutRuntime')).toHaveCSS('color', 'rgb(201, 162, 77)');
   const sourceBox = await page.locator('#aboutPop .about-links a').first().boundingBox();
@@ -592,4 +600,15 @@ test('starter en ny kortstokk når panelet er fullt', async ({ page }) => {
   await page.clock.runFor(50);
   // …and the release starts a new deck even though the column was full.
   await expect(page.locator('#deckBody > .deck-stack')).toHaveCount(before + 1);
+});
+
+test('holder toppgruppene like høye', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${explorer}?bundle=index.md&depth=all`);
+  await expect(page.locator('#spinner')).toBeHidden();
+  await page.keyboard.press('Escape');
+  // The taller brand mark in the title group must not make it taller than the nav groups.
+  const heights = await page.locator('.bar .group').evaluateAll(gs => gs.map(g => g.getBoundingClientRect().height));
+  expect(heights.length).toBeGreaterThan(1);
+  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
 });

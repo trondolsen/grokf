@@ -36,12 +36,12 @@ One dark theme, defined as CSS custom properties on `:root`: a page background, 
 
 Shared styling keeps the controls consistent:[^source]
 
-- Buttons share one base rule (surface, border, radius, padding); hover promotes the border to the accent colour.
+- Buttons share one base rule (surface, border, radius, padding); hover promotes the border to the accent colour. The **title control** is the exception: it shows the brand mark and stays flat on hover — no fill and no accent ring.
 - The filter and legend **panel tabs** keep their inner border transparent in every state, so the tab blends into the panel and its hover accent never draws the edge where it meets the panel — the highlight stops at the panel rather than ringing the tab.
 - Groups are translucent, blurred pills that hold related controls.
 - Toggle buttons (Labels and Tags) carry their state in `aria-pressed`. The **on** state is the normal label; the **off** state dims the label to a shade only slightly lighter than the button surface, rather than tinting the button fill.
-- The title control and the mobile hamburger use the same vertical box model as the nav buttons, so every top-bar pill has the same height.
-- The brand *grokf* — in the toolbar title, the About panel and the bundle dialog — spells *okf* with colour: `o` and `k` are split abruptly at their midpoint, the left half in the Concept colour (the accent, matching how the mascot paints concepts) and the right half in the surrounding text colour, and `f` is that Concept colour at full strength.
+- The title control and the mobile hamburger use the same vertical box model as the nav buttons. The title's brand mark is taller than a text line box, so the title carries a negative block margin that absorbs the excess and keeps every top-bar group the same height.
+- The brand *grokf* appears in three forms. The **toolbar title** shows the **dual-pill mark**: all-lowercase letterforms in the theme text colour (`#e7e9ee`) on the app's own dark surface, with a fully-rounded pill of the same outline colour behind the first four letters (*grok*) overlapping a solid pill in the Concept colour (the accent, `#5b8def`) behind the last three (*okf*), so the shared `o` and `k` sit inside both; it is one inline `<symbol>` reused with `<use>`, and it carries no background of its own. The **About panel** prints *grokf* as plain text. The **bundle dialog** shows a wordmark that colours *okf*: `o` and `k` are split abruptly at their midpoint, the left half in the Concept colour (the accent, matching how the mascot paints concepts) and the right half in the surrounding text colour, and `f` is that Concept colour at full strength.
 - Legend rows carry horizontal padding, so the hover and selected highlight boxes enclose the swatch, label and count with even space on both sides.
 - Text selection is off for the interface and on only where text is the content: input fields and the page display (the preview and the deck reading stream).
 

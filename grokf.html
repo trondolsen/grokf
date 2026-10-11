@@ -100,9 +100,15 @@
     font-weight: 600; letter-spacing: .2px;
     appearance: none; border: 1px solid transparent; background: transparent; color: inherit;
     font: inherit; font-weight: 600; cursor: pointer; padding: 6px; border-radius: 6px;
+    /* The brand mark is taller than a text button (26px vs the ~18px line box), which would
+       make this group taller than the others; the negative block margin absorbs the excess
+       so every top-bar group ends up the same height. */
+    margin-block: -4px;
     display: inline-flex; align-items: center; gap: 5px;
   }
-  .title:hover { background: var(--panel-2); }
+  /* The title shows the brand mark and is deliberately flat on hover: no fill and no
+     accent ring, so the logo is never highlighted. */
+  .title:hover { background: transparent; border-color: transparent; }
   .title .caret { font-size: 10px; line-height: 1; transition: transform .15s ease; }
   .title[aria-expanded="true"] .caret { transform: rotate(180deg); }
   .wordmark .gr {
@@ -111,6 +117,11 @@
     -webkit-text-fill-color: transparent; color: transparent;
   }
   .wordmark .f { color: var(--accent); }
+  /* The grokf brand mark: an outlined pill in the theme text colour (#e7e9ee) around "grok"
+     overlapping a solid pill in the Concept colour (the accent, #5b8def) around "okf", with
+     the wordmark in the same text colour (see #brandMark). It sits on the app's own dark
+     surface, so it carries no background of its own. */
+  .brand { display: inline-block; width: 78px; height: 26px; vertical-align: middle; }
 
   /* In-flight load indicator, floated at the toolbar's top-right (left of the
      filter menu). z-index is above the loading overlay so it stays visible
@@ -917,11 +928,29 @@
 <body>
 <canvas id="c"></canvas>
 
+<!-- The grokf brand mark, drawn once and placed with <use> in the toolbar title. Two
+     fully-rounded pills overlap: a thin outline in the theme text colour
+     (#e7e9ee) over "grok" and a solid Concept-coloured (accent #5b8def) pill over "okf", so
+     the shared "o" and "k" sit in both. -->
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <symbol id="brandMark" viewBox="0 0 240 80">
+    <rect x="100" y="17" width="120" height="46" rx="23" fill="#5b8def"/>
+    <rect x="20" y="17" width="160" height="46" rx="23" fill="#e7e9ee" fill-opacity="0.06" stroke="#e7e9ee" stroke-width="2.5"/>
+    <g fill="#e7e9ee" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="40" text-anchor="middle">
+      <text x="40" y="50">g</text>
+      <text x="80" y="50">r</text>
+      <text x="120" y="50">o</text>
+      <text x="160" y="50">k</text>
+      <text x="200" y="50">f</text>
+    </g>
+  </symbol>
+</svg>
+
 <div class="bar">
   <div class="bar-head">
     <button id="navToggle" class="nav-toggle" type="button" aria-controls="navMore" aria-expanded="false" title="Toggle toolbar" data-i18n-title="nav.toggleToolbar">☰</button>
     <div class="group">
-      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About" data-i18n-title="nav.about"><span class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></span><span class="caret">▾</span></button>
+      <button id="titleBtn" class="title" type="button" aria-expanded="false" aria-controls="aboutPop" title="About" data-i18n-title="nav.about"><svg class="brand" role="img" aria-label="grokf"><use href="#brandMark"/></svg><span class="caret">▾</span></button>
       <span id="stats" class="meta" style="color:var(--muted)"></span>
     </div>
   </div>
@@ -1074,7 +1103,7 @@
       <circle data-joint="rFoot" cx="27" cy="29" r="1.8" fill="#c9a24d"/>
       <ellipse data-joint="torso" cx="15.5" cy="15" rx="3.2" ry="2.5" fill="#8b93a7"/>
     </svg>
-    <p><b class="wordmark">gr<span class="gr">o</span><span class="gr">k</span><span class="f">f</span></b> <span data-i18n="about.tagline">— a single-file, dependency-free viewer for Open Knowledge Format bundles.</span></p>
+    <p>grokf <span data-i18n="about.tagline">— a single-file, dependency-free viewer for Open Knowledge Format bundles.</span></p>
     <p class="about-rev"><span data-i18n="about.rev">Revision</span> <span id="aboutRev"></span></p>
     <div class="about-more" id="aboutMore">
       <p data-i18n="about.desc">It renders Markdown concepts, their frontmatter (type, tags, status, description) and reference links as an interactive graph you can filter, pan and zoom.</p>
